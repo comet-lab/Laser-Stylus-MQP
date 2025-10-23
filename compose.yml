@@ -1,0 +1,9 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "443:8080"
+      - "5000:5000/udp"
+    volumes:
+      - ./backend/src:/app
+      - ./frontend:/app/static
