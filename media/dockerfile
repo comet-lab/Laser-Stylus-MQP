@@ -1,0 +1,12 @@
+FROM debian:bookworm
+
+WORKDIR /app
+
+
+RUN apt update && apt install -y wget ffmpeg \
+    && wget https://github.com/bluenviron/mediamtx/releases/download/v1.15.3/mediamtx_v1.15.3_linux_amd64.tar.gz \
+    && tar -xzkf mediamtx_v1.15.3_linux_amd64.tar.gz
+
+COPY mediamtx.yml ./mediamtx.yml
+
+CMD ["./mediamtx", "mediamtx.yml"]

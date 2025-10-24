@@ -3,7 +3,14 @@ services:
     build: ./backend
     ports:
       - "443:8080"
-      - "5000:5000/udp"
     volumes:
       - ./backend/src:/app
       - ./frontend:/app/static
+  media:
+    build: ./media
+    ports:
+      - "8554:8554"
+      - "8889:8889"
+      - "50000-50010:50000-50010/udp"
+
+
