@@ -1,17 +1,14 @@
-
-#HACKY WAY TO DO RELATIVE IMPORTS 
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 
-from laser_position_control.Franka_Control.franka_client import FrankaClient
-from thermal_cam_control.thermal_cam import ThermalCam
-from switch_control.pyarduino.arduino import Arduino
+from surgical_system.py_src.robot.franka_client import FrankaClient
+from cameras.thermal_cam import ThermalCam
+from laser_control.laser_arduino import Laser_Arduino
 import numpy as np
 import time, subprocess
 import matplotlib.pyplot as plt
 import cv2 
-import numpy as np
 from scipy.spatial.transform import Rotation
 
 def SelectROI(homePose, targetPose, cam_obj=None):
@@ -19,7 +16,7 @@ def SelectROI(homePose, targetPose, cam_obj=None):
     if cam_obj is None:
         cam_obj = ThermalCam(IRFormat="TemperatureLinear10mK", height=120)
         cam_obj.set_acquisition_mode()
-    laser_obj = Arduino()
+    laser_obj = Laser_Arduino()
     
     print("Firing Laser in 2 seconds")
     robot_obj = FrankaClient()
@@ -227,8 +224,6 @@ def goToPose(pose, linTol = .05, rotTol = 0.05, robot_obj = FrankaClient(), maxI
 
 if __name__ == '__main__':
     pathToCWD = os.getcwd()
-    fileLocation = "python_src/thermal_cam_control/img_processing/LaserScanningExperiments/7-31-25/"
-
     subprocess.Popen([pathToCWD + "/cpp_src/main"]) 
     time.sleep(3)
     homePose = loadHomePose()
