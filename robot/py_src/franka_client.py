@@ -1,7 +1,7 @@
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
-from Utilities.UDPClient import UDPClient
+from UDP.UDPClient import UDPClient
 import numpy as np
 import struct
 
@@ -74,7 +74,7 @@ if __name__=='__main__':
     import time
     import subprocess
     from scipy.spatial.transform import Rotation
-    from Utilities.Utilities_functions import loadHomePose
+    from Utilities_functions import loadHomePose
     robot_obj = FrankaClient()
     main_address = "/home/nepacheco/Repositories/Laser_control/cpp_src/main"
     subprocess.Popen([main_address]) 

@@ -5,8 +5,6 @@ import matplotlib.pyplot as plt
 import numpy as np 
 import cv2
 import yaml
-import time
-import os
 from thermal_cam import ThermalCam
 import glob
 import csv

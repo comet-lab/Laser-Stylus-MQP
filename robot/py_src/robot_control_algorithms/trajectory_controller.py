@@ -1,11 +1,9 @@
-import os, sys
-
 import numpy as np
-from laser_control_algorithms.laser_controller import LaserController
-from laser_control_algorithms.controller_message import ControllerMessage
+from laser_controller import LaserController
+from controller_message import ControllerMessage
 
-from laser_control_algorithms.trajectory_helpers.quintic_trajectory import QuinticTrajectory
-from laser_control_algorithms.trajectory_helpers.path_generation import Path_Gen
+from trajectory_helpers.quintic_trajectory import QuinticTrajectory
+from trajectory_helpers.path_generation import Path_Gen
 
 class TrajectoryController(LaserController):
     

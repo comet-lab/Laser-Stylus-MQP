@@ -1,13 +1,9 @@
 import time
-import os
 import PySpin
 import matplotlib.pyplot as plt
-import sys
-import keyboard
 import math
 import warnings
 import numpy as np
-
 
 class ThermalCam:
     __instance = None

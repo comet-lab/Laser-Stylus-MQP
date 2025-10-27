@@ -1,12 +1,8 @@
 import numpy as np
-from laser_control_algorithms.laser_controller import LaserController
-from laser_control_algorithms.controller_message import ControllerMessage
+from controller_message import ControllerMessage
 
-class NoController(LaserController):
-
+class NoController():
     def __init__(self,controller_msg : ControllerMessage):
-        self.laser_info = controller_msg.laser_info
-
         self._laser_pos = np.array([0,0,0])
         self._laser_vel = np.array([0,0,0])
         self._laser_on = False

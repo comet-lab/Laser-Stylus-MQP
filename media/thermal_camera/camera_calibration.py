@@ -1,17 +1,10 @@
-import os
-import sys
+import os, sys, glob
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import matplotlib.pyplot as plt
 import numpy as np 
 import cv2
-import yaml
-import time
-import os
+import yaml, csv
 from thermal_cam import ThermalCam
-import glob
-import csv
-
-
 
 class CameraCalibration():
     def __init__(self,calibration_folder='img_processing/CalibrationImages_0.2FD/',mode='2D',\
