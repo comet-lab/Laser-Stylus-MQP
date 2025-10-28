@@ -1,9 +1,21 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
-    <title>This is the title of the webpage!</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Laser Stylus Frontend</title>
   </head>
   <body>
-    <p>This is an example paragraph. Anything in the <strong>body</strong> tag will appear on the page, just like this <strong>p</strong> tag and its contents.</p>
+    <div id="app">
+      <h1>Laser Stylus Frontend</h1>
+      <button id="connectBtn">Connect to backend</button>
+      <pre id="connectOutput"></pre>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+    <div id="app">
+      <button id="laserBtn">Turn on Laser</button>
+      <pre id="laserOutput"></pre>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

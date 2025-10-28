@@ -5,7 +5,15 @@ services:
       - "443:8080"
     volumes:
       - ./backend/src:/app
-      - ./frontend:/app/static
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
   media:
     build: ./media
     ports:
