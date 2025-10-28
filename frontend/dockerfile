@@ -1,15 +1,27 @@
-FROM node:18-alpine AS build
+# Use a modern, lightweight Node.js image
+FROM node:18-alpine
+
+# 1. This is the crucial line that must match your compose.yml volume
 WORKDIR /app
 
-# Install dependencies and build
-COPY package.json ./
+# 2. Copy package files first to leverage Docker cache
+COPY package.json package-lock.json ./
+# (Use this next line instead if you use yarn)
+# COPY package.json yarn.lock ./
+
+# 3. Install dependencies
 RUN npm install
-COPY . .
-RUN npm run build
+# (Use this next line instead if you use yarn)
+# RUN yarn install
 
-FROM node:18-alpine AS runner
-WORKDIR /app
-RUN npm install -g serve
-COPY --from=build /app/dist /app/dist
+# 4. Copy the rest of your app's code
+# This is good for when you build for production.
+# For development, the volume will overwrite this anyway.
+COPY . .
+
+# 5. Expose the port Vite runs on
 EXPOSE 3000
-CMD ["serve", "-s", "dist", "-l", "3000"]
+
+# 6. The command to run the development server
+# This will be run from '/app' (thanks to WORKDIR)
+CMD ["npm", "run", "dev"]
