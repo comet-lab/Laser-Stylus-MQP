@@ -1,0 +1,33 @@
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  padding: 1.5rem;
+  color: #111;
+}
+
+#app {
+  max-width: 680px;
+}
+
+button {
+  background-color: lightgray;
+  border-radius: 8px;
+  border-width: 2px;
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+pre {
+  background: #f7f7f8;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-top: 1rem;
+  white-space: pre-wrap;
+}
+
+.laser-on {
+  background-color: red; /* Green */
+  color: black;
+  border-radius: 8px;
+  border-width: 2px;
+}

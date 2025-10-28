@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+static/
+frontend/node_modules/
