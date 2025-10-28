@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Coordinate WebSocket Test</title>
+</head>
+<body>
+    <h2>Send Coordinates via WebSocket</h2>
+    <!-- makes fields to input the 6 values  -->
+    <label>X: <input type="number" id="x" value="0" step="any"></label><br>
+    <label>Y: <input type="number" id="y" value="0" step="any"></label><br>
+    <label>Z: <input type="number" id="z" value="0" step="any"></label><br>
+    <label>RX: <input type="number" id="rx" value="0" step="any"></label><br>
+    <label>RY: <input type="number" id="ry" value="0" step="any"></label><br>
+    <label>RZ: <input type="number" id="rz" value="0" step="any"></label><br><br>
+
+    <button onclick="sendCoordinates()">Send through WebSocket</button>
+    <button onclick="fetchCurrentCoordinates()">Get Current Coordinates</button>
+
+    <h3>WebSocket Messages:</h3>
+    <pre id="wsOutput"></pre>
+
+    <h3>Current Coordinates using the API endpoint:</h3>
+    <pre id="httpOutput"></pre>
+
+    <script>
+        const wsOutput = document.getElementById("wsOutput");
+        const httpOutput = document.getElementById("httpOutput");
+
+        // this connects to the websocket 
+        const ws = new WebSocket("ws://localhost:443/ws/coordinates");
+
+        // uses the websocket events to display messages 
+        ws.onopen = () => wsOutput.textContent += "Connected to WebSocket\n";
+        ws.onmessage = (event) => wsOutput.textContent += event.data + "\n";
+        ws.onclose = () => wsOutput.textContent += "Disconnected\n";
+        ws.onerror = (error) => wsOutput.textContent += "WebSocket error: " + error + "\n";
+
+        // sends cordinates as a json string through the websocket
+        function sendCoordinates() {
+            const data = {
+                x: parseFloat(document.getElementById("x").value),
+                y: parseFloat(document.getElementById("y").value),
+                z: parseFloat(document.getElementById("z").value),
+                rx: parseFloat(document.getElementById("rx").value),
+                ry: parseFloat(document.getElementById("ry").value),
+                rz: parseFloat(document.getElementById("rz").value)
+            };
+
+            ws.send(JSON.stringify(data));
+        }
+
+        // fetches the current coordintates from the backend using the http endpoint
+        async function fetchCurrentCoordinates() {
+            try {
+                const response = await fetch("http://localhost:443/current-coordinates");
+                const json = await response.json();
+                httpOutput.textContent = JSON.stringify(json, null, 2);
+            } catch (err) {
+                httpOutput.textContent = "Error fetching coordinates: " + err;
+            }
+        }
+    </script>
+</body>
+</html>
