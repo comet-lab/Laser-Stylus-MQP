@@ -7,21 +7,28 @@
 <body>
 
     <canvas id="canvas"></canvas>
-    <video id="video" autoplay="" hidden></video>
+<video id="video"></video>
 
 <script>
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext("2d");
-canvas.width = 480; // TODO get from video stream
-canvas.height = 360;
+reader = null;
+canvas.width = 100;
+canvas.height = 100;
+let lockedSize = false;
 const updateCanvas = (now, metadata) => {
 //   if (startTime === 0.0) {
 //     startTime = now;
 //   }
+  if(!lockedSize && video.videoWidth != 0) {
+    lockedSize = true;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+  }
 
-ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
 //   const elapsed = (now - startTime) / 1000.0;
 //   const fps = (++paintCount / elapsed).toFixed(3);
@@ -31,29 +38,15 @@ ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
   video.requestVideoFrameCallback(updateCanvas);
 };
 
-let defaultControls = false;
-let reader = null;
-
 const setMessage = (str) => {
-ctx.fillText(str, 10, 50);
-  console.log(str);
+  ctx.fillText(str, 10, 50);
 };
 
 setMessage("Loading stream")
 
-const parseBoolString = (str, defaultVal) => {
-  str = (str || '');
-
-  if (['1', 'yes', 'true'].includes(str.toLowerCase())) {
-    return true;
-  }
-  if (['0', 'no', 'false'].includes(str.toLowerCase())) {
-    return false;
-  }
-  return defaultVal;
-};
-
 window.addEventListener('load', () => {
+  video.muted = true;
+  video.autoplay = true;
   reader = new MediaMTXWebRTCReader({
     url: new URL('http://localhost:8889/mystream/whep'), // TODO get URL dynamically from backend
     onError: (err) => {
