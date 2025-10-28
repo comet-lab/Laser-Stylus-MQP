@@ -1,72 +1,93 @@
 <!-- Following this tutorial: https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback -->
-<html><head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width">
-<script defer="" src="http://localhost:8889/mystream/reader.js"></script> <!-- TODO get url dynamically from back end -->
-</head>
-<body>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <style>
+      html, body {
+          margin: 0 !important;
+          padding: 0 !important;
+      }
+    </style>
+    <script defer="" src="http://localhost:8889/mystream/reader.js"></script> <!-- TODO get url dynamically from back end -->
+  </head>
+  <body>
+    <canvas id="canvas" style="z-index: 1;"></canvas>
+    <video id="video" style="position: absolute; left: 0; top: 0; opacity: 100; z-index: -1;"></video>
+    <script>
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext("2d");
+      const ws = new WebSocket("ws://localhost:443/ws/coordinates");
 
-    <canvas id="canvas"></canvas>
-<video id="video"></video>
+      // uses the websocket events to display messages 
+      ws.onopen = () => console.log("Connected to WebSocket\n");
+      ws.onmessage = (event) => console.log(event.data + "\n");
+      ws.onclose = () => console.log("Disconnected\n");
+      ws.onerror = (error) => console.log("WebSocket error: " + error + "\n");
 
-<script>
+      ctx.font = "48px serif";
+      reader = null;
+      
+      const updateCanvas = (now, metadata) => {
+        //   if (startTime === 0.0) {
+        //     startTime = now;
+        //   }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext("2d");
-reader = null;
-canvas.width = 100;
-canvas.height = 100;
-let lockedSize = false;
-const updateCanvas = (now, metadata) => {
-//   if (startTime === 0.0) {
-//     startTime = now;
-//   }
-  if(!lockedSize && video.videoWidth != 0) {
-    lockedSize = true;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-  }
+        //   const elapsed = (now - startTime) / 1000.0;
+        //   const fps = (++paintCount / elapsed).toFixed(3);
+        //   fpsInfo.innerText = !isFinite(fps) ? 0 : fps;
+        //   metadataInfo.innerText = JSON.stringify(metadata, null, 2);
 
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        video.requestVideoFrameCallback(updateCanvas);
+      };
 
-//   const elapsed = (now - startTime) / 1000.0;
-//   const fps = (++paintCount / elapsed).toFixed(3);
-//   fpsInfo.innerText = !isFinite(fps) ? 0 : fps;
-//   metadataInfo.innerText = JSON.stringify(metadata, null, 2);
+      const setMessage = (str) => {
+        ctx.fillText(str, 10, 50);
+      };
 
-  video.requestVideoFrameCallback(updateCanvas);
-};
+      window.addEventListener('load', () => {
+        video.muted = true;
+        video.autoplay = true;
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        setMessage("Loading stream")
+        reader = new MediaMTXWebRTCReader({
+          url: new URL('http://localhost:8889/mystream/whep'), // TODO get URL dynamically from backend
+          onError: (err) => {
+            setMessage(err);
+          },
+          onTrack: (evt) => {
+            video.srcObject = evt.streams[0];
+            video.requestVideoFrameCallback(updateCanvas);
+          },
+        });
+      });
 
-const setMessage = (str) => {
-  ctx.fillText(str, 10, 50);
-};
+      window.addEventListener('beforeunload', () => {
+        if (reader !== null) {
+          reader.close();
+        }
+      });
 
-setMessage("Loading stream")
+      window.addEventListener('resize', function(event) {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        console.log(canvas.width)
+        console.log(canvas.height)
+      });
 
-window.addEventListener('load', () => {
-  video.muted = true;
-  video.autoplay = true;
-  reader = new MediaMTXWebRTCReader({
-    url: new URL('http://localhost:8889/mystream/whep'), // TODO get URL dynamically from backend
-    onError: (err) => {
-      setMessage(err);
-    },
-    onTrack: (evt) => {
-      video.srcObject = evt.streams[0];
-      video.requestVideoFrameCallback(updateCanvas);
-    },
-  });
-});
+      canvas.addEventListener('click', function(event) {
+        x = event.clientX / canvas.width * video.videoWidth;
+        y = event.clientY / canvas.height * video.videoHeight;
+        const data = {
+          x: x,
+          y: y
+        };
 
-window.addEventListener('beforeunload', () => {
-  if (reader !== null) {
-    reader.close();
-  }
-});
-
-</script>
-
-
-
-</body></html>
+        ws.send(JSON.stringify(data));
+      });
+    </script>
+  </body>
+</html>
