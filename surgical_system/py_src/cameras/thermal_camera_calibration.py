@@ -488,74 +488,6 @@ class CameraCalibration():
         with open(self.filepath + filename, 'w') as f:
             yaml.dump(data, f)
 
-    def find_squares(self, img_path, black_threshold=140):
-        '''
-        This function will find the centers of the black dots in the fiducial markers.
-        
-        @param imagePath: path to the image
-        @param black_threshold: threshold for black color
-        
-        @return filtered_centers: list of filtered centers of black dots
-        '''
-        # Load the image in grayscale
-        img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-        output_img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
- 
-        # Use cv2.selectROI to select the bounding box on the resized image
-        roi = cv2.selectROI("Select ROI", output_img)
-        cv2.destroyAllWindows()
- 
-        # Extract the ROI coordinates
-        x_min, y_min, w, h = roi
-        x_max = x_min + w
-        y_max = y_min + h
- 
-        # Crop the image to the bounding box
-        cropped_img = img[y_min:y_max, x_min:x_max]
-       
-       
-        thresh = cv2.adaptiveThreshold(cropped_img,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C,\
-        cv2.THRESH_BINARY,101,25)
-       
-        blur = cv2.GaussianBlur(thresh,(11,11),0)
-        _,thresh = cv2.threshold(blur, 0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
- 
-        # Find contours of the dots in the cropped image
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        filtered_centers = []
- 
-        # Loop over the contours to find the center of each dot
-        for contour in contours:
-            # Calculate moments for each contour
-            M = cv2.moments(contour)
-           
-            # Calculate the center of the contour
-            if M["m00"] != 0:
-                cX = M["m10"] / M["m00"] + x_min
-                cY = M["m01"] / M["m00"] + y_min
-               
-                perimeter = cv2.arcLength(contour, True)
-                area = cv2.contourArea(contour)
-               
-               
-                # Check if the center is black in the original image
-                perimenter_check = perimeter > 30 and perimeter < 80
-                area_check = area > 30 and area < 400
-                if img[int(cY), int(cX)] < black_threshold and area_check and perimenter_check:
-                    filtered_centers.append((cX, cY))
-                    print("Perimeter: ", perimeter, " Area: ", area)
-                    cv2.circle(output_img, (int(cX), int(cY)), 5, (0, 0, 255), -1)
- 
-        # Draw the bounding box for visualization
-        cv2.rectangle(output_img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
-        cv2.drawContours(output_img, contours, -1, (255, 0, 0), 2, offset=(x_min, y_min))
-       
-        # Display the result
-        cv2.imshow("center", output_img)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        print("Filtered centers:", filtered_centers)
-        return filtered_centers
 
     def save_to_csv(self, filename, imgpts):
         '''
@@ -638,62 +570,6 @@ class CameraCalibration():
         cv2.imshow("centers", img)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
-
-    def get_markers(self, obj_points, checkerboard = True, take_picture = False, filename = ''):
-        '''
-        This function will find the centers of the fiducial markers and pair them with the object points.
-        
-        @param objPoints: numpy array of object points
-        @param fileName: path to the image
-        
-        @return imgPoints: numpy array of image centers
-        '''
-        img_processing_path = os.path.join(self.directory, 'img_processing')
-        csv_filepath = os.path.join(img_processing_path, 'cameraFiducial.csv')
-        default_img_path = os.path.join(img_processing_path, 'cameraFiducial.jpeg')
-        
-        # if os.path.exists(csvFilePath) and not takePicture:
-        #     return self.getImgPointsCSV(csvFilePath)
-        if filename == '' and not take_picture:
-            print("No file name provided. Default name will be used")
-            filepath = default_img_path
-            print("Default image path: ", filepath)
-        elif os.path.exists(os.path.join(img_processing_path, filename)) and not take_picture:
-            filepath = os.path.join(img_processing_path, filename)
-        else:
-            image = CameraCalibration.get_thermal_image()
-            cv2.imshow("Image", image)
-            cv2.waitKey(500)
-            while input("Would you like to save a picture of the fiducial? (y/n): ").strip().lower() != 'y':
-                image = CameraCalibration.get_thermal_image()
-                cv2.imshow("Image", image)
-                cv2.waitKey(0)
-                cv2.destroyAllWindows()
-        
-            cv2.destroyAllWindows()
-            filename = 'cameraFiducial.jpeg' if filename == '' else filename
-            filepath = os.path.join(img_processing_path, filename)
-            print("Saving image to: ", filepath )
-            cv2.imwrite(filepath, image)
-        
-        if checkerboard:
-            img_points = CameraCalibration.find_checkerboard_corners(filepath, self.checkboardSize)
-            if img_points is None:
-                print("Checkerboard was not found, please try again.")
-                return self.get_markers(obj_points, checkerboard=True, take_picture=True, filename=filename)
-        else:
-            img_points = self.find_squares(filepath)
-            if input("Would you like to select the points manually? (y/n): ").strip().lower() == 'y':
-                img_points = self.select_image_points(filepath,len(obj_points))
-            else:
-                img_points = self.pair_objpts_imgpts(obj_points, np.array(img_points))
-        
-        if len(img_points) != len(obj_points):
-            print("Number of points do not match. Please try again.")
-            return self.get_markers(obj_points, checkerboard=checkerboard, take_picture=True, filename=filename)
-        
-        self.save_to_csv('img_processing/cameraFiducial.csv', img_points)
-        return np.array(img_points)
 
     @staticmethod
     def process_input_image(input_variable):
