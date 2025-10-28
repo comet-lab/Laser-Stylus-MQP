@@ -96,3 +96,34 @@ def get_current_coordinates():
 # have the socket accept websocket 
 # make HTTP endpoints
 # make an websockets 
+
+
+#Laser control websocket
+@app.websocket("/ws/laser")
+async def websocket_laser(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            
+            try:
+                state = json.loads(data)
+
+                if 'isLaserOn' not in state:
+                    await websocket.send_text("Error: Missing 'isLaserOn' key.")
+                    continue
+                
+                received_bool = state['isLaserOn']
+
+                if not isinstance(received_bool, bool):
+                    await websocket.send_text("Error: 'isLaserOn' must be a boolean.")
+                    continue
+                
+                await manager.broadcast(json.dumps(state))
+
+            except json.JSONDecodeError:
+                await websocket.send_text("Error: Please send 'true' or 'false'.")
+    
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        print("Client disconnected.")
