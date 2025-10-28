@@ -1,16 +1,32 @@
 import './styles/style.css'
 
-const btn = document.getElementById('connectBtn') as HTMLButtonElement
-const out = document.getElementById('output') as HTMLElement
+const testBtn = document.getElementById('connectBtn') as HTMLButtonElement
+const testOut = document.getElementById('connectOutput') as HTMLElement
 
-btn.addEventListener('click', async () => {
-  out.textContent = 'Connecting...'
+const laserButton = document.getElementById('laserBtn') as HTMLButtonElement
+const laserButtonOut = document.getElementById('laserOutput') as HTMLElement
+
+testBtn.addEventListener('click', async () => {
+  testOut.textContent = 'Connecting...'
   try {
     // Call the backend which is accessible on the host at port 443 in this compose setup
     const res = await fetch('http://localhost:443/media/mystream')
     const data = await res.json()
-    out.textContent = JSON.stringify(data, null, 2)
+    testOut.textContent = JSON.stringify(data, null, 2)
   } catch (e) {
-    out.textContent = 'Error: ' + String(e)
+    testOut.textContent = 'Error: ' + String(e)
   }
 })
+
+laserButton.addEventListener('click', async () => {
+  laserButtonOut.textContent = 'Connecting...'
+  try {
+    // Call the backend which is accessible on the host at port 443 in this compose setup
+    const res = await fetch('http://localhost:443/media/mystream')
+    const data = await res.json()
+    laserButtonOut.textContent = JSON.stringify(data, null, 2)
+  } catch (e) {
+    laserButtonOut.textContent = 'Error: ' + String(e)
+  }
+})
+
