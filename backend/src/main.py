@@ -62,19 +62,19 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             try:
                 coords = json.loads(data)
-                required_keys = ["x", "y", "z", "rx", "ry", "rz"]
+                valid_keys = example_data.keys()
 
                 # makes sure that the corerct keys are present
-                if not all(key in coords for key in required_keys):
-                    await websocket.send_text("Error: Missing keys")
+                if not all(key in valid_keys for key in coords):
+                    await websocket.send_text("Error: Unknown keys")
                     continue
                 # makes sure values are numbers
-                if not all(isinstance(coords[key], (int, float)) for key in required_keys):
+                if not all(isinstance(coords[key], (int, float)) for key in coords): # May not need for config status strings
                     await websocket.send_text("Error: Values need to be numbers")
                     continue
 
                 # updates the example data
-                for key in required_keys:
+                for key in coords:
                     example_data[key] = float(coords[key])
 
                 # broadcasts the data as a json string

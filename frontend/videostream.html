@@ -18,6 +18,14 @@
       const video = document.getElementById('video');
       const canvas = document.getElementById('canvas');
       const ctx = canvas.getContext("2d");
+      const ws = new WebSocket("ws://localhost:443/ws/coordinates");
+
+      // uses the websocket events to display messages 
+      ws.onopen = () => console.log("Connected to WebSocket\n");
+      ws.onmessage = (event) => console.log(event.data + "\n");
+      ws.onclose = () => console.log("Disconnected\n");
+      ws.onerror = (error) => console.log("WebSocket error: " + error + "\n");
+
       ctx.font = "48px serif";
       reader = null;
       
@@ -71,8 +79,14 @@
       });
 
       canvas.addEventListener('click', function(event) {
-        console.log(event.clientX / canvas.width * video.videoWidth);
-        console.log(event.clientY / canvas.height * video.videoHeight);
+        x = event.clientX / canvas.width * video.videoWidth;
+        y = event.clientY / canvas.height * video.videoHeight;
+        const data = {
+          x: x,
+          y: y
+        };
+
+        ws.send(JSON.stringify(data));
       });
     </script>
   </body>
