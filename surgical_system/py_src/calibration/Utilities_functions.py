@@ -41,7 +41,7 @@ def manuallyFocusCamera(homePose, cam_obj = None):
     if cam_obj is None:
         cam_obj = ThermalCam(IRFormat="TemperatureLinear10mK", height=120)
         cam_obj.set_acquisition_mode()
-    laser_obj = Arduino()
+    laser_obj = Laser_Arduino()
     print("Firing Laser in 2 seconds")
     robot_obj = FrankaClient()
     targetPose = np.array([1,0,0,0],[0,1,0,0],[0,0,1,0.15],[0,0,0,1])

@@ -1,7 +1,7 @@
 import sys, os
-sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
-
+# sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 from UDP.UDPClient import UDPClient
+from calibration.Utilities_functions import loadHomePose
 import numpy as np
 import struct
 
@@ -71,11 +71,10 @@ class FrankaClient:
         return setattr(self.__instance, attr, value)
     
 if __name__=='__main__':
-    import time
-    import subprocess
+    import time, pathlib, subprocess
     from scipy.spatial.transform import Rotation
-    from Utilities_functions import loadHomePose
     robot_obj = FrankaClient()
+    
     main_address = "/home/nepacheco/Repositories/Laser_control/cpp_src/main"
     subprocess.Popen([main_address]) 
     time.sleep(2)
