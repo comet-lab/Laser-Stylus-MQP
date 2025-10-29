@@ -18,9 +18,9 @@ def laserAlignment():
     debug = True
     pathToCWD = os.getcwd()
 
-    homePose = loadHomePose(home_pose_path="home_pose.csv")
     
     robot_obj = FrankaClient()  
+    homePose = robot_obj.loadHomePose(home_pose_path="home_pose.csv")
     subprocess.Popen([pathToCWD + "/cpp_src/main"]) 
     time.sleep(3)
     goToPose(homePose,  robot_obj=robot_obj) # Send robot to zero position

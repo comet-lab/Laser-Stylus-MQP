@@ -8,7 +8,7 @@ from cameras.thermal_cam import ThermalCam
 from cameras.thermal_camera_calibration import CameraCalibration
 import numpy as np
 from laser_control.laser_arduino import Laser_Arduino
-from Utilities_functions import SelectROI, alignRobot_input, loadHomePose, loadAndEditPose, goToPose
+from Utilities_functions import SelectROI, loadAndEditPose, goToPose
 from scipy.spatial.transform import Rotation
 import matplotlib.pyplot as plt
 

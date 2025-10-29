@@ -54,24 +54,6 @@ def manuallyFocusCamera(homePose, cam_obj = None):
     plt.close()
     print("Laser Off")
 
-def loadHomePose(home_pose_path = "home_pose.csv"):
-    if(os.path.exists(home_pose_path)):
-        homePose = np.loadtxt(home_pose_path, delimiter=",")
-        print("\nLoad Robot home pose: ", homePose)
-    else:
-        print("\n[WARNING] home_position.csv not found: Setting default home pose.")
-        # Load home pose 
-        rot = Rotation.from_euler('ZYX',[0,np.pi/4,np.pi/2])
-        rotM = rot.as_matrix()
-        
-
-        # Default robot starting location 
-        homePosition = np.array([[0.4425],[0.1043],[0.1985]])
-        homePose = np.concatenate((rotM,homePosition),axis=1)
-        homePose = np.concatenate((homePose,[[0,0,0,1]]),axis=0)
-
-    return homePose
-
 def HT_Inv(homogeneousPose):
     """
     Computes the inverse of a homogeneous transformation matrix

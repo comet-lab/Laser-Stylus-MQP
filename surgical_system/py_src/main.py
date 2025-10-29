@@ -4,7 +4,6 @@ from scipy.spatial.transform import Rotation
 
 # Classes
 from robot.franka_client import FrankaClient
-from calibration.Utilities_functions import loadHomePose
 from cameras.thermal_cam import ThermalCam
 # RGBD camera
 from laser_control.laser_arduino import Laser_Arduino
@@ -19,7 +18,7 @@ def main():
     # Create FrankaNode object for controlling robot
     robot_obj = FrankaClient()  
     subprocess.Popen([pathToCWD + "/cpp_src/main"])
-    home_pose = loadHomePose(home_pose_path="home_pose.csv")
+    home_pose = FrankaClient.loadHomePose(home_pose_path="home_pose.csv")
     start_pos = np.array([0,0,0.35]) # [m,m,m]
     target_pose = np.array([[1.0, 0, 0, start_pos[0]],
                             [0,1,0,start_pos[1]],
@@ -44,7 +43,6 @@ def main():
     ##################################################################################
     #------------------------------ RGBD Cam Config ---------------------------------#
     ##################################################################################
-    
     # Empty 
     
     ##################################################################################

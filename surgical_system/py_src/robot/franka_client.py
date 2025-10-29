@@ -1,9 +1,9 @@
 import sys, os
 # sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
-from UDP.UDPClient import UDPClient
-from calibration.Utilities_functions import loadHomePose
+from .UDP import UDPClient
 import numpy as np
 import struct
+
 
 
 class FrankaClient:
@@ -14,6 +14,23 @@ class FrankaClient:
             self.last_sent = struct.pack('@ddddddddddddb',1,0,0,0,1,0,0,0,1,0.3,0,0.4,0)
             self.last_received = []
             pass
+        
+        def loadHomePose(home_pose_path = "home_pose.csv"):
+            if(os.path.exists(home_pose_path)):
+                homePose = np.loadtxt(home_pose_path, delimiter=",")
+                print("\nLoad Robot home pose: ", homePose)
+            else:
+                print("\n[WARNING] home_position.csv not found: Setting default home pose.")
+                # Load home pose 
+                rot = Rotation.from_euler('ZYX',[0,np.pi/4,np.pi/2])
+                rotM = rot.as_matrix()
+                
+                # Default robot starting location 
+                homePosition = np.array([[0.4425],[0.1043],[0.1985]])
+                homePose = np.concatenate((rotM,homePosition),axis=1)
+                homePose = np.concatenate((homePose,[[0,0,0,1]]),axis=0)
+
+            return homePose
 
         def send_pose(self, transform, mode=1):
             if np.shape(transform) != (4,4):
@@ -79,7 +96,7 @@ if __name__=='__main__':
     subprocess.Popen([main_address]) 
     time.sleep(2)
 
-    home_pose = loadHomePose()
+    home_pose = robot_obj.loadHomePose()
     
     mode = 1
     height = 0.2 # m
