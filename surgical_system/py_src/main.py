@@ -1,16 +1,17 @@
-import os, time, subprocess, sys, warnings
+import os, time, subprocess, sys, warnings, threading
 import numpy as np
 from scipy.spatial.transform import Rotation
 
 # Classes
 from robot.franka_client import FrankaClient
 from cameras.thermal_cam import ThermalCam
-# RGBD camera
+from cameras.RGBD_cam import RGBD_Cam
 from laser_control.laser_arduino import Laser_Arduino
 
 def main():
     pathToCWD = os.getcwd()
     camera_calibration = False
+    threads = []
     
     ##################################################################################
     #------------------------------ Robot Config ------------------------------------#
@@ -37,13 +38,18 @@ def main():
     # start with full window so we can perform camera calibration. Additionally, set maximum frame rate at 50 hz, 
     # and the focal distance to 0.204 m. This seems to be at the right location to maximize the focal point around the 
     # free beam laser spot.
-    cam_obj = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frameRate="Rate50Hz",focalDistance=0.2) 
-    cam_obj.set_acquisition_mode()
+    therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frameRate="Rate50Hz",focalDistance=0.2) 
+    therm_cam.set_acquisition_mode()
     
     ##################################################################################
     #------------------------------ RGBD Cam Config ---------------------------------#
     ##################################################################################
-    # Empty 
+    try:
+        rgbd_cam = RGBD_Cam()
+        RGBD_cam_thread = threading.Thread(target=rgbd_cam.get_camera_stream(), args=(), kwargs={"delay": 2})
+        RGBD_cam_thread.run()
+    except:
+        print("Error in connecting to RGB-D Camera")
     
     ##################################################################################
     #-------------------------------- Laser Config ----------------------------------#
@@ -51,15 +57,14 @@ def main():
     try:
         laser_obj = Laser_Arduino()  # controls whether laser is on or off
         laser_on = False
+        laser_obj.set_output(laser_on)
     except:
         print("Failed to connect to Laser...")
     
     ##################################################################################
     #----------------------------- Backend Connection -------------------------------#
     ##################################################################################
-    
     # Empty 
-    
     backend_connection = False
     
     ##################################################################################

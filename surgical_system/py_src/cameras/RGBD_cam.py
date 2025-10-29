@@ -2,8 +2,6 @@ import pyrealsense2 as rs
 import numpy as np
 import cv2
 
-
-
 class RGBD_Cam():
     def __init__(self, width = 640, height = 480, frame_rate = 30):
         # Configure depth and color streams
@@ -20,6 +18,9 @@ class RGBD_Cam():
         self.config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, frame_rate)
 
         self.pipeline.start(self.config)
+        
+        self.color_frame = np.array()
+        self.depth_frame = np.array()
     
     
     def get_camera_stream(self):
@@ -32,26 +33,39 @@ class RGBD_Cam():
                 continue
 
             # Convert images to numpy arrays
-            depth_image = np.asanyarray(depth_frame.get_data())
-            color_image = np.asanyarray(color_frame.get_data())
+            self.depth_frame = np.asanyarray(depth_frame.get_data())
+            self.color_frame = np.asanyarray(color_frame.get_data())
+            self.depth_shape = self.depth_frame
+            self.color_shape = self.color_frame
+    
+    def display_color_stream(self):
+        depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(self.depth_image, alpha=0.03), cv2.COLORMAP_JET)
+        # Show images
+        cv2.namedWindow('Color Stream', cv2.WINDOW_AUTOSIZE)
+        cv2.imshow('Depth Stream', depth_colormap)
+        cv2.waitKey(1)
+        
+    def display_depth_stream(self):
+        cv2.namedWindow('Color Stream', cv2.WINDOW_AUTOSIZE)
+        cv2.imshow('Depth Stream', self.color_frame)
+        cv2.waitKey(1)
+        
+    def display_all_streams(self):
+        # Apply colormap on depth image (image must be converted to 8-bit per pixel first)
+        depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(self.depth_frame, alpha=0.03), cv2.COLORMAP_JET)
 
-            # Apply colormap on depth image (image must be converted to 8-bit per pixel first)
-            depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
 
-            depth_colormap_dim = depth_colormap.shape
-            color_colormap_dim = color_image.shape
+        # If depth and color resolutions are different, resize color image to match depth image for display
+        if self.depth_shape != self.color_shape:
+            resized_color_image = cv2.resize(self.color_frame, dsize=(self.depth_shape[1], self.depth_shape[0]), interpolation=cv2.INTER_AREA)
+            images = np.hstack((resized_color_image, depth_colormap))
+        else:
+            images = np.hstack((self.color_frame, depth_colormap))
 
-            # If depth and color resolutions are different, resize color image to match depth image for display
-            if depth_colormap_dim != color_colormap_dim:
-                resized_color_image = cv2.resize(color_image, dsize=(depth_colormap_dim[1], depth_colormap_dim[0]), interpolation=cv2.INTER_AREA)
-                images = np.hstack((resized_color_image, depth_colormap))
-            else:
-                images = np.hstack((color_image, depth_colormap))
-
-            # Show images
-            cv2.namedWindow('RealSense', cv2.WINDOW_AUTOSIZE)
-            cv2.imshow('RealSense', images)
-            cv2.waitKey(1)
+        # Show images
+        cv2.namedWindow('RealSense', cv2.WINDOW_AUTOSIZE)
+        cv2.imshow('RealSense', images)
+        cv2.waitKey(1)
 
     def deinitialize_cam(self):
         self.pipeline.stop()
