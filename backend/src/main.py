@@ -21,6 +21,10 @@ app.add_middleware(
 def read_item(stream_name: str):
     return {"stream_url": "http://localhost:8889/mystream"}
 
+@app.get("/health")
+def health():
+    return None
+
 # this code is from the FastAPI websockets documentation
 class ConnectionManager:
     def __init__(self):
@@ -83,6 +87,19 @@ async def websocket_endpoint(websocket: WebSocket):
                 print(f"Updated coordinates: {example_data}")
             except json.JSONDecodeError:
                 await websocket.send_text("Error: Invalid JSON format.")
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        print("Client disconnected.")
+
+@app.websocket("/ws/robot")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket) 
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            print(data)
+            await websocket.send_text("Got ur data")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
         print("Client disconnected.")

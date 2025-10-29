@@ -2,13 +2,16 @@ import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 
-from surgical_system.py_src.robot.franka_client import FrankaClient
-from cameras.thermal_cam import ThermalCam
+from robot.franka_client import FrankaClient
+mock_robot = os.getenv("MOCK_ROBOT", "false") == "true"
+print(f"Mocking? {mock_robot}")
+if(not mock_robot):
+    from cameras.thermal_cam import ThermalCam
+    import cv2 
 from laser_control.laser_arduino import Laser_Arduino
 import numpy as np
 import time, subprocess
 import matplotlib.pyplot as plt
-import cv2 
 from scipy.spatial.transform import Rotation
 
 def SelectROI(homePose, targetPose, cam_obj=None):

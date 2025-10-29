@@ -1,7 +1,7 @@
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
-from UDP.UDPClient import UDPClient
+from robot.UDP.UDPClient import UDPClient
 import numpy as np
 import struct
 

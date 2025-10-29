@@ -1,8 +1,8 @@
-from franka_client import FrankaClient
+from robot.franka_client import FrankaClient
 
 class MockFrankaClient(FrankaClient):
     def __init__(self):
-        self.__instance = self
+        FrankaClient._FrankaClient__instance = self
         
     def send_pose(self, transform, mode=1):
         print("Sending mock message")
