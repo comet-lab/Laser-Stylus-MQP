@@ -5,6 +5,14 @@ services:
       - "443:8080"
     volumes:
       - ./backend/src:/app
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:443/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    environment:
+      - PYTHONUNBUFFERED=1
   frontend:
     build: ./frontend
     ports:
@@ -20,3 +28,11 @@ services:
       - "8554:8554"
       - "8889:8889"
       - "8189:8189/udp"
+  surgical_system:
+    build: ./surgical_system
+    environment:
+      - MOCK_ROBOT=true
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - backend
+      - frontend
