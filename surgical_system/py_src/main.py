@@ -1,5 +1,6 @@
-import os, time, subprocess, sys
+import os, time, subprocess, sys, warnings
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 # Classes
 from robot.franka_client import FrankaClient
@@ -49,8 +50,11 @@ def main():
     ##################################################################################
     #-------------------------------- Laser Config ----------------------------------#
     ##################################################################################
-    laser_obj = Laser_Arduino()  # controls whether laser is on or off
-    laser_on = False
+    try:
+        laser_obj = Laser_Arduino()  # controls whether laser is on or off
+        laser_on = False
+    except:
+        print("Failed to connect to Laser...")
     
     ##################################################################################
     #----------------------------- Backend Connection -------------------------------#

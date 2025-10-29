@@ -185,8 +185,6 @@ class ThermalCam:
                 self.cam.BeginAcquisition()
                 self.acquiring_flag = True
 
-
-
         def change_IRFormat(self, IRFormat):
             """
             Changes the image data type of the IR camera
@@ -230,8 +228,7 @@ class ThermalCam:
 
                 self.execute_nuc()
             else: 
-                warnings.warn("Can't change camera params while acquiring images. End acquisition first")
-            
+                warnings.warn("Can't change camera params while acquiring images. End acquisition first")      
 
         def change_IRFrameRate(self, rate):
             """

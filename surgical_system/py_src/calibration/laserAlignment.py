@@ -9,7 +9,7 @@ from cameras.thermal_camera_calibration import thermalCamCali
 import numpy as np
 from scipy.spatial.transform import Rotation
 from laser_control.laser_arduino import Laser_Arduino
-from Utilities.cameraRegistration import reProjectionTest, alignRobot_input, hotSpotPixel
+from cameraRegistration import reProjectionTest, alignRobot_input, hotSpotPixel
 from Utilities_functions import loadHomePose, goToPose
 from pathlib import Path
 import cv2
