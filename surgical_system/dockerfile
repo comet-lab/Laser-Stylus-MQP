@@ -1,0 +1,12 @@
+FROM python:3.8-slim
+
+WORKDIR /app
+
+COPY py_src/requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY cpp_src/ .
+COPY py_src/ .
+
+CMD ["python", "main.py"]

@@ -7,3 +7,4 @@ PySpin
 matplotlib.pyplot
 yaml
 pyrealsense2 #RGBD Camera only works on 3.11
+websockets

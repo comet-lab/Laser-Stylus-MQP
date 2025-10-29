@@ -1,23 +1,29 @@
 import os, time, subprocess, sys, warnings
 import numpy as np
+import asyncio
+import websockets
+import ast
 from scipy.spatial.transform import Rotation
 
 # Classes
 from robot.franka_client import FrankaClient
+from robot.mock_franka_client import MockFrankaClient
 from calibration.Utilities_functions import loadHomePose
 from cameras.thermal_cam import ThermalCam
+from backend.listener import BackendConnection
 # RGBD camera
 from laser_control.laser_arduino import Laser_Arduino
 
-def main():
+async def main():
     pathToCWD = os.getcwd()
     camera_calibration = False
+    mock_robot = ast.literal_eval(os.getenv("MOCK_ROBOT", "False"))
     
     ##################################################################################
     #------------------------------ Robot Config ------------------------------------#
     ##################################################################################
     # Create FrankaNode object for controlling robot
-    robot_obj = FrankaClient()  
+    robot_obj = FrankaClient() if not mock_robot else MockFrankaClient()
     subprocess.Popen([pathToCWD + "/cpp_src/main"])
     home_pose = loadHomePose(home_pose_path="home_pose.csv")
     start_pos = np.array([0,0,0.35]) # [m,m,m]
@@ -60,9 +66,11 @@ def main():
     #----------------------------- Backend Connection -------------------------------#
     ##################################################################################
     
-    # Empty 
-    
-    backend_connection = False
+    backend_connection = BackendConnection(
+        send_fn=lambda: "Hello from robot!",
+        recv_fn=lambda msg: print("Server sent: " + msg)
+    )
+    await backend_connection.connect_to_websocket()
     
     ##################################################################################
     #----------------------------- Camera Calibration -------------------------------#
@@ -70,6 +78,8 @@ def main():
     
     if camera_calibration:
         pass
+
+    await asyncio.Future()
     
     
     

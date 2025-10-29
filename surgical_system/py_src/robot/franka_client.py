@@ -69,29 +69,29 @@ class FrankaClient:
     def __setattr__(self, attr, value):
         """ Delegate access to implementation """
         return setattr(self.__instance, attr, value)
+
+# if __name__=='__main__':
+#     import time
+#     import subprocess
+#     from scipy.spatial.transform import Rotation
+#     from Utilities_functions import loadHomePose
+#     robot_obj = FrankaClient()
+#     main_address = "/home/nepacheco/Repositories/Laser_control/cpp_src/main"
+#     subprocess.Popen([main_address]) 
+#     time.sleep(2)
+
+#     home_pose = loadHomePose()
     
-if __name__=='__main__':
-    import time
-    import subprocess
-    from scipy.spatial.transform import Rotation
-    from Utilities_functions import loadHomePose
-    robot_obj = FrankaClient()
-    main_address = "/home/nepacheco/Repositories/Laser_control/cpp_src/main"
-    subprocess.Popen([main_address]) 
-    time.sleep(2)
+#     mode = 1
+#     height = 0.2 # m
+#     x = 0
+#     y = 0
+#     target_pose = np.array([[1,0,0,x],[0,1,0,y],[0,0,1,height],[0,0,0,1]])
 
-    home_pose = loadHomePose()
-    
-    mode = 1
-    height = 0.2 # m
-    x = 0
-    y = 0
-    target_pose = np.array([[1,0,0,x],[0,1,0,y],[0,0,1,height],[0,0,0,1]])
+#     time.sleep(2)
+#     returnedPose =robot_obj.send_pose(target_pose@home_pose,mode)
+#     time.sleep(4)
 
-    time.sleep(2)
-    returnedPose =robot_obj.send_pose(target_pose@home_pose,mode)
-    time.sleep(4)
-
-    message = robot_obj.request_pose()    
-    print("Robot Message: ", message)
-    robot_obj.close()
+#     message = robot_obj.request_pose()    
+#     print("Robot Message: ", message)
+#     robot_obj.close()
