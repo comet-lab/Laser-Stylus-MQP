@@ -62,19 +62,19 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             try:
                 coords = json.loads(data)
-                required_keys = ["x", "y", "z", "rx", "ry", "rz"]
+                valid_keys = example_data.keys()
 
                 # makes sure that the corerct keys are present
-                if not all(key in coords for key in required_keys):
-                    await websocket.send_text("Error: Missing keys")
+                if not all(key in valid_keys for key in coords):
+                    await websocket.send_text("Error: Unknown keys")
                     continue
                 # makes sure values are numbers
-                if not all(isinstance(coords[key], (int, float)) for key in required_keys):
+                if not all(isinstance(coords[key], (int, float)) for key in coords): # May not need for config status strings
                     await websocket.send_text("Error: Values need to be numbers")
                     continue
 
                 # updates the example data
-                for key in required_keys:
+                for key in coords:
                     example_data[key] = float(coords[key])
 
                 # broadcasts the data as a json string
@@ -96,3 +96,34 @@ def get_current_coordinates():
 # have the socket accept websocket 
 # make HTTP endpoints
 # make an websockets 
+
+
+#Laser control websocket
+@app.websocket("/ws/laser")
+async def websocket_laser(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            
+            try:
+                state = json.loads(data)
+
+                if 'isLaserOn' not in state:
+                    await websocket.send_text("Error: Missing 'isLaserOn' key.")
+                    continue
+                
+                received_bool = state['isLaserOn']
+
+                if not isinstance(received_bool, bool):
+                    await websocket.send_text("Error: 'isLaserOn' must be a boolean.")
+                    continue
+                
+                await manager.broadcast(json.dumps(state))
+
+            except json.JSONDecodeError:
+                await websocket.send_text("Error: Please send 'true' or 'false'.")
+    
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        print("Client disconnected.")
