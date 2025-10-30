@@ -1,4 +1,4 @@
-import time
+import time, threading, queue, warnings
 import PySpin
 import matplotlib.pyplot as plt
 import math
@@ -18,8 +18,72 @@ class ThermalCam:
             self.execute_nuc()
             time.sleep(0.2)
             self.set_acquisition_mode()
+            
+            #threading 
+            self.thread_stop = threading.Event()
+            self._q = queue.Queue(maxsize=1)
+            self._thread = threading.Thread(target=self._run, daemon=True)
+            # self._thread.start()     
             # Just to make sure the settings are defined before receiving images
+            
+        def _run(self):
+            t = time.time()
+            try:
+                while not self.thread_stop.is_set():
+                    if not self.acquiring_flag:
+                        self.set_acquisition_mode()
+                        image_result = self.cam.GetNextImage(1000)
 
+                        #  Ensure image completion
+                        if image_result.IsIncomplete():
+                            print('FLIR: Image incomplete with image status %d ...' % image_result.GetImageStatus())
+                        else:
+                            # Getting the image data as a numpy array
+                            image_data = image_result.GetNDArray()
+                            
+                    #  Release image
+                    #  *** NOTES ***
+                    #  Images retrieved directly from the camera (i.e. non-converted
+                    #  images) need to be released in order to keep from filling the
+                    #  buffer.
+                    image_result.Release()
+                    ts = time.time() - t
+                    item = {"image": image_data, "ts": ts}
+
+                    # keep only the newest frame
+                    if self._q.full():
+                        try: self._q.get_nowait()
+                        except queue.Empty: pass
+                    self._q.put_nowait(item)
+            finally:
+                pass
+        
+        def get_latest(self, timeout=None):
+            """Return the most recent {'image','ts'} or None if nothing yet."""
+            try:
+                return self._q.get(timeout=timeout)
+            except queue.Empty:
+                return None
+        
+        def start_stream(self):
+            if self._thread and self._thread.is_alive():
+                warnings.warn("start_thread() called but thread is already running")
+                return False
+
+            self.thread_stop.clear()
+            self._thread = threading.Thread(target=self._run, daemon=True)
+            self._thread.start()
+            return True
+            
+        def stop_stream(self):
+            if self._thread and not self._thread.is_alive():
+                warnings.warn("stop_thread() called but thread is stopped or not made")
+                return False
+            
+            self.thread_stop.set(True)
+            self._thread.join(timeout=2)
+            return True
+            
         def initialize_camera(self):
             # Retrieve singleton reference to system object
             self.system = PySpin.System.GetInstance()
@@ -250,7 +314,6 @@ class ThermalCam:
                 time.sleep(1)
             else:
                 warnings.warn("Can't change camera params while acquiring images. End acquisition first")
-
 
         def start_recording(self, num_frames):
             """

@@ -1,4 +1,4 @@
-import os, time, subprocess, sys, warnings, threading
+import os, time, sys, warnings, threading
 import numpy as np
 from scipy.spatial.transform import Rotation
 
@@ -9,7 +9,6 @@ from cameras.RGBD_cam import RGBD_Cam
 from laser_control.laser_arduino import Laser_Arduino
 
 def main():
-    pathToCWD = os.getcwd()
     camera_calibration = False
     
     ##################################################################################
@@ -37,12 +36,13 @@ def main():
     # free beam laser spot.
     therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frameRate="Rate50Hz",focalDistance=0.2) 
     therm_cam.set_acquisition_mode()
+    therm_cam.start_stream() # Start camera stream
     
     ##################################################################################
     #------------------------------ RGBD Cam Config ---------------------------------#
     ##################################################################################
     try:
-        rgbd_cam = RGBD_Cam() #Runs a thread internally to stream
+        rgbd_cam = RGBD_Cam() #Runs a thread internally
     except:
         print("Error in connecting to RGB-D Camera")
     
@@ -69,7 +69,7 @@ def main():
     if camera_calibration:
         pass
     
-    rgbd_cam.display_all_streams()
+    rgbd_cam.display_all_streams() #Test Streaming
     
     
 

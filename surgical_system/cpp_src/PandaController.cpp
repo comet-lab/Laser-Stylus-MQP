@@ -1,6 +1,4 @@
 #include "PandaController.h" 
- 
-
 
 PandaController::PandaController(std::string ipAddress,char mode, double *posTargetPtr, double orienTargetPtr[][3], double currState[7]){
   this->ipAddress = ipAddress;
@@ -64,15 +62,14 @@ void PandaController::moveToStart(double x, double y, double z){
 }
 
 void PandaController::runController(double maxTime /*=10*/){
-
   // Eigen::Vector3d theFirst = Eigen::Vector3d::Zero();
   while (mode >= 0)
   { // while we haven't received the stop command
     if (mode == 0)
     {
       this->getPose();
-    } else if (mode == 1)
-    {
+    } 
+    else if (mode == 1){
       franka::Model model = this->robot->loadModel();
       modelPtr = &model;
       setDefaultBehavior(*robot);
@@ -180,8 +177,17 @@ void PandaController::runController(double maxTime /*=10*/){
         return output;
       });
     }
+    else if (mode == 2){
+
+    }
   }
 }
+
+
+void PandaController::velocityMode(){
+
+}
+
 
 void PandaController::getPose(){
   /*

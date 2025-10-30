@@ -3,3 +3,4 @@ __pycache__/
 static/
 frontend/node_modules/
 venvs/
+.vscode/
