@@ -53,8 +53,6 @@ class RGBD_Cam():
     def display_all_streams(self):
         # Apply colormap on depth image (image must be converted to 8-bit per pixel first)
         depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(self.depth_frame, alpha=0.03), cv2.COLORMAP_JET)
-
-
         # If depth and color resolutions are different, resize color image to match depth image for display
         if self.depth_shape != self.color_shape:
             resized_color_image = cv2.resize(self.color_frame, dsize=(self.depth_shape[1], self.depth_shape[0]), interpolation=cv2.INTER_AREA)

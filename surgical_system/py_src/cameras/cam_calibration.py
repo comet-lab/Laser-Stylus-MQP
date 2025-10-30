@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import numpy as np 
 import cv2
 import yaml, csv
-from thermal_cam import ThermalCam
 
 class CameraCalibration():
     def __init__(self,calibration_folder='img_processing/CalibrationImages_0.2FD/',mode='2D',\

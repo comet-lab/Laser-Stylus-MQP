@@ -5,12 +5,12 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from surgical_system.py_src.robot.franka_client import FrankaClient
 from cameras.thermal_cam import ThermalCam
 import subprocess, time, math
-from cameras.thermal_camera_calibration import thermalCamCali
+from .cameras.cam_calibration import CameraCalibration
 import numpy as np
 from scipy.spatial.transform import Rotation
 from laser_control.laser_arduino import Laser_Arduino
-from cameraRegistration import reProjectionTest, alignRobot_input, hotSpotPixel
-from Utilities_functions import loadHomePose, goToPose
+from .cameraRegistration import reProjectionTest, hotSpotPixel
+from .Utilities_functions import goToPose
 from pathlib import Path
 import cv2
 
@@ -18,7 +18,6 @@ def laserAlignment():
     debug = True
     pathToCWD = os.getcwd()
 
-    
     robot_obj = FrankaClient()  
     homePose = robot_obj.loadHomePose(home_pose_path="home_pose.csv")
     subprocess.Popen([pathToCWD + "/cpp_src/main"]) 
@@ -32,7 +31,7 @@ def laserAlignment():
     cam_obj.set_acquisition_mode()
     
     fileLocation = "python_src/thermal_cam_control/img_processing/LaserScanningExperiments/"
-    camCali = thermalCamCali(filepath=fileLocation)
+    camCali = CameraCalibration(filepath=fileLocation)
     M_pixPerM = 7000
     camCali.load_homography(M_pix_per_m = M_pixPerM, fileLocation = fileLocation, debug = debug)
     M = camCali.M
@@ -183,7 +182,7 @@ def findRobotOffset(newHomePose, robot_obj, laser_obj, camCali, M_pixPerM):
     _newHomePose[2, -1] -= height
     return _newHomePose.copy(), np.linalg.norm(error*1000)
     
-def fullRobotAlignment(robot_obj: FrankaClient, camCali: thermalCamCali, laser_obj: Laser_Arduino,\
+def fullRobotAlignment(robot_obj: FrankaClient, camCali: CameraCalibration, laser_obj: Laser_Arduino,\
                        homePose, M_pixPerM, height=0):
     robotError = 1000
     
@@ -208,7 +207,7 @@ def fireLaser(laser_obj, duration=0.5):
     laser_obj.set_output(False)
     print("Laser fired.")
 
-def getPeakTemp(thermal_obj: ThermalCam, camCali: thermalCamCali, method="Centroid"):
+def getPeakTemp(thermal_obj: ThermalCam, camCali: CameraCalibration, method="Centroid"):
     
     # Acquire image and find laser spot
     img = thermal_obj.acquire_and_display_images(1,display=False)[0]
