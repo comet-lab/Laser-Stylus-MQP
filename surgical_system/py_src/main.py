@@ -42,9 +42,7 @@ def main():
     #------------------------------ RGBD Cam Config ---------------------------------#
     ##################################################################################
     try:
-        rgbd_cam = RGBD_Cam()
-        RGBD_cam_thread = threading.Thread(target=rgbd_cam.get_camera_stream(), args=(), kwargs={"delay": 2})
-        RGBD_cam_thread.run()
+        rgbd_cam = RGBD_Cam() #Runs a thread internally to stream
     except:
         print("Error in connecting to RGB-D Camera")
     
@@ -71,8 +69,7 @@ def main():
     if camera_calibration:
         pass
     
-    
-    
+    rgbd_cam.display_all_streams()
     
     
 

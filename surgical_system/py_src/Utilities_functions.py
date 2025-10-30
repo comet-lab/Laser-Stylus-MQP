@@ -2,7 +2,7 @@ import sys, os, time, subprocess
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 
-from surgical_system.py_src.robot.franka_client import FrankaClient
+from surgical_system.py_src.robot.robot_controller import Robot_Controller
 from cameras.thermal_cam import ThermalCam
 from laser_control.laser_arduino import Laser_Arduino
 import numpy as np
@@ -35,23 +35,23 @@ def SelectROI(homePose, targetPose, cam_obj=None):
     cv2.destroyWindow('select')
     return rowROI, colROI
 
-def manuallyFocusCamera(homePose, cam_obj = None):
-    print("\nStart Manually Focusing the Camera\n")
-    if cam_obj is None:
-        cam_obj = ThermalCam(IRFormat="TemperatureLinear10mK", height=120)
-        cam_obj.set_acquisition_mode()
-    laser_obj = Laser_Arduino()
-    print("Firing Laser in 2 seconds")
-    robot_obj = FrankaClient()
-    targetPose = np.array([1,0,0,0],[0,1,0,0],[0,0,1,0.15],[0,0,0,1])
-    robot_obj.send_pose(targetPose@homePose,1)
-    time.sleep(2)
-    print("Laser On")
-    laser_obj.set_output(1)
-    cam_obj.acquire_and_display_images(500, display=True, debug=True)
-    laser_obj.set_output(0)
-    plt.close()
-    print("Laser Off")
+# def manuallyFocusCamera(homePose, cam_obj = None):
+#     print("\nStart Manually Focusing the Camera\n")
+#     if cam_obj is None:
+#         cam_obj = ThermalCam(IRFormat="TemperatureLinear10mK", height=120)
+#         cam_obj.set_acquisition_mode()
+#     laser_obj = Laser_Arduino()
+#     print("Firing Laser in 2 seconds")
+#     robot_obj = FrankaClient()
+#     targetPose = np.array([1,0,0,0],[0,1,0,0],[0,0,1,0.15],[0,0,0,1])
+#     robot_obj.send_pose(targetPose@homePose,1)
+#     time.sleep(2)
+#     print("Laser On")
+#     laser_obj.set_output(1)
+#     cam_obj.acquire_and_display_images(500, display=True, debug=True)
+#     laser_obj.set_output(0)
+#     plt.close()
+#     print("Laser Off")
 
 def HT_Inv(homogeneousPose):
     """
@@ -68,8 +68,8 @@ def HT_Inv(homogeneousPose):
 
 if __name__ == '__main__':
     pathToCWD = os.getcwd()
-    robot_obj = FrankaClient()
+    robot_controller = Robot_Controller()
     subprocess.Popen([pathToCWD + "/cpp_src/main"]) 
     time.sleep(3)
-    homePose = robot_obj.loadHomePose()
-    goToPose(homePose)
+    homePose = robot_controller.loadHomePose()
+    robot_controller.goToPose(homePose)
