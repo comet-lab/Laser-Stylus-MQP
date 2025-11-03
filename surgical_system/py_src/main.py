@@ -28,7 +28,7 @@ async def main():
     # Create FrankaNode object for controlling robot
     robot_controller = Robot_Controller() if not mock_robot else MockFrankaClient()
     # TODO fix running in container
-    home_pose = robot_controller.load_home_pose(home_pose_path="home_pose.csv")
+    home_pose = robot_controller.load_home_pose()
     start_pos = np.array([0,0,0.35]) # [m,m,m]
     target_pose = np.array([[1.0, 0, 0, start_pos[0]],
                             [0,1,0,start_pos[1]],
@@ -84,10 +84,6 @@ async def main():
         pass
 
     await asyncio.Future()
-    
-    # while(not therm_cam.is_ready() or not rgbd_cam.is_ready()):
-    #     time.sleep(2)
-        # print("Waiting for: Therm ",therm_cam.isReady(), " RGBD ", rgbd_cam.isReady())
     
     print("Cameras are ready")
     therm_cam.start_stream() # Start camera stream
