@@ -53,7 +53,11 @@ example_data = {
     "z": 0,
     "rx": 0,
     "ry": 0,
-    "rz":0
+    "rz":0,
+    "laserX": 0,
+    "laserY": 0,
+    "beamWaist": 0,
+    "speed": 0
 }
 
 # this is the websocket to pass the 6 varaibles from frontend to backend
