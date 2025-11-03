@@ -17,15 +17,19 @@ class ThermalCam:
             self.temp_scale = 100.0
             self._ready = False
             
-            ### THIS CANNOT BE INIT IN THE THREAD, LEAVE THIS HERE
-            self.initialize_camera()
-            self.change_IRWindowing(self.height)
-            self.set_focal_distance(self.focal_distance)
-            self.change_IRFormat(self.ir_format)
-            self.change_IRFrameRate(self.frame_rate)
-            self.execute_nuc()
-            time.sleep(0.2)
-            self.set_acquisition_mode()
+            try:
+                ### THIS CANNOT BE INIT IN THE THREAD, LEAVE THIS HERE
+                self.initialize_camera()
+                self.change_IRWindowing(self.height)
+                self.set_focal_distance(self.focal_distance)
+                self.change_IRFormat(self.ir_format)
+                self.change_IRFrameRate(self.frame_rate)
+                self.execute_nuc()
+                time.sleep(0.2)
+                self.set_acquisition_mode()
+                self._ready = True
+            except:
+                print("Thermal camera failed to init")
             
             #threading 
             self.thread_ready = threading.Event()
@@ -38,10 +42,9 @@ class ThermalCam:
         def _run(self):
             t = time.time()
             print("Starting Thermal Camera Thread...")
-            
-            self._ready = True
-            
             try:
+                if not self._ready:
+                    return 
                 while(True):
                     self.thread_ready.wait()
                     images = self.start_recording(1)  # returns a list of images
