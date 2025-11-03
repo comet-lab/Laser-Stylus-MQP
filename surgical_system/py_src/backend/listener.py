@@ -1,5 +1,6 @@
 import asyncio
 import websockets
+import os
 
 class BackendConnection():
     def __init__(self, send_fn, recv_fn):
@@ -18,7 +19,8 @@ class BackendConnection():
             self.recv_fn(message)
 
     async def connect_to_websocket(self):
-        uri = "ws://backend:8080/ws/robot"
+        ws_ui_name = os.getenv("UI_WEBSOCKET_NAME")
+        uri = f"ws://backend:8080/ws/{ws_ui_name}"
         async with websockets.connect(uri) as websocket:
             # Connection is now open
             print(f"Connected to WebSocket server at {uri}")

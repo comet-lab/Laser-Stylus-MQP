@@ -13,6 +13,8 @@ services:
       start_period: 5s
     environment:
       - PYTHONUNBUFFERED=1
+      - UI_WEBSOCKET_NAME=${UI_WEBSOCKET_NAME}
+      - ROBOT_WEBSOCKET_NAME=${ROBOT_WEBSOCKET_NAME}
   frontend:
     build: ./frontend
     ports:
@@ -22,6 +24,8 @@ services:
       - /app/node_modules
     depends_on:
       - backend
+    environment:
+      - VITE_UI_WEBSOCKET_NAME=${UI_WEBSOCKET_NAME}
   media:
     build: ./media
     ports:
@@ -33,6 +37,7 @@ services:
     environment:
       - MOCK_ROBOT=true
       - PYTHONUNBUFFERED=1
+      - ROBOT_WEBSOCKET_NAME=${ROBOT_WEBSOCKET_NAME}
     depends_on:
       - backend
       - frontend
