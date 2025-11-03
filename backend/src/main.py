@@ -62,7 +62,7 @@ example_data = {
 }
 
 # this is the websocket to pass the 6 varaibles from frontend to backend
-@app.websocket("/ws/coordinates")
+@app.websocket("/ws/ui")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket) 
 
