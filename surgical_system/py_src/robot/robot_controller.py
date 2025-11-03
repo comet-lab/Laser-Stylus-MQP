@@ -1,23 +1,28 @@
 import os, subprocess, time, sys
-from .franka_client import franka_client
 from scipy.spatial.transform import Rotation
 import numpy as np
+
+if __name__=='__main__':
+    from franka_client import FrankaClient
+else:
+    from .franka_client import FrankaClient
 
 class Robot_Controller():
     def __init__(self):
         pathToCWD = os.getcwd()
-        self.franka_client = franka_client
-        subprocess.Popen([pathToCWD + "surgical_system/cpp_src/main"]) 
+        self.franka_client = FrankaClient()
+        subprocess.Popen([pathToCWD + "/surgical_system/cpp_src/main"]) 
         time.sleep(3)
+        print("Robot Online")
         self.home_pose = self.load_home_pose()
 
-    def load_home_pose(self, home_pose_path = "home_pose.csv"):
+    def load_home_pose(self, home_pose_path = "surgical_system/py_src/robot/home_pose.csv"):
         if(os.path.exists(home_pose_path)):
             homePose = np.loadtxt(home_pose_path, delimiter=",")
             print("\nLoad Robot home pose: ", homePose)
         else:
             print("\n[WARNING] home_position.csv not found: Setting default home pose.")
-            # Load home pose 
+            # Load home pose array
             rot = Rotation.from_euler('ZYX',[0,np.pi/4,np.pi/2])
             rotM = rot.as_matrix()
             
@@ -25,10 +30,11 @@ class Robot_Controller():
             homePosition = np.array([[0.4425],[0.1043],[0.1985]])
             homePose = np.concatenate((rotM,homePosition),axis=1)
             homePose = np.concatenate((homePose,[[0,0,0,1]]),axis=0)
-
+            np.savetxt(home_pose_path, homePose, delimiter=",")
+            print("Saving new home_pose...")
         return homePose
     
-    def loadAndEditPose(self, filePath = "home_pose.csv"):
+    def loadAndEditPose(self, filePath = "/surgical_system/py_src/robot/home_pose.csv"):
         # Default robot starting location 
         self.home_pose = self.load_home_pose(home_pose_path=filePath)
         self.franka_client.send_pose(self.home_pose,1) # Send robot to zero position
@@ -51,7 +57,7 @@ class Robot_Controller():
         errorFlag2 = True
         while (errorFlag1 or errorFlag2) and iterations < maxIterations:
             time.sleep(.5)
-            currPose = franka_client.send_pose(pose, 1)
+            currPose = self.franka_client.send_pose(pose, 1)
             error = currPose[:3] - pose[:3, -1]
             
             # Convert to scipy Rotations
@@ -113,8 +119,6 @@ class Robot_Controller():
 if __name__=='__main__':
     import time, subprocess
     from scipy.spatial.transform import Rotation
-    time.sleep(2)
-
     robot_controller = Robot_Controller()
     home_pose = robot_controller.get_home_pose()
     

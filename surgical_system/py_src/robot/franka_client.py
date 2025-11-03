@@ -1,6 +1,8 @@
 import os
-# sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
-from .UDP import UDPClient
+if __name__=='__main__':
+    from UDP.UDPClient import UDPClient
+else:
+    from .UDP.UDPClient import UDPClient
 import numpy as np
 import struct
 
@@ -70,13 +72,11 @@ class FrankaClient:
 franka_client = FrankaClient()
     
 if __name__=='__main__':
-    import time, pathlib, subprocess
+    import time, subprocess
     from scipy.spatial.transform import Rotation
     time.sleep(2)
-    
     pathToCWD = os.getcwd()
-    subprocess.Popen([pathToCWD + "surgical_system/cpp_src/main"]) 
-
+    subprocess.Popen([pathToCWD + "/surgical_system/cpp_src/main"]) 
     # Load home pose 
     rot = Rotation.from_euler('ZYX',[0,np.pi/4,np.pi/2])
     rotM = rot.as_matrix()
@@ -92,7 +92,7 @@ if __name__=='__main__':
     y = 0
     target_pose = np.array([[1,0,0,x],[0,1,0,y],[0,0,1,height],[0,0,0,1]])
 
-    # time.sleep(2)
+    time.sleep(2)
     returnedPose = franka_client.send_pose(target_pose@home_pose,mode)
     time.sleep(4)
 

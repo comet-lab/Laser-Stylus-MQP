@@ -10,45 +10,45 @@ class ThermalCam:
     class __impl:
         acquiring_flag = False
         def __init__(self, ir_format="TemperatureLinear10mK", height=480, frame_rate="Rate50Hz",focal_distance=0.2):
+            self.height= height
+            self.focal_distance = focal_distance
+            self.ir_format = ir_format
+            self.frame_rate = frame_rate
+            self.temp_scale = 100.0
+            self._ready = False
+            
+            ### THIS CANNOT BE INIT IN THE THREAD, LEAVE THIS HERE
             self.initialize_camera()
-            self.change_IRWindowing(height)
-            self.set_focal_distance(focal_distance)
-            self.change_IRFormat(ir_format)
-            self.change_IRFrameRate(frame_rate)
+            self.change_IRWindowing(self.height)
+            self.set_focal_distance(self.focal_distance)
+            self.change_IRFormat(self.ir_format)
+            self.change_IRFrameRate(self.frame_rate)
             self.execute_nuc()
             time.sleep(0.2)
             self.set_acquisition_mode()
             
             #threading 
-            self.thread_stop = threading.Event()
+            self.thread_ready = threading.Event()
+            self.thread_ready.clear()
             self._q = queue.Queue(maxsize=1)
             self._thread = threading.Thread(target=self._run, daemon=True)
-            # self._thread.start()     
+            self._thread.start()     
             # Just to make sure the settings are defined before receiving images
             
         def _run(self):
             t = time.time()
+            print("Starting Thermal Camera Thread...")
+            
+            self._ready = True
+            
             try:
-                while not self.thread_stop.is_set():
-                    if not self.acquiring_flag:
-                        self.set_acquisition_mode()
-                        image_result = self.cam.GetNextImage(1000)
-
-                        #  Ensure image completion
-                        if image_result.IsIncomplete():
-                            print('FLIR: Image incomplete with image status %d ...' % image_result.GetImageStatus())
-                        else:
-                            # Getting the image data as a numpy array
-                            image_data = image_result.GetNDArray()
-                            
-                    #  Release image
-                    #  *** NOTES ***
-                    #  Images retrieved directly from the camera (i.e. non-converted
-                    #  images) need to be released in order to keep from filling the
-                    #  buffer.
-                    image_result.Release()
+                while(True):
+                    self.thread_ready.wait()
+                    images = self.start_recording(1)  # returns a list of images
+                    # Take that image and extract temperature info
+                    tempInfo = np.subtract(images[0]/self.temp_scale, 273.15) 
                     ts = time.time() - t
-                    item = {"image": image_data, "ts": ts}
+                    item = {"image": tempInfo, "ts": ts}
 
                     # keep only the newest frame
                     if self._q.full():
@@ -64,25 +64,21 @@ class ThermalCam:
                 return self._q.get(timeout=timeout)
             except queue.Empty:
                 return None
+            
+        def display(self):
+            plt.imshow(self.get_latest()['image'], cmap='gray')
+            plt.pause(0.001)
+            # Clear current reference of a figure. This will improve display speed significantly
+            plt.clf()
+            
+        def is_ready(self):
+            return self._ready
+        
+        def stop_stream(self):
+            self.thread_ready.clear()
         
         def start_stream(self):
-            if self._thread and self._thread.is_alive():
-                warnings.warn("start_thread() called but thread is already running")
-                return False
-
-            self.thread_stop.clear()
-            self._thread = threading.Thread(target=self._run, daemon=True)
-            self._thread.start()
-            return True
-            
-        def stop_stream(self):
-            if self._thread and not self._thread.is_alive():
-                warnings.warn("stop_thread() called but thread is stopped or not made")
-                return False
-            
-            self.thread_stop.set(True)
-            self._thread.join(timeout=2)
-            return True
+            self.thread_ready.set()
             
         def initialize_camera(self):
             # Retrieve singleton reference to system object
