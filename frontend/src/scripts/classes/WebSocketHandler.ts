@@ -7,7 +7,7 @@ export class WebSocketHandler {
 
 
     constructor(outputElement: HTMLElement) {
-        this.url = "ws://localhost:443/ws/ui";
+        this.url = `ws://localhost:443/ws/${import.meta.env.VITE_UI_WEBSOCKET_NAME}`;
         this.outputElement = outputElement;
     }
 
