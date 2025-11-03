@@ -108,6 +108,7 @@ void PandaController::runController(double maxTime /*=10*/){
         // Jacobian for preventing excessive joint velocities
         std::array<double, 42> jacobian_array = modelPtr->zeroJacobian(franka::Frame::kFlange, robotState);
         Eigen::Map<const Eigen::Matrix<double, 6, 7>> jacobian(jacobian_array.data());
+
         // We can get the robot's current joint velocities targets
         Eigen::Map<const Eigen::Matrix<double, 7, 1>> jointVel_d(robotState.dq_d.data());
         Eigen::Matrix<double, 6, 1> cartVel_d; // panda desired cartesian velocity
@@ -178,14 +179,96 @@ void PandaController::runController(double maxTime /*=10*/){
       });
     }
     else if (mode == 2){
-
+      this->velocityMode(maxTime);
     }
   }
 }
 
 
-void PandaController::velocityMode(){
+void PandaController::velocityMode(double maxTime){
 
+  double max_lin_v = 0.3;   // [m/s] 
+  double max_alg_w = .50;   // [rad/s] 
+  double max_lin_a = 1.4;    // [m/s^2] 
+  double max_ang_w = 1.5;    // [rad/s^2] 
+
+  auto clampNorm = [](const Eigen::Vector3d& v, double max_n) {
+    double n = v.norm();
+    if (n <= max_n || n < 1e-12) return v;
+    return (v * (max_n / n)).eval();
+  };
+
+  auto clamp = [](double x, double lo, double hi) {
+    return std::max(lo, std::min(hi, x));
+  };
+
+  franka::Model model = this->robot->loadModel();
+  modelPtr = &model;
+  setDefaultBehavior(*robot);
+  this->setBehavior();
+  std::cout << "Running Controller" << std::endl;
+  double time = 0;
+
+  this->robot->control([=,&time](const franka::RobotState& robotState,
+                                franka::Duration timeStep) -> franka::CartesianVelocities {
+    
+    double dt = timeStep.toSec();  // Update time at the beginning of the callback.
+    time += dt; // sec
+
+    Eigen::Vector3d linVelTarget(this->posTargetPtr[0], this->posTargetPtr[1], this->posTargetPtr[2]);
+    Eigen::Vector3d omegaVelTarget(this->orienTargetPtr[0][0], this->orienTargetPtr[1][0], this->orienTargetPtr[2][0]);
+
+
+    linVelTarget = clampNorm(linVelTarget, max_lin_v);
+    omegaVelTarget = clampNorm(omegaVelTarget, max_alg_w);        
+    
+    
+
+    // // Calculate if joint acceleration is too high
+    // // Jacobian for preventing excessive joint velocities
+    // std::array<double, 42> jacobian_array = modelPtr->zeroJacobian(franka::Frame::kFlange, robotState);
+    // Eigen::Map<const Eigen::Matrix<double, 6, 7>> jacobian(jacobian_array.data());
+    // // We can get the robot's current joint velocities targets
+    // Eigen::Map<const Eigen::Matrix<double, 7, 1>> jointVel_d(robotState.dq_d.data());
+    // Eigen::Matrix<double, 6, 1> cartVel_d; // panda desired cartesian velocity
+    // // current cartesian velocity based on jacobian
+    // cartVel_d = jacobian*jointVel_d;
+
+    static Eigen::Vector3d linVelOutput = Eigen::Vector3d::Zero();
+    static Eigen::Vector3d omegaVelOutput  = Eigen::Vector3d::Zero();
+
+    franka::CartesianVelocities output = {{linVelOutput(0), linVelOutput(1), linVelOutput(2), omegaVelOutput(0), omegaVelOutput(1), omegaVelOutput(2)}};
+    
+    //debug statements
+    // double printFrequency = 100; //[Hz]
+    // if (abs(round(time * printFrequency) - time*printFrequency) < 0.0005){     // only print every second   
+    //   std::cout << "\nC++ Debug at time: " << time  << " seconds" << std::endl;
+    //   // std::cout << "Current Joint Velocities: " << jointVel.transpose() << std::endl;
+    //   // std::cout << "Desired Joint Velocities: " << jointVel_d.transpose() << std::endl;
+    //   // std::cout << "Commanded Joint Velocities: " << jointVel_c.transpose() << std::endl;
+    //   std::cout << "Current Cartesian Velocity: " << linVel << std::endl;
+    //   std::cout << "Desired Cartesian Velocities: " << cartVel_d.transpose() << std::endl;
+    //   // std::cout << "Commanded Cartesian Velocity: " << cartVel_c.transpose() << std::endl;
+    //   // std::cout << "Desired Linear Acceleration: " << desiredLinAccel.transpose() << std::endl;
+    //   // std::cout << "Orientation Target: \n" << orienTarget << std::endl;
+    //   // std::cout << "Full transform: \n" << O_T_EE << std::endl;
+    // //   for (int i = 0; i < 3; i ++){
+    // //     std::cout << orienTarget[i][0] <<" "<< orienTarget[i][1] <<" "<< orienTarget[i][2] << std::endl;
+    // //   }
+    // //   std::cout << "\n";
+    // //   for (int i = 0; i < 3; i ++){
+    // //     std::cout << robotState.O_T_EE.data()[i] <<" "<< robotState.O_T_EE.data()[i+4] <<" "<< robotState.O_T_EE.data()[i + 8] << std::endl;
+    // //   }
+    // } 
+
+    if ((time >= maxTime) || (this->mode <= 0)) 
+    {
+      // Return MotionFinished at the end of the trajectory.
+      std::cout << "Control Finished" << std::endl;
+      return franka::MotionFinished(output);
+    }
+    return output;
+  });
 }
 
 
