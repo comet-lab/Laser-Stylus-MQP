@@ -2,6 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import json
+import os
 
 app = FastAPI()
 
@@ -16,10 +17,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.get("/media/{stream_name}")
 def read_item(stream_name: str):
     return {"stream_url": "http://localhost:8889/mystream"}
+
+@app.get("/health")
+def health():
+    return None
 
 # this code is from the FastAPI websockets documentation
 class ConnectionManager:
@@ -49,11 +53,18 @@ example_data = {
     "z": 0,
     "rx": 0,
     "ry": 0,
-    "rz":0
+    "rz":0,
+    "laserX": 0,
+    "laserY": 0,
+    "beamWaist": 0,
+    "speed": 0,
+    "isLaserOn": False
 }
 
+ws_ui_name = os.getenv("UI_WEBSOCKET_NAME")
+
 # this is the websocket to pass the 6 varaibles from frontend to backend
-@app.websocket("/ws/coordinates")
+@app.websocket(f"/ws/{ws_ui_name}")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket) 
 
@@ -68,14 +79,15 @@ async def websocket_endpoint(websocket: WebSocket):
                 if not all(key in valid_keys for key in coords):
                     await websocket.send_text("Error: Unknown keys")
                     continue
-                # makes sure values are numbers
-                if not all(isinstance(coords[key], (int, float)) for key in coords): # May not need for config status strings
-                    await websocket.send_text("Error: Values need to be numbers")
-                    continue
-
-                # updates the example data
+             
+                # have to introduce an if statement because there is now a bool being sent
                 for key in coords:
-                    example_data[key] = float(coords[key])
+                    value = coords[key]
+                    if isinstance(value, bool):
+                        example_data[key] = bool(value)
+                    else:
+                        example_data[key] = float(value)
+
 
                 # broadcasts the data as a json string
                 await manager.broadcast(json.dumps(example_data))
@@ -83,6 +95,21 @@ async def websocket_endpoint(websocket: WebSocket):
                 print(f"Updated coordinates: {example_data}")
             except json.JSONDecodeError:
                 await websocket.send_text("Error: Invalid JSON format.")
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        print("Client disconnected.")
+
+ws_robot_name = os.getenv("ROBOT_WEBSOCKET_NAME")
+
+@app.websocket(f"/ws/{ws_robot_name}")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket) 
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            print(data)
+            await websocket.send_text("Got ur data")
     except WebSocketDisconnect:
         manager.disconnect(websocket)
         print("Client disconnected.")
@@ -97,33 +124,34 @@ def get_current_coordinates():
 # make HTTP endpoints
 # make an websockets 
 
+# TODO deprecate
 
-#Laser control websocket
-@app.websocket("/ws/laser")
-async def websocket_laser(websocket: WebSocket):
-    await manager.connect(websocket)
-    try:
-        while True:
-            data = await websocket.receive_text()
+# #Laser control websocket
+# @app.websocket("/ws/laser")
+# async def websocket_laser(websocket: WebSocket):
+#     await manager.connect(websocket)
+#     try:
+#         while True:
+#             data = await websocket.receive_text()
             
-            try:
-                state = json.loads(data)
+#             try:
+#                 state = json.loads(data)
 
-                if 'isLaserOn' not in state:
-                    await websocket.send_text("Error: Missing 'isLaserOn' key.")
-                    continue
+#                 if 'isLaserOn' not in state:
+#                     await websocket.send_text("Error: Missing 'isLaserOn' key.")
+#                     continue
                 
-                received_bool = state['isLaserOn']
+#                 received_bool = state['isLaserOn']
 
-                if not isinstance(received_bool, bool):
-                    await websocket.send_text("Error: 'isLaserOn' must be a boolean.")
-                    continue
+#                 if not isinstance(received_bool, bool):
+#                     await websocket.send_text("Error: 'isLaserOn' must be a boolean.")
+#                     continue
                 
-                await manager.broadcast(json.dumps(state))
+#                 await manager.broadcast(json.dumps(state))
 
-            except json.JSONDecodeError:
-                await websocket.send_text("Error: Please send 'true' or 'false'.")
+#             except json.JSONDecodeError:
+#                 await websocket.send_text("Error: Please send 'true' or 'false'.")
     
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-        print("Client disconnected.")
+#     except WebSocketDisconnect:
+#         manager.disconnect(websocket)
+#         print("Client disconnected.")

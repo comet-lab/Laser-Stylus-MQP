@@ -2,6 +2,7 @@
 
 ## Docker
 - `docker-compose up`
+- `docker-compose up -e MOCK_ROBOT=1`
 
 ## Pages
 - [Home](http://localhost:3000)

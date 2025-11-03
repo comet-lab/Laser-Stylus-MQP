@@ -5,6 +5,16 @@ services:
       - "443:8080"
     volumes:
       - ./backend/src:/app
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:443/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    environment:
+      - PYTHONUNBUFFERED=1
+      - UI_WEBSOCKET_NAME=${UI_WEBSOCKET_NAME}
+      - ROBOT_WEBSOCKET_NAME=${ROBOT_WEBSOCKET_NAME}
   frontend:
     build: ./frontend
     ports:
@@ -14,9 +24,20 @@ services:
       - /app/node_modules
     depends_on:
       - backend
+    environment:
+      - VITE_UI_WEBSOCKET_NAME=${UI_WEBSOCKET_NAME}
   media:
     build: ./media
     ports:
       - "8554:8554"
       - "8889:8889"
       - "8189:8189/udp"
+  surgical_system:
+    build: ./surgical_system
+    environment:
+      - MOCK_ROBOT=true
+      - PYTHONUNBUFFERED=1
+      - ROBOT_WEBSOCKET_NAME=${ROBOT_WEBSOCKET_NAME}
+    depends_on:
+      - backend
+      - frontend
