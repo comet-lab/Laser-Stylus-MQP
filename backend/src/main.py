@@ -2,6 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import json
+import os
 
 app = FastAPI()
 
@@ -15,7 +16,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 @app.get("/media/{stream_name}")
 def read_item(stream_name: str):
@@ -56,8 +56,10 @@ example_data = {
     "rz":0
 }
 
+ws_ui_name = os.getenv("UI_WEBSOCKET_NAME")
+
 # this is the websocket to pass the 6 varaibles from frontend to backend
-@app.websocket("/ws/coordinates")
+@app.websocket(f"/ws/{ws_ui_name}")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket) 
 
@@ -91,7 +93,9 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
         print("Client disconnected.")
 
-@app.websocket("/ws/robot")
+ws_robot_name = os.getenv("ROBOT_WEBSOCKET_NAME")
+
+@app.websocket(f"/ws/{ws_robot_name}")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket) 
 
@@ -114,6 +118,7 @@ def get_current_coordinates():
 # make HTTP endpoints
 # make an websockets 
 
+# TODO deprecate
 
 #Laser control websocket
 @app.websocket("/ws/laser")

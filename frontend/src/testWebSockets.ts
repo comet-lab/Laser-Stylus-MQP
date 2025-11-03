@@ -35,8 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         wsOutput.textContent = "Connecting to WebSocket...\n";
 
-
-        ws = new WebSocket("ws://localhost:443/ws/coordinates");
+        ws = new WebSocket(`ws://localhost:443/ws/${import.meta.env.VITE_UI_WEBSOCKET_NAME}`);
         
         ws.onopen = () => wsOutput.textContent += "Connected to WebSocket\n";
         ws.onmessage = (event) => wsOutput.textContent += event.data + "\n";

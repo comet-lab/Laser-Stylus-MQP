@@ -1,4 +1,7 @@
-FROM python:3.8-slim
+FROM python:3.8-bookworm
+
+RUN apt-get update && \
+    apt-get install -y make
 
 WORKDIR /app
 
@@ -8,5 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY cpp_src/ .
 COPY py_src/ .
+
+RUN make cpp_src/ cpp_src/
 
 CMD ["python", "main.py"]
