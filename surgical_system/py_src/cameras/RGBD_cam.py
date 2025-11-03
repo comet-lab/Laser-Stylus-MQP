@@ -13,28 +13,34 @@ class RGBD_Cam():
         self._lock = threading.Lock()
         self._latest  = None 
     
-        # Configure depth and color streams
-        self.pipeline = rs.pipeline()
-        self.config = rs.config()
+        try:
+            # Configure depth and color streams
+            self.pipeline = rs.pipeline()
+            self.config = rs.config()
 
-        # Get device product line for setting a supporting resolution
-        self.pipeline_wrapper = rs.pipeline_wrapper(self.pipeline)
-        self.pipeline_profile = self.config.resolve(self.pipeline_wrapper)
-        self.device = self.pipeline_profile.get_device()
-        self.device_name = str(self.device.get_info(rs.camera_info.product_line))
-        print(self.device_name, " Connected")
+            # Get device product line for setting a supporting resolution
+            self.pipeline_wrapper = rs.pipeline_wrapper(self.pipeline)
+            self.pipeline_profile = self.config.resolve(self.pipeline_wrapper)
+            self.device = self.pipeline_profile.get_device()
+            self.device_name = str(self.device.get_info(rs.camera_info.product_line))
+            print(self.device_name, " Connected")
 
-        self.config.enable_stream(rs.stream.depth, width, height, rs.format.z16, frame_rate)
-        self.config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, frame_rate)
-        self.pipeline.start(self.config)
+            self.config.enable_stream(rs.stream.depth, width, height, rs.format.z16, frame_rate)
+            self.config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, frame_rate)
+            self.pipeline.start(self.config)
+            self._ready = True
+        except:
+            print("RGBD failed to connect or Init")
         
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
         print(f"Starting {self.device_name} Thread...")
-        self._ready = True
+        
 
     def _run(self):
         try:
+            if not self._ready:
+                return 
             while True:
                 self.thread_ready.wait()
                 frames = self.pipeline.wait_for_frames()
