@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         laserButtonOut.textContent = "Connecting to WebSocket...\n";
 
-        ws = new WebSocket("ws://localhost:443/ws/laser");
+        ws = new WebSocket("ws://localhost:443/ws/coordinates");
         
         ws.onopen = () => laserButtonOut.textContent += "Connected to WebSocket\n";
         ws.onmessage = (event) => laserButtonOut.textContent += event.data + "\n";
