@@ -89,6 +89,12 @@ class Robot_Controller():
         # time.sleep(5)
         return error, angleError
     
+    def set_velocity(self, lin_vel, ang_vel):
+        return self.franka_client.send_velocity(lin_vel, ang_vel)
+    
+    def robot_stop(self):
+        return self.franka_client.send_velocity(np.array([0, 0, 0]), np.array([0, 0, 0]))
+    
     def alignRobot_input(self):
         newPose = self.home_pose.copy()
         self.goToPose(self.home_pose)
