@@ -31,6 +31,25 @@ class FrankaClient:
             self.last_received = struct.unpack_from('@ddddddd', return_message[0])
             return self.last_received
         
+        def send_velocity(self, lin_vel, ang_vel):
+            if np.shape(lin_vel) != (3,):
+                raise Exception("FrankaClient: lin_vel should be a 3 vector")
+            
+            if np.shape(ang_vel) != (3,):
+                raise Exception("FrankaClient: ang_vel should be a 3 vector")
+            
+            # We might need to change b to i so it can be an integer !!!!!
+            message = struct.pack('@ddddddddddddb',ang_vel[0],ang_vel[1],ang_vel[2],\
+                    -1.0,-1.0,-1.0,-1.0,-1.0,-1.0,\
+                    lin_vel[0],lin_vel[1],lin_vel[2], 2)
+            self.last_sent = message
+            # The data is rotation matrix first row, second row, third row, translation column
+            # The last character is a 0 for no control, 1 for pose control.
+            # The return message should be, translation vector [x,y,z], quaternion of orientation [x,y,z,w]. (7 doubles)
+            return_message = self.client.requestMessage(message)  # send return information
+            self.last_received = struct.unpack_from('@ddddddd', return_message[0])
+            return self.last_received
+        
         def request_pose(self):
             # The return message should be, translation vector [x,y,z], quaternion of orientation [x,y,z,w]. (7 doubles)
             return_message = self.client.requestMessage(self.last_sent)  # send return information
@@ -91,11 +110,16 @@ if __name__=='__main__':
     x = 0
     y = 0
     target_pose = np.array([[1,0,0,x],[0,1,0,y],[0,0,1,height],[0,0,0,1]])
-
+    
+    target_lin_vel = np.array([0, 0, 0.0])
+    target_ang_vel = np.array([0, 0.05, 0.])
+    
     time.sleep(2)
-    returnedPose = franka_client.send_pose(target_pose@home_pose,mode)
-    time.sleep(4)
-
+    # returnedPose = franka_client.send_pose(target_pose@home_pose,mode)
+    returnedPose = franka_client.send_velocity(target_lin_vel, target_ang_vel)
+    time.sleep(1)
+    returnedPose = franka_client.send_velocity(np.array([0, 0, 0]), target_ang_vel)
+    time.sleep(10)
     message = franka_client.request_pose()    
     print("Robot Message: ", message)
     franka_client.close()
