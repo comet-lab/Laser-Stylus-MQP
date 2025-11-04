@@ -49,7 +49,6 @@ def cameraRegistration(cam_obj: ThermalCam, robot_obj: FrankaClient, laser_obj:L
     
     cam_obj.deinitialize_cam()
     
-
 def createCheckerBoard(homePose, cam_obj: ThermalCam, robot_obj: FrankaClient, laser_obj: Laser_Arduino, \
                        gridShape = np.array([2, 6]), squareSize = 0.005, laserDuration = .15, debug=False, \
                        saveLocation = 'python_src/Utilities/'):

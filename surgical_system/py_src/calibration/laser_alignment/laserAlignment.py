@@ -9,7 +9,7 @@ from .cameras.cam_calibration import CameraCalibration
 import numpy as np
 from scipy.spatial.transform import Rotation
 from laser_control.laser_arduino import Laser_Arduino
-from .cameraRegistration import reProjectionTest, hotSpotPixel
+from ..camera_registration.cameraRegistration import reProjectionTest, hotSpotPixel
 from .Utilities_functions import goToPose
 from pathlib import Path
 import cv2
