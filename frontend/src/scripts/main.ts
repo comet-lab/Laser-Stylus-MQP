@@ -56,6 +56,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- WebSocket Setup ---
     const wsHandler = new WebSocketHandler(wsOutput);
+    // implemented the following line of code so that the console has access to the handler
+    // then I can do wsHandler.disconnect() and wsHandler.connect() to test that it properly turns the laser off
+    //(window as any).wsHandler = wsHandler;
     
     // Assign the callback *before* connecting.
     // This function will run every time the backend broadcasts a new state.
