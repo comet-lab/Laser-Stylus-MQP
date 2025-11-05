@@ -8,19 +8,19 @@ export class DrawingTracker {
     private canvas: HTMLCanvasElement;
     private video: HTMLVideoElement;
     private ctx: CanvasRenderingContext2D;
-    private ws: WebSocket;
     private drawnPixels: Set<string>;
     private isDrawing: boolean;
     private drawingEnabled: boolean; // New flag
     private lastPos: Position | null;
     private drawingCanvas: HTMLCanvasElement;
     private drawingCtx: CanvasRenderingContext2D;
+    private apiBaseUrl: string;
 
-    constructor(canvas: HTMLCanvasElement, video: HTMLVideoElement, ws: WebSocket) {
+    constructor(canvas: HTMLCanvasElement, video: HTMLVideoElement, apiBaseUrl: string = 'http://localhost:443') {
         this.canvas = canvas;
         this.video = video;
         this.ctx = canvas.getContext('2d')!;
-        this.ws = ws;
+        this.apiBaseUrl = apiBaseUrl;
         this.drawnPixels = new Set<string>();
         this.isDrawing = false;
         this.drawingEnabled = false; // Start disabled
@@ -177,36 +177,41 @@ export class DrawingTracker {
     }
 
     //Send coordinates to backend via websocket
-    public sendCoordinates(onResponse?: (data: any) => void): void {
+    public async sendCoordinates(): Promise<{ status: string; pixel_count: number; pixels: Position[]; message: string } | null> {
         const pixels = this.getDrawnPixelList();
         if (pixels.length === 0) {
             console.log("No pixels to send");
-            return;
+            return null;
         }
 
-        if (this.ws.readyState === WebSocket.OPEN) {
-            const videoPixels = pixels.map(p => ({
-                x: p.x / this.canvas.width * this.video.videoWidth,
-                y: p.y / this.canvas.height * this.video.videoHeight
-            }));
+        // Convert to video coordinates
+        const videoPixels = pixels.map(p => ({
+            x: p.x / this.canvas.width * this.video.videoWidth,
+            y: p.y / this.canvas.height * this.video.videoHeight
+        }));
 
-            this.ws.send(JSON.stringify({
-                type: 'path',
-                pixels: videoPixels
-            }));
+        try {
+            const response = await fetch(`${this.apiBaseUrl}/api/path`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    pixels: videoPixels
+                })
+            });
 
-            console.log(`Sent ${videoPixels.length} pixels to device`);
-
-            // Set up one-time listener for response if callback provided
-            if (onResponse) {
-                const messageHandler = (event: MessageEvent) => {
-                    onResponse(event.data);
-                    this.ws.removeEventListener('message', messageHandler);
-                };
-                this.ws.addEventListener('message', messageHandler);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-        } else {
-            console.error("WebSocket is not open");
+
+            const data = await response.json();
+            console.log(`Sent ${videoPixels.length} pixels, received response:`, data);
+            return data;
+
+        } catch (error) {
+            console.error('Error sending coordinates:', error);
+            throw error;
         }
     }
 }

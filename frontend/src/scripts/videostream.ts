@@ -12,19 +12,9 @@ window.addEventListener('load', () => {
     const video = document.getElementById('video') as HTMLVideoElement;
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext("2d")!;
-    const ws = new WebSocket(`ws://localhost:443/ws/${import.meta.env.VITE_UI_WEBSOCKET_NAME}`);
     const drawBtn = document.getElementById('drawBtn') as HTMLButtonElement;
     const sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
     const coordinateOutput = document.getElementById("coordinateOutput") as HTMLElement;
-
-    // WebSocket event handlers
-    ws.onopen = () => console.log("Connected to WebSocket\n");
-    ws.onmessage = (event) => {
-        console.log("Received from backend:", event.data);
-        coordinateOutput.textContent = `Response: ${event.data}`;
-    };
-    ws.onclose = () => console.log("Disconnected\n");
-    ws.onerror = (error) => console.log("WebSocket error: " + error + "\n");
 
     //Canvas setup
     ctx.font = "48px serif";
@@ -68,7 +58,7 @@ window.addEventListener('load', () => {
             video.requestVideoFrameCallback(updateCanvas);
 
             // Initialize drawing tracker after video is ready
-            drawingTracker = new DrawingTracker(canvas, video, ws);
+            drawingTracker = new DrawingTracker(canvas, video, 'http://localhost:443');
             
             // Initially disable send button
             sendBtn.disabled = true;
@@ -95,15 +85,30 @@ window.addEventListener('load', () => {
     });
 
     // Handler for the send button
-    sendBtn.addEventListener('click', () => {
+    sendBtn.addEventListener('click', async () => {
         if (!drawingTracker) return;
 
-        drawingTracker.sendCoordinates((response) => {
-            coordinateOutput.textContent = `Response: ${response}`;
-        });
+        sendBtn.disabled = true;
+        coordinateOutput.textContent = 'Sending coordinates...';
 
-        // Clear drawing after sending
-        drawingTracker.clearDrawing();
+        try {
+            const result = await drawingTracker.sendCoordinates();
+
+            if (result) {
+                coordinateOutput.textContent = `Sent ${result.pixel_count} pixels. Server response: ${result.message}`;
+            }
+            else {
+                coordinateOutput.textContent = 'No pixels to send.';
+            }
+            drawingTracker.clearDrawing();
+        }
+        catch (e) {
+            console.error('Error sending coordinates:', e);
+            coordinateOutput.textContent = 'Error sending coordinates: ' + (e instanceof Error ? e.message : String(e));
+        }
+        finally {
+            sendBtn.disabled = false;
+        }
     });
 
     // Window event handlers

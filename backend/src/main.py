@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import json
 import os
@@ -39,6 +39,21 @@ def read_item(stream_name: str):
 @app.get("/health")
 def health():
     return None
+
+@app.post("/api/path")
+async def submit_path(request: dict):
+    pixels = request.get("pixels", [])
+    
+    if len(pixels) == 0:
+        raise HTTPException(status_code=400, detail="No pixels provided")
+    
+    print(f"Received path with {len(pixels)} pixels")
+    
+    return {
+        "status": "success",
+        "pixel_count": len(pixels),
+        "message": f"Path with {len(pixels)} pixels received and processed"
+    }
 
 # this code is from the FastAPI websockets documentation
 class ConnectionManager:
@@ -91,40 +106,20 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             try:
                 message = json.loads(data)
-                # Handle different message types
-                if "type" in message:
-                    if message["type"] == "path":
-                        # Handle path drawing data
-                        pixels = message.get("pixels", [])
-                        print(f"Received path with {len(pixels)} pixels")
-                        
-                        # For now, just echo back with confirmation
-                        response = {
-                            "type": "path_received",
-                            "pixel_count": len(pixels),
-                            "status": "success",
-                            "message": f"Path with {len(pixels)} pixels received and ready for processing"
-                        }
-                        
-                        # Send response only to the sender
-                        await websocket.send_text(json.dumps(response))
-                    else:
-                        await websocket.send_text(f"Error: Unknown message type '{message['type']}'")
-                # Standard message type for updateing state
-                else:
-                    if not isinstance(message, dict):
-                        await websocket.send_text("Error: Invalid JSON format")
-                        continue
-                    # this updates only the keys that are sent from the frontend
-                    for key, value in message.items():
-                        if key in current_data:
-                            current_data[key] = value
-                        else:
-                            await websocket.send_text(f"Error: Unknown key '{key}'")
-                    # after updating, broadcast the full current data to all clients
-                    await manager.broadcast_to_all(json.dumps(current_data))
 
-                    print(f"Updated state: {current_data}")
+                if not isinstance(message, dict):
+                    await websocket.send_text("Error: Invalid JSON format")
+                    continue
+                # this updates only the keys that are sent from the frontend
+                for key, value in message.items():
+                    if key in current_data:
+                        current_data[key] = value
+                    else:
+                        await websocket.send_text(f"Error: Unknown key '{key}'")
+                # after updating, broadcast the full current data to all clients
+                await manager.broadcast_to_all(json.dumps(current_data))
+
+                print(f"Updated state: {current_data}")
 
             except json.JSONDecodeError:
                 await websocket.send_text("Error: Invalid JSON format")
@@ -163,35 +158,3 @@ def get_current_coordinates():
 # have the socket accept websocket 
 # make HTTP endpoints
 # make an websockets 
-
-# TODO deprecate
-
-# #Laser control websocket
-# @app.websocket("/ws/laser")
-# async def websocket_laser(websocket: WebSocket):
-#     await manager.connect(websocket)
-#     try:
-#         while True:
-#             data = await websocket.receive_text()
-            
-#             try:
-#                 state = json.loads(data)
-
-#                 if 'isLaserOn' not in state:
-#                     await websocket.send_text("Error: Missing 'isLaserOn' key.")
-#                     continue
-                
-#                 received_bool = state['isLaserOn']
-
-#                 if not isinstance(received_bool, bool):
-#                     await websocket.send_text("Error: 'isLaserOn' must be a boolean.")
-#                     continue
-                
-#                 await manager.broadcast(json.dumps(state))
-
-#             except json.JSONDecodeError:
-#                 await websocket.send_text("Error: Please send 'true' or 'false'.")
-    
-#     except WebSocketDisconnect:
-#         manager.disconnect(websocket)
-#         print("Client disconnected.")
