@@ -13,7 +13,7 @@ export interface WebSocketMessage {
     isLaserOn: boolean;
 }
 
-// Type for partial updates (any subset of RobotState)
+// Type for partial updates, any subset of WebSocketMessage
 export type PartialWebSocketMessage = Partial<WebSocketMessage>;
 
 export class WebSocketHandler {
