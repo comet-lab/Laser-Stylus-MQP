@@ -72,27 +72,49 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             data = await websocket.receive_text()
             try:
-                coords = json.loads(data)
-                valid_keys = example_data.keys()
-
-                # makes sure that the corerct keys are present
-                if not all(key in valid_keys for key in coords):
-                    await websocket.send_text("Error: Unknown keys")
-                    continue
-             
-                # have to introduce an if statement because there is now a bool being sent
-                for key in coords:
-                    value = coords[key]
-                    if isinstance(value, bool):
-                        example_data[key] = bool(value)
+                message = json.loads(data)
+                
+                # Handle different message types
+                if "type" in message:
+                    if message["type"] == "path":
+                        # Handle path drawing data
+                        pixels = message.get("pixels", [])
+                        print(f"Received path with {len(pixels)} pixels")
+                        
+                        # For now, just echo back with confirmation
+                        response = {
+                            "type": "path_received",
+                            "pixel_count": len(pixels),
+                            "status": "success",
+                            "message": f"Path with {len(pixels)} pixels received and ready for processing"
+                        }
+                        
+                        # Send response only to the sender
+                        await websocket.send_text(json.dumps(response))
                     else:
-                        example_data[key] = float(value)
+                        await websocket.send_text(f"Error: Unknown message type '{message['type']}'")
+                else:
+                    # Handle regular coordinate updates (existing behavior)
+                    valid_keys = example_data.keys()
 
+                    # makes sure that the correct keys are present
+                    if not all(key in valid_keys for key in message):
+                        await websocket.send_text("Error: Unknown keys")
+                        continue
+                 
+                    # have to introduce an if statement because there is now a bool being sent
+                    for key in message:
+                        value = message[key]
+                        if isinstance(value, bool):
+                            example_data[key] = bool(value)
+                        else:
+                            example_data[key] = float(value)
 
-                # broadcasts the data as a json string
-                await manager.broadcast(json.dumps(example_data))
-                # print for debugging testing
-                print(f"Updated coordinates: {example_data}")
+                    # broadcasts the data as a json string
+                    await manager.broadcast(json.dumps(example_data))
+                    # print for debugging testing
+                    print(f"Updated coordinates: {example_data}")
+                    
             except json.JSONDecodeError:
                 await websocket.send_text("Error: Invalid JSON format.")
     except WebSocketDisconnect:
