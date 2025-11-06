@@ -34,11 +34,11 @@ class Robot_Controller():
             print("Saving new home_pose...")
         return homePose
     
-    def loadAndEditPose(self, filePath = "/surgical_system/py_src/robot/home_pose.csv"):
+    def load_edit_pose(self, filePath = "/surgical_system/py_src/robot/home_pose.csv"):
         # Default robot starting location 
         self.home_pose = self.load_home_pose(home_pose_path=filePath)
         self.franka_client.send_pose(self.home_pose,1) # Send robot to zero position
-        self.home_pose = self.alignRobot_input()
+        self.home_pose = self.align_robot_input()
         
         np.savetxt("home_pose.csv", self.home_pose, delimiter=",")
         print("Saving new self.home_pose...")
@@ -47,7 +47,7 @@ class Robot_Controller():
     '''
     Code is blocking
     '''
-    def goToPose(self, pose, linTol = .05, rotTol = 0.05, maxIterations = 24):
+    def go_to_pose(self, pose, linTol = .05, rotTol = 0.05, maxIterations = 24):
         # tolerances are in mm and degrees 
         error, angleError = 10000, 10000
         currPose = self.franka_client.send_pose(pose, 1)
@@ -95,9 +95,9 @@ class Robot_Controller():
     def robot_stop(self):
         return self.franka_client.send_velocity(np.array([0, 0, 0]), np.array([0, 0, 0]))
     
-    def alignRobot_input(self):
+    def align_robot_input(self):
         newPose = self.home_pose.copy()
-        self.goToPose(self.home_pose)
+        self.go_to_pose(self.home_pose)
         while True:
             user_input = input("Enter offset in X Y Z (mm), separated by space (blank to escape): ")
             
@@ -112,7 +112,7 @@ class Robot_Controller():
                 newPose[:3, 3] += offset_m
                 print(f"Applying offset (m): {offset_m}")
                 print(f"New position (m): {newPose[:3, 3]}")
-                self.goToPose(newPose)
+                self.go_to_pose(newPose)
 
             except ValueError:
                 print("Invalid input. Please enter three numeric values separated by space.")
@@ -135,5 +135,5 @@ if __name__=='__main__':
     target_pose = np.array([[1,0,0,x],[0,1,0,y],[0,0,1,height],[0,0,0,1]])
 
     time.sleep(2)
-    returnedPose = robot_controller.goToPose(target_pose@home_pose,mode)
+    returnedPose = robot_controller.go_to_pose(target_pose@home_pose,mode)
     print("Finished Command")
