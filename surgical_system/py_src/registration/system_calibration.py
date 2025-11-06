@@ -4,24 +4,20 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 import matplotlib.pyplot as plt
 
-if __name__=='__main__':
-    import sys, pathlib
-    HERE = pathlib.Path(__file__).resolve().parent
-    for candidate in (HERE, HERE.parent, HERE.parent.parent):
-        if (candidate / "robot").is_dir() and (candidate / "cameras").is_dir() and (candidate / "laser_control").is_dir():
-            sys.path.insert(0, str(candidate))
-            break
-    from robot.robot_controller import Robot_Controller
-    from cameras.thermal_cam import ThermalCam
-    from cameras.RGBD_cam import RGBD_Cam
-    from cameras.cam_calibration import CameraCalibration
-    from laser_control.laser_arduino import Laser_Arduino
-else:
-    from ..robot.robot_controller import Robot_Controller
-    from ..cameras.thermal_cam import ThermalCam
-    from ..cameras.RGBD_cam import RGBD_Cam
-    from ..cameras.cam_calibration import CameraCalibration
-    from ..laser_control.laser_arduino import Laser_Arduino
+
+import sys, pathlib
+HERE = pathlib.Path(__file__).resolve().parent
+for candidate in (HERE, HERE.parent, HERE.parent.parent):
+    if (candidate / "robot").is_dir() and (candidate / "cameras").is_dir() and (candidate / "laser_control").is_dir():
+        sys.path.insert(0, str(candidate))
+        break
+from robot.robot_controller import Robot_Controller
+from cameras.thermal_cam import ThermalCam
+from cameras.RGBD_cam import RGBD_Cam
+from cameras.cam_calibration import CameraCalibration
+from laser_control.laser_arduino import Laser_Arduino
+
+    
     
 class System_Calibration():
     def __init__(self, therm_cam: ThermalCam, rgbd_cam: RGBD_Cam, robot_controller: Robot_Controller, laser_controller:Laser_Arduino):
@@ -38,7 +34,7 @@ class System_Calibration():
 
         self.home_pose = robot_controller.get_home_pose()
     
-    def reprojection_test(self, cam_type, M, gridShape = np.array([2, 6]),/
+    def reprojection_test(self, cam_type, M, gridShape = np.array([2, 6]),
                          laserDuration = .15, debug=False, height = 0.001):
         
         input("Press Enter to continue re-projection test.")
@@ -64,7 +60,7 @@ class System_Calibration():
         pix_Per_M = cam_obj.pix_Per_M
         
         startImage = cam_obj.get_latest()
-        startImage = startImage['thermal'] if cam_type is "thermal" else startImage["color"]
+        startImage = startImage['thermal'] if cam_type == "thermal" else startImage["color"]
         
         imgCount = gridShape[0] * gridShape[1]
         laserPixelPoints = np.empty((2, imgCount))
@@ -86,7 +82,7 @@ class System_Calibration():
             img = CameraCalibration.get_thermal_image(cam_obj)
             img = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
 
-            if cam_type is "thermal":
+            if cam_type == "thermal":
                 laserPixel = self.get_hot_pixel(img, method="Centroid")
             else:
                 laserPixel = self.get_beam_pixel(img, method="Centroid")
@@ -136,7 +132,7 @@ class System_Calibration():
         # print("Laser Off")
         
         image = cam_obj.get_latest()
-        image = image['thermal'] if cam_type is "thermal" else image["color"]
+        image = image['thermal'] if cam_type == "thermal" else image["color"]
         # im = (image_list[4] - image_list[4].min())
         # im = np.array(im*255.0/im.max(),dtype=np.uint8)
         bbox = cv2.selectROI('select', image)
@@ -146,18 +142,18 @@ class System_Calibration():
         return rowROI, colROI
         
     def get_cam_obj(self, cam_type = "color"):
-        if cam_type is "color" or "depth":
+        if cam_type == "color" or "depth":
             return self.rgbd_cam
-        elif cam_type is "thermal":
+        elif cam_type == "thermal":
             return self.therm_cam
         else:
             print("Incorrect camera type: ", cam_type)
             return None
     
     def get_cam_cali(self, cam_type = "color"):
-        if cam_type is "color" or "depth":
+        if cam_type == "color" or "depth":
             return self.rgbd_cali
-        elif cam_type is "thermal":
+        elif cam_type == "thermal":
             return self.therm_cali
         else:
             print("Incorrect camera type: ", cam_type)
@@ -188,7 +184,7 @@ class System_Calibration():
         return center
     
     def get_beam_pixel(self, img, method="Centroid", threshold = 0.8):
-        if img is None or img.size == 0:
+        if img.size == 0:
             raise ValueError("get_beam_pixel: empty image input")
 
         # Ensure we have a 3-channel BGR image
@@ -205,7 +201,7 @@ class System_Calibration():
         GBmax = np.maximum(G, B)
         red_resp = (R - GBmax).clip(min=0).astype(np.float32)
 
-        # If the dot is very bright/saturated, red_resp should be strongly peaked.
+        # If the dot == very bright/saturated, red_resp should be strongly peaked.
         rmax = float(red_resp.max())
         if rmax <= 1e-6:
             # No visible red; return image center
@@ -227,7 +223,7 @@ class System_Calibration():
                 break
 
         # If still empty, fall back to the single most "red" pixel
-        if mask is None or mask.sum() == 0:
+        if mask.sum() == 0:
             peak_idx = np.argmax(red_resp)
             h, w = red_resp.shape
             cy, cx = divmod(int(peak_idx), w)

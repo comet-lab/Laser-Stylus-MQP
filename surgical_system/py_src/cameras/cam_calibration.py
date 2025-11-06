@@ -27,11 +27,11 @@ class CameraCalibration():
     
 
         self.checkboardSize = checkerboard_size
-        if not (calibration_folder == ''):
-            if os.path.exists(file_address):
-                _, self.camera_matrix, self.dist_coeffs = self.read_calibration_settings(file_address)
-            else:
-                self.camera_matrix, self.dist_coeffs = self.calibrate(calibration_folder,checkerboard_size) 
+        # if not (calibration_folder == ''):
+        #     if os.path.exists(file_address):
+        #         _, self.camera_matrix, self.dist_coeffs = self.read_calibration_settings(file_address)
+        #     else:
+        #         self.camera_matrix, self.dist_coeffs = self.calibrate(calibration_folder,checkerboard_size) 
         
     def calibrate(self,foldername,checkerboard_size):
         """

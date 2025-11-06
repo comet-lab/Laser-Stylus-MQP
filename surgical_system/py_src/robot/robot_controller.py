@@ -26,21 +26,21 @@ class Robot_Controller():
             rot = Rotation.from_euler('ZYX',[0,np.pi/4,np.pi/2])
             rotM = rot.as_matrix()
             
+            #-75
             # Default robot starting location 
-            homePosition = np.array([[0.4425],[0.1043],[0.1985]])
+            homePosition = np.array([[0.5275],[0.0893],[0.1985]])
             homePose = np.concatenate((rotM,homePosition),axis=1)
             homePose = np.concatenate((homePose,[[0,0,0,1]]),axis=0)
             np.savetxt(home_pose_path, homePose, delimiter=",")
             print("Saving new home_pose...")
         return homePose
     
-    def load_edit_pose(self, filePath = "/surgical_system/py_src/robot/home_pose.csv"):
+    def load_edit_pose(self, filePath = "surgical_system/py_src/robot/home_pose.csv"):
         # Default robot starting location 
         self.home_pose = self.load_home_pose(home_pose_path=filePath)
         self.franka_client.send_pose(self.home_pose,1) # Send robot to zero position
         self.home_pose = self.align_robot_input()
-        
-        np.savetxt("home_pose.csv", self.home_pose, delimiter=",")
+        np.savetxt(filePath, self.home_pose, delimiter=",")
         print("Saving new self.home_pose...")
         return self.home_pose
   

@@ -9,18 +9,19 @@ else:
     from .camera import Camera
 
 class ThermalCam(Camera):    
-    def __init__(self, ir_format="TemperatureLinear10mK", height=480, frame_rate="Rate50Hz",focal_distance=0.2, pix_Per_M = 7000):
+    def __init__(self, IRFormat="TemperatureLinear10mK", height=480, frame_rate="Rate50Hz",focal_distance=0.2, pix_Per_M = 7000):
         super().__init__(100,height, pix_Per_M)
         self.focal_distance = focal_distance
-        self.ir_format = ir_format
+        self.IRFormat = IRFormat
         self.frame_rate = frame_rate
         self.temp_scale = 100.0      
+        self.acquiring_flag = False
         try:
             ### THIS CANNOT BE INIT IN THE THREAD, LEAVE THIS HERE
             self.initialize_camera()
             self.change_IRWindowing(self.height)
             self.set_focal_distance(self.focal_distance)
-            self.change_IRFormat(self.ir_format)
+            self.change_IRFormat(self.IRFormat)
             self.change_IRFrameRate(self.frame_rate)
             self.execute_nuc()
             time.sleep(0.2)
@@ -61,7 +62,9 @@ class ThermalCam(Camera):
     #         return None
         
     def display(self):
-        plt.imshow(self.get_latest()['image'], cmap='gray')
+        if(self.get_latest() == None):
+            return
+        plt.imshow(self.get_latest()['thermal'], cmap='gray')
         plt.pause(0.001)
         # Clear current reference of a figure. This will improve display speed significantly
         plt.clf()
@@ -415,7 +418,7 @@ class ThermalCam(Camera):
     #     # Check whether we already have an instance
     #     if ThermalCam.__instance is None:
     #         # Create and remember instance
-    #         ThermalCam.__instance = ThermalCam.__impl(ir_format=IRFormat, height=height, frame_rate=frameRate,focal_distance=focalDistance)
+    #         ThermalCam.__instance = ThermalCam.__impl(IRFormat=IRFormat, height=height, frame_rate=frameRate,focal_distance=focalDistance)
     #     else:
     #         print("Camera Object Already Exists.\nReturning existing object")
     #     # Store instance reference as the only member in the handle
@@ -519,8 +522,11 @@ def npy_to_mat():
 if __name__ == '__main__':
     # npyToMat()
 
-    cam_obj = ThermalCam(IRFormat="TemperatureLinear10mK", height=480, frameRate="Rate50Hz",focalDistance=0.20)
-    cam_obj.acquire_and_display_images(500,True)
+    cam_obj = ThermalCam(IRFormat="TemperatureLinear10mK", height=480, frame_rate="Rate50Hz",focal_distance=0.20)
+    # cam_obj.acquire_and_display_images(500,True)
+    cam_obj.start_stream()
+    while True:
+        cam_obj.display()
     
     cam_obj.deinitialize_cam()      
     
