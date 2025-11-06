@@ -26,7 +26,7 @@ else:
 class System_Calibration():
     def __init__(self, therm_cam: ThermalCam, rgbd_cam: RGBD_Cam, robot_controller: Robot_Controller, laser_controller:Laser_Arduino):
         self.pathToCWD = os.getcwd()
-        self.fileLocation = r"surgical_system\py_src\registration"
+        self.directory = self.pathToCWD + r"surgical_system/py_src/registration"
         
         self.laser_controller = laser_controller
         self.robot_controller = robot_controller

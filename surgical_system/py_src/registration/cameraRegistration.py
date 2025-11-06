@@ -136,7 +136,7 @@ class Camera_Registration(System_Calibration):
             cv2.destroyAllWindows()
         
         
-        therm_saveLocation = saveLocation + "thermal_cali/"
+        therm_saveLocation = self.directory + saveLocation + "thermal_cali/"
         therm_save_dir = Path(therm_saveLocation)      
         therm_save_dir.mkdir(parents=True, exist_ok=True) 
         
@@ -152,17 +152,50 @@ class Camera_Registration(System_Calibration):
         # np.save    (save_dir / "laser_spots.npy",       therm_image_set)
         return combinedImg, therm_img_points, obj_Points
 
-        
-    
-    
 
 
 if __name__ == '__main__':
-    # debug = True
-    # pathToCWD = os.getcwd()
-    # subprocess.Popen([pathToCWD + "/cpp_src/main"]) 
-    # time.sleep(3)
+    ##################################################################################
+    #------------------------------ Robot Config ------------------------------------#
+    ##################################################################################
+    # Create FrankaNode object for controlling robot
+    robot_controller = Robot_Controller()
+    # TODO fix running in container
+    home_pose = robot_controller.load_home_pose()
+    start_pos = np.array([0,0,0.35]) # [m,m,m]
+    target_pose = np.array([[1.0, 0, 0, start_pos[0]],
+                            [0,1,0,start_pos[1]],
+                            [0,0,1,start_pos[2]],
+                            [0,0,0,1]])
+    robot_controller.goToPose(target_pose@home_pose,1) # Send robot to start position
+    time.sleep(2)
     
-    # cameraRegistration(cam_obj = ThermalCam(), robot_controller = FrankaClient(),self.laser_controller = Laser_Arduino())
-    # loadAndEditPose(FrankaClient())
+    ##################################################################################
+    #--------------------------- Thermal Cam Config ---------------------------------#
+    ##################################################################################
+    # Set up camera object
+    window_scale = 1
+    frame_rate = 50  
+    temp_scale = 100.0  # based on temperature linear 10mK reading
+    # start with full window so we can perform camera calibration. Additionally, set maximum frame rate at 50 hz, 
+    # and the focal distance to 0.204 m. This seems to be at the right location to maximize the focal point around the 
+    # free beam laser spot.
+    therm_cam = None
+    therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frameRate="Rate50Hz",focalDistance=0.2) 
+    
+    ##################################################################################
+    #------------------------------ RGBD Cam Config ---------------------------------#
+    ##################################################################################
+    rgbd_cam = RGBD_Cam() #Runs a thread internally
+
+    
+    ##################################################################################
+    #-------------------------------- Laser Config ----------------------------------#
+    ##################################################################################
+    
+    laser_controller = Laser_Arduino()  # controls whether laser is on or off
+    laser_on = False
+    laser_controller.set_output(laser_on)
+    
+    camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_controller)
 
