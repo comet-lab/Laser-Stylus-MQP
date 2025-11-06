@@ -12,6 +12,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY cpp_src/ .
 COPY py_src/ .
 
-RUN make cpp_src/ cpp_src/
+# RUN make cpp_src/ cpp_src/
 
 CMD ["python", "main.py"]

@@ -9,7 +9,13 @@
           padding: 0 !important;
       }
     </style>
-    <script defer="" src="http://localhost:8889/mystream/reader.js"></script> <!-- TODO get url dynamically from back end -->
+    <script>
+      var scriptElm = document.createElement('script');
+      scriptElm.defer = true; // Use .defer for the defer attribute
+      scriptElm.src = 'http://' + window.location.hostname + ':8889/mystream/reader.js';
+      document.head.appendChild(scriptElm);
+    </script>
+     <!-- TODO get url dynamically from back end -->
   </head>
   <body>
     <canvas id="canvas" style="z-index: 1;"></canvas>
@@ -18,7 +24,7 @@
       const video = document.getElementById('video');
       const canvas = document.getElementById('canvas');
       const ctx = canvas.getContext("2d");
-      const ws = new WebSocket("ws://localhost:443/ws/coordinates");
+      const ws = new WebSocket(`ws://${window.location.hostname}:443/ws/ui`);
 
       // uses the websocket events to display messages 
       ws.onopen = () => console.log("Connected to WebSocket\n");
@@ -54,7 +60,7 @@
         canvas.height = window.innerHeight;
         setMessage("Loading stream")
         reader = new MediaMTXWebRTCReader({
-          url: new URL('http://localhost:8889/mystream/whep'), // TODO get URL dynamically from backend
+          url: new URL(`http://${window.location.hostname}:8889/mystream/whep`), // TODO get URL dynamically from backend
           onError: (err) => {
             setMessage(err);
           },

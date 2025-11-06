@@ -19,8 +19,7 @@ class BackendConnection():
             self.recv_fn(message)
 
     async def connect_to_websocket(self):
-        ws_ui_name = os.getenv("UI_WEBSOCKET_NAME")
-        uri = f"ws://backend:8080/ws/{ws_ui_name}"
+        uri = f"ws://localhost:443/ws/robot"
         async with websockets.connect(uri) as websocket:
             # Connection is now open
             print(f"Connected to WebSocket server at {uri}")

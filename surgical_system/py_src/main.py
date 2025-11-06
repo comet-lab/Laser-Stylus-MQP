@@ -1,20 +1,24 @@
 import os, time, sys, warnings
+import cv2
 import numpy as np
 import asyncio
 import websockets
+import time
 from scipy.spatial.transform import Rotation
 
 # Classes
-from robot.robot_controller import Robot_Controller
-from cameras.thermal_cam import ThermalCam
-from cameras.RGBD_cam import RGBD_Cam
-from laser_control.laser_arduino import Laser_Arduino
+mock_robot = os.getenv("MOCK_ROBOT", "false") == "true"
+mock_robot = False
+if(not mock_robot):
+    from robot.robot_controller import Robot_Controller
+    print(f"Mocking? {mock_robot}")
+    from cameras.thermal_cam import ThermalCam
+    from cameras.RGBD_cam import RGBD_Cam
+    from laser_control.laser_arduino import Laser_Arduino
 
 from robot.mock_franka_client import MockFrankaClient
-mock_robot = os.getenv("MOCK_ROBOT", "false") == "true"
-print(f"Mocking? {mock_robot}")
-if(not mock_robot):
-    from cameras.thermal_cam import ThermalCam
+
+from cameras.broadcast import Broadcast
 from backend.listener import BackendConnection
 
 
@@ -22,20 +26,22 @@ async def main():
     pathToCWD = os.getcwd()
     camera_calibration = False
     
+            
+    
     ##################################################################################
     #------------------------------ Robot Config ------------------------------------#
     ##################################################################################
     # Create FrankaNode object for controlling robot
-    robot_controller = Robot_Controller() if not mock_robot else MockFrankaClient()
+    # robot_controller = Robot_Controller() if not mock_robot else MockFrankaClient()
     # TODO fix running in container
-    home_pose = robot_controller.load_home_pose()
-    start_pos = np.array([0,0,0.35]) # [m,m,m]
-    target_pose = np.array([[1.0, 0, 0, start_pos[0]],
-                            [0,1,0,start_pos[1]],
-                            [0,0,1,start_pos[2]],
-                            [0,0,0,1]])
-    robot_controller.goToPose(target_pose@home_pose,1) # Send robot to start position
-    time.sleep(2)
+    # home_pose = robot_controller.load_home_pose()
+    # start_pos = np.array([0,0,0.35]) # [m,m,m]
+    # target_pose = np.array([[1.0, 0, 0, start_pos[0]],
+    #                         [0,1,0,start_pos[1]],
+    #                         [0,0,1,start_pos[2]],
+    #                         [0,0,0,1]])
+    # robot_controller.goToPose(target_pose@home_pose,1) # Send robot to start position
+    # time.sleep(2)
     
     ##################################################################################
     #--------------------------- Thermal Cam Config ---------------------------------#
@@ -54,7 +60,7 @@ async def main():
     ##################################################################################
     #------------------------------ RGBD Cam Config ---------------------------------#
     ##################################################################################
-    rgbd_cam = RGBD_Cam() #Runs a thread internally
+    # rgbd_cam = RGBD_Cam() #Runs a thread internally
 
     
     ##################################################################################
@@ -70,11 +76,11 @@ async def main():
     #----------------------------- Backend Connection -------------------------------#
     ##################################################################################
     
-    backend_connection = BackendConnection(
-        send_fn=lambda: "Hello from robot!",
-        recv_fn=lambda msg: print("Server sent: " + msg)
-    )
-    await backend_connection.connect_to_websocket()
+    # backend_connection = BackendConnection(
+    #     send_fn=lambda: "Hello from robot!",
+    #     recv_fn=lambda msg: print("Server sent: " + msg)
+    # )
+    # await backend_connection.connect_to_websocket()
     
     ##################################################################################
     #----------------------------- Camera Calibration -------------------------------#
@@ -83,15 +89,32 @@ async def main():
     if camera_calibration:
         pass
 
-    await asyncio.Future()
+    # await asyncio.Future()
     
     print("Cameras are ready")
     therm_cam.start_stream() # Start camera stream
-    rgbd_cam.start_stream()
+    # rgbd_cam.start_stream()
     print("Starting Streams ")
-    while(True):
-        rgbd_cam.display_all_streams() #Test Streaming
-        therm_cam.display()
+    b = Broadcast()
+    print(f"Broadcast connection status: {b.connect()}")
+    
+    while (True):
+        # rgbd_cam.display_all_streams() #Test Streaming
+        img = therm_cam.get_latest()
+        if img is None:
+            continue
+        img = img['image']
+        max = np.max(img)
+        img = img / max
+        img = img * 254
+        
+        if(b.connected):
+            b.publish_frame(img)
+        else:
+            b.connect()
+            print('connecting...')
+            time.sleep(2)
+            
         
     
     therm_cam.deinitialize_cam()
