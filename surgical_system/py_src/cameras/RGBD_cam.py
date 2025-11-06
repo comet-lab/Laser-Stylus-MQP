@@ -1,18 +1,15 @@
 import pyrealsense2 as rs
 import numpy as np
 import cv2, threading, queue, time
+if __name__=='__main__':
+    from camera import Camera
+else:
+    from .camera import Camera
 
-class RGBD_Cam():
-    def __init__(self, width = 640, height = 480, frame_rate = 30):
+class RGBD_Cam(Camera):
+    def __init__(self, width = 640, height = 480, frame_rate = 30, pix_Per_M = 7000):
         #Threading 
-        self._ready = False
-        self.thread_ready = threading.Event()
-        self.thread_ready.clear()
-
-        #Sync camera frames
-        self._lock = threading.Lock()
-        self._latest  = None 
-    
+        super().__init__(width, height, pix_Per_M) 
         try:
             # Configure depth and color streams
             self.pipeline = rs.pipeline()
@@ -28,15 +25,15 @@ class RGBD_Cam():
             self.config.enable_stream(rs.stream.depth, width, height, rs.format.z16, frame_rate)
             self.config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, frame_rate)
             self.pipeline.start(self.config)
+            
+            self.thread = threading.Thread(target=self._run, daemon=True)
+            print(f"Starting {self.device_name} Thread...")
             self._ready = True
+            self.thread.start()
+            
         except:
             print("RGBD failed to connect or Init")
-        
-        self.thread = threading.Thread(target=self._run, daemon=True)
-        self.thread.start()
-        print(f"Starting {self.device_name} Thread...")
-        
-
+    
     def _run(self):
         try:
             if not self._ready:
@@ -59,21 +56,21 @@ class RGBD_Cam():
         finally:
             self.pipeline.stop()
             
-    def get_latest(self):
-        """Return the most recent {'color','depth','ts'} or None if nothing yet."""
-        self._lock.acquire()
-        item = self._latest
-        self._lock.release()
-        return item
+    # def get_latest(self):
+    #     """Return the most recent {'color','depth','ts'} or None if nothing yet."""
+    #     self._lock.acquire()
+    #     item = self._latest
+    #     self._lock.release()
+    #     return item
     
-    def is_ready(self):
-        return self._ready
+    # def is_ready(self):
+    #     return self._ready
 
-    def stop_stream(self):
-        self.thread_ready.clear()
+    # def stop_stream(self):
+    #     self.thread_ready.clear()
         
-    def start_stream(self):
-        self.thread_ready.set()
+    # def start_stream(self):
+    #     self.thread_ready.set()
     
     def display_depth_stream(self):
         depth_image = self.get_latest()['depth']

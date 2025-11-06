@@ -19,7 +19,6 @@ from backend.listener import BackendConnection
 
 
 async def main():
-    pathToCWD = os.getcwd()
     camera_calibration = False
     
     ##################################################################################
