@@ -4,8 +4,10 @@ import numpy as np
 
 if __name__=='__main__':
     from franka_client import FrankaClient
+    from controllers.trajectory_controller import TrajectoryController
 else:
     from .franka_client import FrankaClient
+    from .controllers.trajectory_controller import TrajectoryController
 
 class Robot_Controller():
     def __init__(self):
@@ -122,6 +124,26 @@ class Robot_Controller():
     def get_home_pose(self):
         return self.home_pose
 
+    def get_current_pose(self):
+        pose = self.franka_client.request_pose()
+        position, quat = pose[:3], pose[3:]
+        Rmat = Rotation.from_quat(quat).as_matrix()
+        new_pose = np.zeros((4,4))
+        new_pose[0:3, -1], new_pose[:3, :3], new_pose[-1, -1] = position, Rmat, 1
+        return pose
+
+    def create_trajectory(self, path_info):
+        return TrajectoryController(path_info, debug=True)
+    
+    def run_trajectory(self, traj: TrajectoryController, time_step):
+        #
+        start_pos = traj.start_pos
+        start_pose = np.eye((4,4))
+        start_pose[:3, -1] = start_pos
+        self.go_to_pose(start_pose@self.home_pose)
+        pass
+    
+    
 if __name__=='__main__':
     import time, subprocess
     from scipy.spatial.transform import Rotation

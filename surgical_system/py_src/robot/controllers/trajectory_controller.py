@@ -1,22 +1,21 @@
 import numpy as np
 from laser_controller import LaserController
-from controller_message import ControllerMessage
 
 from trajectory_helpers.quintic_trajectory import QuinticTrajectory
 from trajectory_helpers.path_generation import Path_Gen
 
 class TrajectoryController(LaserController):
     
-    def __init__(self,controller_msg : ControllerMessage):
+    def __init__(self, path_info, debug = True):
         # Abstract class attributes
-        self._laser_pos = np.array([0,0,0])
-        self._laser_vel = np.array([0,0,0])
+        self.init_path(path_info)
+        self.laser_pos = np.array([0,0,0])
+        self.laser_pos_vel = np.array([0,0,0])
         self._laser_on = False
         self._irradiance = 0
-
-
-        self.laser_info = controller_msg.laser_info
-        self.gains = controller_msg.gains
+        self.debug = debug
+        
+        # self.laser_info = controller_msg.laser_info
         
         if self.positions.shape[0]-1 != len(self.durations):
             raise Exception("Durations and Postions dims do not match")
@@ -24,9 +23,7 @@ class TrajectoryController(LaserController):
         self.generateTrajectories(self.positions, self.durations, self.max_velocity, self.max_acceleration)
 
         self.t = 0
-        self.time_step = controller_msg.time_step
-        self.pulse_idx = 0
-        self.debug = controller_msg.debug
+        # self.time_step = controller_msg.time_step
     
     @property
     def name(self):
@@ -96,40 +93,45 @@ class TrajectoryController(LaserController):
                                                               v0 = v0[dim], vf = vf[dim],
                                                               a0 = a0[dim], af = af[dim])
 
-    def update(self,controller_msg : ControllerMessage):
-        self.t += self.time_step
+    def update(self, time_step):
+        self.t += time_step
         # We default to the laser being off at the given height
-        self._irradiance = 0
-        self._laser_on = False        
+        # self._irradiance = 0
+        # self._laser_on = False        
 
         # Calculate Trajectory 
         idx = np.searchsorted(self.durations, self.t, side='right')
         pathIdx = idx if idx < self.n_points-2 else self.n_points-2
-        self._laser_pos = np.zeros(self.n_dims) # laser position in [cm] shape:(x)
+        self.laser_pos = np.zeros(self.n_dims) # laser position in [cm] shape:(x)
+        self.laser_pos_vel = np.zeros(self.n_dims)
         
         for dim in range(self.n_dims):
-            self._laser_pos[dim] = self.trajectories[pathIdx, dim].position(self.t)
-        
-        self._laser_on = True        
+            self.laser_pos[dim] = self.trajectories[pathIdx, dim].position(self.t)
+            self.laser_pos_vel[dim] = self.trajectories[pathIdx, dim].velocity(self.t)
             
-        if self._laser_on: # if the laser is on, calculate the beam width and expected peak irradiance
-            power = controller_msg.power
-            width = self.laser_info['w0']*np.sqrt(1 + ((self._laser_pos[2] * self.laser_info['wavelength'])/(np.pi*self.laser_info['w0']**2))**2) 
-            self._irradiance = 2*power/(np.pi*(width**2))
+        traj = {'position': self.laser_pos,
+                'velocity': self.laser_pos_vel}
+                    
+        # if self._laser_on: # if the laser is on, calculate the beam width and expected peak irradiance
+            # power = controller_msg.power
+            # width = self.laser_info['w0']*np.sqrt(1 + ((self._laser_pos[2] * self.laser_info['wavelength'])/(np.pi*self.laser_info['w0']**2))**2) 
+            # self._irradiance = 2*power/(np.pi*(width**2))
         if self.debug:
-            print("Spot Temperature: ", np.amax(controller_msg.current_temp))
-            print("Irradiance: ", self._irradiance)
-            print("Laser Position: ", self._laser_pos)
+            # print("Spot Temperature: ", np.amax(controller_msg.current_temp))
+            # print("Irradiance: ", self._irradiance)
+            print("Laser Position: ", self.laser_pos)
+            print("Laser Velocity: ", self.laser_pos_vel)
             print("Current Path: ", self.positions[pathIdx+1])
             print("Time: ", self.t)
             print("")
 
-        return (self._laser_pos,self._laser_on, self._irradiance)
+        return traj
     
-    def _set_gains(self):
-        self.positions = np.array(self._gains["Positions"]) # laser position in [cm] shape:(n,x)
-        self.durations = np.array(self._gains["Durations"]) # shape: (x) 
-        self.pattern: str = self._gains["Pattern"]
-        self.num_passes: int = self._gains["Passes"]
-        self.max_acceleration = self._gains["MaxAcceleration"]
-        self.max_velocity = self._gains["MaxVelocity"]
+    def init_path(self, path_info):
+        self.positions = np.array(path_info["Positions"]) # laser position in [cm] shape:(n,x)
+        self.start_pos = self.positions[0]
+        self.durations = np.array(path_info["Durations"]) # shape: (x) 
+        self.pattern: str = path_info["Pattern"]
+        self.num_passes: int = path_info["Passes"]
+        self.max_acceleration = path_info["MaxAcceleration"]
+        self.max_velocity = path_info["MaxVelocity"]
