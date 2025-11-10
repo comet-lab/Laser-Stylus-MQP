@@ -1,35 +1,46 @@
 <!-- Following this tutorial: https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback -->
 <html>
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width">
-    <link rel="stylesheet" href="/src/styles/style.css" />
-    <style>
-      html, body {
-          margin: 0 !important;
-          padding: 0 !important;
-      }
-    </style>
-    <script defer="" src="http://localhost:8889/mystream/reader.js"></script> <!-- TODO get url dynamically from back end -->
-    <script type="module" src="/src/scripts/videostream.ts" defer></script>
-  </head>
-  <body>
-    <div id="top-panel">
-      <button id="laserBtn">LASER ON</button>
-      <div id="status-panel-left" class = "status-message"></div>
-      <div id="status-panel-right" class = "status-message">
-        <p id = "laserStatus">Laser: OFF</p>
-        <p id = "robotStatus">Robot: OFF</p>
-      </div>
 
-      <button id="robotBtn">ROBOT ON</button>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
+  <link rel="stylesheet" href="/src/styles/style.css" />
+  <style>
+    html,
+    body {
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+  </style>
+  <script defer="" src="http://localhost:8889/mystream/reader.js"></script>
+  <!-- TODO get url dynamically from back end -->
+  <script type="module" src="/src/scripts/videostream.ts" defer></script>
+</head>
+
+<body>
+  <div id="top-panel">
+    <div id="laser-toggle-container">
+      <div id="laser-off-bg" class="laser-bg-section"></div>
+      <div id="laser-on-bg" class="laser-bg-section"></div>
+      <div id="laser-center-box">LASER</div>
+      <span id="laser-off-text">OFF</span>
+      <span id="laser-on-text">ON</span>
     </div>
-    <div id="left-panel">
-      <button id = "drawBtn">Start</button>
-      <button id = "sendBtn">Send</button>
+    <div id="status-panel-left" class="status-message"></div>
+    <div id="status-panel-right" class="status-message">
+      <p id="laserStatus">Laser: OFF</p>
+      <p id="robotStatus">Robot: OFF</p>
     </div>
-    <canvas id="canvas"></canvas>
-    <video id="video"></video>
-    
-  </body>
+
+    <button id="robotBtn">ROBOT ON</button>
+  </div>
+  <div id="left-panel">
+    <button id="drawBtn">Start</button>
+    <button id="sendBtn">Send</button>
+  </div>
+  <canvas id="canvas"></canvas>
+  <video id="video"></video>
+
+</body>
+
 </html>
