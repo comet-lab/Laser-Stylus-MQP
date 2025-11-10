@@ -31,3 +31,19 @@ pre {
   border-radius: 8px;
   border-width: 2px;
 }
+
+#canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 93%;
+  height: 90%;
+}
+
+#video {
+  position: absolute; 
+  top: 0; 
+  left: 0; 
+  opacity: 100; 
+  z-index: -1;
+}
