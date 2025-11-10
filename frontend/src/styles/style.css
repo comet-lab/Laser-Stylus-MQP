@@ -42,8 +42,8 @@ pre {
 
 #video {
   position: absolute; 
-  right: 0; 
-  bottom: 0; 
+  top: 0; 
+  left: 0; 
   opacity: 100; 
   z-index: -1;
 }
