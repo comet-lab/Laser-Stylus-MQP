@@ -88,6 +88,9 @@ export class DrawingTracker {
         if (!this.drawingEnabled) return; // Check if drawing is enabled
         
         e.preventDefault();
+
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+
         const pos = this.getPointerPos(e);
         this.isDrawing = true;
         this.lastPos = pos;
@@ -119,11 +122,15 @@ export class DrawingTracker {
         if (!this.drawingEnabled) return;
         
         e.preventDefault();
+
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+
         this.isDrawing = false;
     }
 
     //Handle pointer cancel event
     private handlePointerCancel(e: PointerEvent): void {
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
         this.isDrawing = false;
     }
 
