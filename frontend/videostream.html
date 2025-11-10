@@ -5,6 +5,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width">
   <link rel="stylesheet" href="/src/styles/style.css" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,100..700;1,100..700&family=Inter:wght@100..900&display=swap"
+    rel="stylesheet">
   <style>
     html,
     body {
@@ -22,7 +25,10 @@
     <div id="laser-toggle-container">
       <div id="laser-off-bg" class="laser-bg-section"></div>
       <div id="laser-on-bg" class="laser-bg-section"></div>
-      <div id="laser-center-box">LASER</div>
+      <div id="laser-center-box">
+        <div id="laser-slider"></div>
+        <span id="laser-text">LASER</span>
+      </div>
       <span id="laser-off-text">OFF</span>
       <span id="laser-on-text">ON</span>
     </div>
@@ -40,7 +46,6 @@
   </div>
   <canvas id="canvas"></canvas>
   <video id="video"></video>
-
 </body>
 
 </html>

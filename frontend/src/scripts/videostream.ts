@@ -14,7 +14,7 @@ window.addEventListener('load', () => {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext("2d")!;
     const robotBtn = document.getElementById('robotBtn') as HTMLButtonElement;
-    const laserBtn = document.getElementById('laserBtn') as HTMLButtonElement;
+    const laserBtn = document.getElementById('laser-toggle-container') as HTMLButtonElement;
     const robotStatus = document.getElementById('robotStatus') as HTMLElement;
     const laserStatus = document.getElementById('laserStatus') as HTMLElement;
     const drawBtn = document.getElementById('drawBtn') as HTMLButtonElement;
@@ -33,7 +33,7 @@ window.addEventListener('load', () => {
     
     /** Reads the laser's *current state* from the button's class or data attribute */
     function getLocalLaserState(): boolean {
-        return laserBtn.classList.contains('laser-on');
+        return laserBtn.classList.contains('active');
     }
 
     /**
@@ -46,14 +46,13 @@ window.addEventListener('load', () => {
             const newLaserState = !!state.isLaserOn;
             
             // Update button text and class
-            laserBtn.textContent = newLaserState ? 'LASER OFF' : 'LASER ON';
-            laserBtn.classList.toggle('laser-on', newLaserState);
+            laserBtn.classList.toggle('active', newLaserState)
             
             // Update status display
             laserStatus.textContent = `Laser: ${newLaserState ? 'ON' : 'OFF'}`;
             
             // Re-enable button after state sync
-            laserBtn.disabled = false;
+            laserBtn.style.pointerEvents = 'auto';
         }
 
         // Update robot status if present
@@ -118,7 +117,7 @@ window.addEventListener('load', () => {
     // Handler for laser button - request a *toggle*
     laserBtn.addEventListener('click', () => {
         // 1. Disable button immediately to prevent multiple clicks
-        laserBtn.disabled = true;
+        laserBtn.style.pointerEvents = 'none';
         
         // 2. Read the *current* state from the UI
         const isCurrentlyOn = getLocalLaserState();
@@ -131,7 +130,7 @@ window.addEventListener('load', () => {
         
         if (!success) {
             // If send failed, re-enable the button
-            laserBtn.disabled = false;
+            laserBtn.style.pointerEvents = 'auto';
             console.error('Failed to send laser state update');
         }
         // Note: Button will be re-enabled when we receive the state update from backend
@@ -140,6 +139,7 @@ window.addEventListener('load', () => {
 
     // Handler for the draw button
     drawBtn.addEventListener('click', () => {
+        console.log('Draw button clicked');
         if (!drawingTracker) return;
 
         if (drawingTracker.isDrawingEnabled()) {

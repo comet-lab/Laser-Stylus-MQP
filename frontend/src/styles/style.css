@@ -1,7 +1,11 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;700&display=swap');
+
 body {
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
   padding: 1.5rem;
   color: #111;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 400;
 }
 
 #app {
@@ -25,13 +29,6 @@ pre {
   white-space: pre-wrap;
 }
 
-.laser-on {
-  background-color: red !important; /* Green */
-  color: black !important;
-  border-color: darkred !important;
-
-}
-
 #top-panel {
   position: relative;
   display: flex;
@@ -48,6 +45,7 @@ pre {
   height: 100%;
   width: 300px;
   flex-shrink: 0;
+  user-select: none;
 }
 
 .laser-bg-section {
@@ -56,11 +54,54 @@ pre {
   background-color: #172027;
 }
 
+#laser-slider {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 40px;
+  height: calc(100% - 6px);
+  background-color: #e0f2e0;
+  border-radius: 14px;
+  transition: left 0.3s ease, background-color 0.2s ease;
+  z-index: 1;
+}
+
+#laser-text {
+  position: relative;
+  z-index: 2;
+}
+
+#laser-center-box {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 100%;
+  width: 185px;
+  border-radius: 18px;
+  background-color: #172027;
+  border: 2px solid #2c343b;
+  padding: 0 40px;
+  color: #e0f2e0;
+  font-size: 18px;
+  font-weight: bold;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+  overflow: hidden;
+}
+
 #laser-off-bg {
+  background-color: #2c343b;
   display: flex;
   align-items: center;
   justify-content: flex-start;
   padding-left: 15px;
+  transition: background-color 0.2s ease;
 }
 
 #laser-on-bg {
@@ -70,29 +111,40 @@ pre {
   align-items: center;
   justify-content: flex-end;
   padding-right: 15px;
+  background-color: #172027;
+  transition: background-color 0.2s ease;
 }
 
-#laser-center-box {
-  position: absolute;
-  width: 120px;
-  height: 100%;
-  text-align: center;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background-color: #2c343b;
-  border-radius: 16px;
-  padding: 8px 24px;
-  color: #f5eff7;
-  font-weight: 500;
-  z-index: 2;
+/* Active state when laser is ON */
+#laser-toggle-container.active #laser-slider {
+  left: calc(100% - 43px);
+  background-color: #fff6f8;
+}
+
+#laser-toggle-container.active #laser-center-box {
+  background-color: #86140d;
+  border-color: #cb0e00;
+  color: #fff6f8;
+}
+
+#laser-toggle-container.active #laser-off-bg {
+  background-color: #172027;
+}
+
+#laser-toggle-container.active #laser-on-bg {
+  background-color: #cb0e00;
+}
+
+#laser-toggle-container.active #laser-on-text {
+  color: #fff6f8;
 }
 
 #laser-off-text,
 #laser-on-text {
   position: absolute;
-  color: #f5eff7;
-  font-size: 14px;
+  color: #e0f2e0;
+  font-size: 18px;
+  font-weight: bold;
   top: 50%;
   transform: translateY(-50%);
   z-index: 1;
@@ -111,7 +163,7 @@ pre {
   height: 100%;
   align-items: center;
   background-color: #151b21;
-  color: #f5eff7;
+  color: #e0f2e0;
   border-radius: 16px;
   flex-grow: 1;
 }
