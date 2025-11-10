@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width">
+    <link rel="stylesheet" href="/src/styles/style.css" />
     <style>
       html, body {
           margin: 0 !important;
@@ -13,10 +14,10 @@
     <script type="module" src="/src/scripts/videostream.ts" defer></script>
   </head>
   <body>
-    <canvas id="canvas" style="z-index: 1;"></canvas>
-    <video id="video" style="position: absolute; left: 0; top: 0; opacity: 100; z-index: -1;"></video>
-    <button id = "drawBtn" style="position: absolute; top: 0; left: 0;">Start Drawing</button>
-    <button id = "sendBtn" style="position: absolute; top: 0; left: 100;">Send Drawing</button>
+    <canvas id="canvas"></canvas>
+    <video id="video"></video>
+    <button id = "drawBtn">Start Drawing</button>
+    <button id = "sendBtn">Send Drawing</button>
     <pre id="coordinateOutput" style="position: absolute; top: 30; left: 0; background-color: white;"></pre>
   </body>
 </html>

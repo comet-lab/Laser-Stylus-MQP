@@ -19,16 +19,22 @@ export type PartialWebSocketMessage = Partial<WebSocketMessage>;
 export class WebSocketHandler {
     private ws: WebSocket | null = null;
     private url: string;
-    private outputElement: HTMLElement;
+    private outputElement: HTMLElement | null;
     public onStateUpdate: ((newState: WebSocketMessage) => void) | null = null;
 
-    constructor(outputElement: HTMLElement) {
+    constructor(outputElement: HTMLElement | null) {
         this.url = `ws://localhost:443/ws/${import.meta.env.VITE_UI_WEBSOCKET_NAME}`;
         this.outputElement = outputElement;
     }
 
     private log(message: string) {
-        this.outputElement.textContent += message + "\n";
+        if (this.outputElement) {
+            // If an element was provided, use it
+            this.outputElement.textContent += message + "\n";
+        } else {
+            // Otherwise, log to the console
+            console.log(`[WebSocketHandler]: ${message}`);
+        }
     }
 
     public connect() {

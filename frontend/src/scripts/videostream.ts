@@ -1,4 +1,5 @@
 import { DrawingTracker } from './classes/DrawingTracker';
+import { WebSocketHandler, WebSocketMessage } from './classes/WebSocketHandler';
 
 declare global {
     interface Window {
@@ -22,6 +23,9 @@ window.addEventListener('load', () => {
 
     // Initialize drawing tracker
     let drawingTracker: DrawingTracker | null = null;
+    const wsHandler = new WebSocketHandler(null);
+
+    wsHandler.connect();
 
     //Update canvas with video frame
     const updateCanvas = (now: DOMHighResTimeStamp, metadata: VideoFrameCallbackMetadata) => {
@@ -130,4 +134,22 @@ window.addEventListener('load', () => {
             drawingTracker.updateCanvasSize(canvas.width, canvas.height);
         }
     });
+
+    canvas.addEventListener('click', function(event) {
+        if (drawingTracker?.isDrawingEnabled()) {
+            return;
+        }
+
+        console.log(event.clientX / canvas.width * video.videoWidth);
+        console.log(event.clientY / canvas.height * video.videoHeight);
+
+        let x = event.clientX / canvas.width * video.videoWidth;
+        let y = event.clientY / canvas.height * video.videoHeight;
+
+        const data = {
+          x: x,
+          y: y
+        };
+        wsHandler.updateState(data);
+      });
 });

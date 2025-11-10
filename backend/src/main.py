@@ -106,10 +106,10 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             try:
                 message = json.loads(data)
-
+                
                 if not isinstance(message, dict):
                     await websocket.send_text("Error: Invalid JSON format")
-                    continue
+                    continue       
                 # this updates only the keys that are sent from the frontend
                 for key, value in message.items():
                     if key in current_data:
