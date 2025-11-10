@@ -1,10 +1,10 @@
 import numpy as np
-from laser_controller import LaserController
+# from laser_controller import LaserController
 
-from trajectory_helpers.quintic_trajectory import QuinticTrajectory
-from trajectory_helpers.path_generation import Path_Gen
+from .trajectory_helpers.quintic_trajectory import QuinticTrajectory
+from .trajectory_helpers.path_generation import Path_Gen
 
-class TrajectoryController(LaserController):
+class TrajectoryController():
     
     def __init__(self, path_info, debug = True):
         # Abstract class attributes
@@ -93,8 +93,8 @@ class TrajectoryController(LaserController):
                                                               v0 = v0[dim], vf = vf[dim],
                                                               a0 = a0[dim], af = af[dim])
 
-    def update(self, time_step):
-        self.t += time_step
+    def update(self, time):
+        self.t = time
         # We default to the laser being off at the given height
         # self._irradiance = 0
         # self._laser_on = False        
@@ -130,7 +130,7 @@ class TrajectoryController(LaserController):
     def init_path(self, path_info):
         self.positions = np.array(path_info["Positions"]) # laser position in [cm] shape:(n,x)
         self.start_pos = self.positions[0]
-        self.durations = np.array(path_info["Durations"]) # shape: (x) 
+        self.durations = np.array(path_info["Durations"]) # shape: (x)
         self.pattern: str = path_info["Pattern"]
         self.num_passes: int = path_info["Passes"]
         self.max_acceleration = path_info["MaxAcceleration"]

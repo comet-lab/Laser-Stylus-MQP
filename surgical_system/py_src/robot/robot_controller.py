@@ -2,7 +2,7 @@ import os, subprocess, time, sys
 from scipy.spatial.transform import Rotation
 import numpy as np
 
-if __name__=='__main__':
+if __name__=='__main__':    
     from franka_client import FrankaClient
     from controllers.trajectory_controller import TrajectoryController
 else:
@@ -133,15 +133,33 @@ class Robot_Controller():
         return pose
 
     def create_trajectory(self, path_info):
+        path_info['Positions'] = path_info['Positions'] / 100.0
         return TrajectoryController(path_info, debug=True)
     
     def run_trajectory(self, traj: TrajectoryController, time_step):
         #
+        total_time = traj.durations[-1]
+        print("Path Duration: ", total_time)
+        
         start_pos = traj.start_pos
-        start_pose = np.eye((4,4))
+        start_pose = np.eye(4)
         start_pose[:3, -1] = start_pos
+        print(start_pose)
         self.go_to_pose(start_pose@self.home_pose)
-        pass
+        
+        time_step = 0.05
+        elapsedTime = 0
+        t = time.time()
+        # TODO ask user to verify they want to continue
+        target_vel = np.zeros(3)
+        while (elapsedTime) < total_time:
+            if (time.time() - t) >= time_step:    
+                elapsedTime = elapsedTime + time.time() - t
+                t = time.time()
+                movement = traj.update(elapsedTime)
+                target_vel = self.home_pose[:3, :3].T @ (movement['velocity']/100) # cm to m
+                print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel) 
+                # self.set_velocity(target_vel, [0,0,0])
     
     
 if __name__=='__main__':

@@ -106,7 +106,7 @@ if __name__=='__main__':
     home_pose = np.concatenate((home_pose,[[0,0,0,1]]),axis=0)
     
     mode = 1
-    height = 0.2 # m
+    height = 0.3 # m
     x = 0
     y = 0
     target_pose = np.array([[1,0,0,x],[0,1,0,y],[0,0,1,height],[0,0,0,1]])
@@ -119,7 +119,7 @@ if __name__=='__main__':
     # returnedPose = franka_client.send_velocity(target_lin_vel, target_ang_vel)
     # time.sleep(1)
     # returnedPose = franka_client.send_velocity(np.array([0, 0, 0]), target_ang_vel)
-    time.sleep(1)
+    time.sleep(4)
     message = franka_client.request_pose()    
     print("Robot Message: ", message)
     franka_client.close()
