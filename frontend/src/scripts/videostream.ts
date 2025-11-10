@@ -13,9 +13,13 @@ window.addEventListener('load', () => {
     const video = document.getElementById('video') as HTMLVideoElement;
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext("2d")!;
+    const robotBtn = document.getElementById('robotBtn') as HTMLButtonElement;
+    const laserBtn = document.getElementById('laserBtn') as HTMLButtonElement;
+    const robotStatus = document.getElementById('robotStatus') as HTMLElement;
+    const laserStatus = document.getElementById('laserStatus') as HTMLElement;
     const drawBtn = document.getElementById('drawBtn') as HTMLButtonElement;
     const sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
-    const coordinateOutput = document.getElementById("coordinateOutput") as HTMLElement;
+    const coordinateOutput = document.getElementById("status-panel-left") as HTMLElement;
 
     //Canvas setup
     ctx.font = "48px serif";
@@ -24,6 +28,46 @@ window.addEventListener('load', () => {
     // Initialize drawing tracker
     let drawingTracker: DrawingTracker | null = null;
     const wsHandler = new WebSocketHandler(null);
+
+    // --- Helper Functions ---
+    
+    /** Reads the laser's *current state* from the button's class or data attribute */
+    function getLocalLaserState(): boolean {
+        return laserBtn.classList.contains('laser-on');
+    }
+
+    /**
+     * Single function for updating the UI based on backend state.
+     * Called by the WebSocket handler whenever state updates arrive.
+     */
+    function syncUiToState(state: Partial<WebSocketMessage>) {
+        // Update laser button and status (only if laser state is present)
+        if (state.isLaserOn !== undefined) {
+            const newLaserState = !!state.isLaserOn;
+            
+            // Update button text and class
+            laserBtn.textContent = newLaserState ? 'LASER OFF' : 'LASER ON';
+            laserBtn.classList.toggle('laser-on', newLaserState);
+            
+            // Update status display
+            laserStatus.textContent = `Laser: ${newLaserState ? 'ON' : 'OFF'}`;
+            
+            // Re-enable button after state sync
+            laserBtn.disabled = false;
+        }
+
+        // Update robot status if present
+        // (You can add robot state handling here later if needed)
+    }
+
+    // --- WebSocket Setup ---
+    
+    // Assign the callback *before* connecting.
+    // This function will run every time the backend broadcasts a new state.
+    wsHandler.onStateUpdate = (newState: WebSocketMessage) => {
+        console.log('State update received:', newState);
+        syncUiToState(newState);
+    };
 
     wsHandler.connect();
 
@@ -69,6 +113,31 @@ window.addEventListener('load', () => {
         },
     });
 
+    // --- Event Listeners ---
+
+    // Handler for laser button - request a *toggle*
+    laserBtn.addEventListener('click', () => {
+        // 1. Disable button immediately to prevent multiple clicks
+        laserBtn.disabled = true;
+        
+        // 2. Read the *current* state from the UI
+        const isCurrentlyOn = getLocalLaserState();
+        
+        // 3. Request the *opposite* state
+        const desiredNewState = !isCurrentlyOn;
+        
+        // 4. Send only the laser state update to backend
+        const success = wsHandler.updateState({ isLaserOn: desiredNewState });
+        
+        if (!success) {
+            // If send failed, re-enable the button
+            laserBtn.disabled = false;
+            console.error('Failed to send laser state update');
+        }
+        // Note: Button will be re-enabled when we receive the state update from backend
+        // via the onStateUpdate -> syncUiToState flow
+    });
+
     // Handler for the draw button
     drawBtn.addEventListener('click', () => {
         if (!drawingTracker) return;
@@ -76,13 +145,13 @@ window.addEventListener('load', () => {
         if (drawingTracker.isDrawingEnabled()) {
             // Stop drawing
             drawingTracker.disableDrawing();
-            drawBtn.textContent = 'Start Drawing';
+            drawBtn.textContent = 'Start';
             sendBtn.disabled = false; // Enable send button
         } else {
             // Start drawing
             drawingTracker.enableDrawing();
             drawingTracker.clearDrawing(); // Clear previous drawing
-            drawBtn.textContent = 'Stop Drawing';
+            drawBtn.textContent = 'Stop';
             sendBtn.disabled = true; // Disable send while drawing
             coordinateOutput.textContent = ''; // Clear previous output
         }

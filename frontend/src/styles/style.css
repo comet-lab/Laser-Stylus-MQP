@@ -26,24 +26,99 @@ pre {
 }
 
 .laser-on {
-  background-color: red; /* Green */
-  color: black;
-  border-radius: 8px;
-  border-width: 2px;
+  background-color: red !important; /* Green */
+  color: black !important;
+  border-color: darkred !important;
+
+}
+
+#top-panel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 7%;
+}
+
+#laserBtn {
+  height: 100%;
+  width: 200px;
+  border-radius: 0px;
+  background-color: #172027;
+  border: 2px solid #2c343b;
+  color: #f5eff7;
+}
+
+.status-message {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  background-color: #151b21;
+  color: #f5eff7;
+  padding-left: 10px;
+  padding-right: 10px;
+  flex-grow: 1;
+}
+#status-panel-left {
+  justify-content: flex-start;
+}
+#status-panel-right {
+  align-items: flex-end;
+  flex-direction: column;
+  justify-content: center;
+}
+#status-panel-right p {
+  margin: 0;
+}
+
+#robotBtn {
+  height: 100%;
+  width: 200px;
+  border-radius: 0px;
+  background-color: #172027;
+  border: 2px solid #2c343b;
+  color: #f5eff7;
+}
+
+#left-panel {
+  position: relative;
+  display: block;
+  width: 5%;
+  height: 93%;
+  background-color: #0f1419;
+}
+
+#sendBtn {
+  position: relative;
+  display: block;
+  width: 100%;
+  border-radius: 0px;
+  background-color: #172027;
+  border: 2px solid #2c343b;
+  color: #f5eff7;
+}
+#drawBtn {
+  position: relative;
+  display: block;
+  width: 100%;
+  border-radius: 0px;
+  background-color: #172027;
+  border: 2px solid #2c343b;
+  color: #f5eff7;
 }
 
 #canvas {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 93%;
-  height: 90%;
+  bottom: 0;
+  right: 0;
+  width: 95%;
+  height: 93%;
 }
 
 #video {
   position: absolute; 
-  top: 0; 
-  left: 0; 
+  bottom: 0; 
+  right: 0; 
   opacity: 100; 
   z-index: -1;
 }

@@ -14,10 +14,22 @@
     <script type="module" src="/src/scripts/videostream.ts" defer></script>
   </head>
   <body>
+    <div id="top-panel">
+      <button id="laserBtn">LASER ON</button>
+      <div id="status-panel-left" class = "status-message"></div>
+      <div id="status-panel-right" class = "status-message">
+        <p id = "laserStatus">Laser: OFF</p>
+        <p id = "robotStatus">Robot: OFF</p>
+      </div>
+
+      <button id="robotBtn">ROBOT ON</button>
+    </div>
+    <div id="left-panel">
+      <button id = "drawBtn">Start</button>
+      <button id = "sendBtn">Send</button>
+    </div>
     <canvas id="canvas"></canvas>
     <video id="video"></video>
-    <button id = "drawBtn">Start Drawing</button>
-    <button id = "sendBtn">Send Drawing</button>
-    <pre id="coordinateOutput" style="position: absolute; top: 30; left: 0; background-color: white;"></pre>
+    
   </body>
 </html>
