@@ -1,11 +1,16 @@
+/* ============================================
+   FONTS & IMPORTS
+   ============================================ */
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;700&display=swap');
 
+/* ============================================
+   GLOBAL STYLES
+   ============================================ */
 body {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-  padding: 1.5rem;
-  color: #111;
   font-family: 'IBM Plex Sans', sans-serif;
   font-weight: 400;
+  padding: 1.5rem;
+  color: #111;
 }
 
 #app {
@@ -29,6 +34,9 @@ pre {
   white-space: pre-wrap;
 }
 
+/* ============================================
+   TOP PANEL
+   ============================================ */
 #top-panel {
   position: relative;
   display: flex;
@@ -39,6 +47,7 @@ pre {
   gap: 10px;
 }
 
+/* --- Laser Toggle Component --- */
 #laser-toggle-container {
   position: relative;
   display: flex;
@@ -54,21 +63,24 @@ pre {
   background-color: #172027;
 }
 
-#laser-slider {
-  position: absolute;
-  left: 3px;
-  top: 3px;
-  width: 40px;
-  height: calc(100% - 6px);
-  background-color: #e0f2e0;
-  border-radius: 14px;
-  transition: left 0.3s ease, background-color 0.2s ease;
-  z-index: 1;
+#laser-off-bg {
+  background-color: #2c343b;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 15px;
+  transition: background-color 0.2s ease;
 }
 
-#laser-text {
-  position: relative;
-  z-index: 2;
+#laser-on-bg {
+  border-top-right-radius: 16px;
+  border-bottom-right-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 15px;
+  background-color: #172027;
+  transition: background-color 0.2s ease;
 }
 
 #laser-center-box {
@@ -95,27 +107,43 @@ pre {
   overflow: hidden;
 }
 
-#laser-off-bg {
-  background-color: #2c343b;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding-left: 15px;
-  transition: background-color 0.2s ease;
+#laser-slider {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 40px;
+  height: calc(100% - 6px);
+  background-color: #e0f2e0;
+  border-radius: 14px;
+  transition: left 0.3s ease, background-color 0.2s ease;
+  z-index: 1;
 }
 
-#laser-on-bg {
-  border-top-right-radius: 16px;
-  border-bottom-right-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 15px;
-  background-color: #172027;
-  transition: background-color 0.2s ease;
+#laser-text {
+  position: relative;
+  z-index: 2;
 }
 
-/* Active state when laser is ON */
+#laser-off-text,
+#laser-on-text {
+  position: absolute;
+  color: #e0f2e0;
+  font-size: 18px;
+  font-weight: bold;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+#laser-off-text {
+  left: 15px;
+}
+
+#laser-on-text {
+  right: 15px;
+}
+
+/* Laser Active State */
 #laser-toggle-container.active #laser-slider {
   left: calc(100% - 43px);
   background-color: #fff6f8;
@@ -139,8 +167,85 @@ pre {
   color: #fff6f8;
 }
 
-#laser-off-text,
-#laser-on-text {
+/* --- Robot Toggle Component --- */
+#robot-toggle-container {
+  position: relative;
+  display: flex;
+  height: 100%;
+  width: 300px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.robot-bg-section {
+  height: 100%;
+  width: 50%;
+  background-color: #172027;
+}
+
+#robot-off-bg {
+  border-top-left-radius: 16px;
+  border-bottom-left-radius: 16px;
+  background-color: #2c343b;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 15px;
+  transition: background-color 0.2s ease;
+}
+
+#robot-on-bg {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 15px;
+  background-color: #172027;
+  transition: background-color 0.2s ease;
+}
+
+#robot-center-box {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 100%;
+  width: 185px;
+  border-radius: 18px;
+  background-color: #172027;
+  border: 2px solid #2c343b;
+  padding: 0 40px;
+  color: #e0f2e0;
+  font-size: 18px;
+  font-weight: bold;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+#robot-slider {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 40px;
+  height: calc(100% - 6px);
+  background-color: #e0f2e0;
+  border-radius: 14px;
+  transition: left 0.3s ease, background-color 0.2s ease;
+  z-index: 1;
+}
+
+#robot-text {
+  position: relative;
+  z-index: 2;
+}
+
+#robot-off-text,
+#robot-on-text {
   position: absolute;
   color: #e0f2e0;
   font-size: 18px;
@@ -150,14 +255,40 @@ pre {
   z-index: 1;
 }
 
-#laser-off-text {
+#robot-off-text {
   left: 15px;
 }
 
-#laser-on-text {
+#robot-on-text {
   right: 15px;
 }
 
+/* Laser Active State */
+#robot-toggle-container.active #robot-slider {
+  left: calc(100% - 43px);
+  background-color: #fff6f8;
+}
+
+#robot-toggle-container.active #robot-center-box {
+  background-color: #86140d;
+  border-color: #cb0e00;
+  color: #fff6f8;
+}
+
+#robot-toggle-container.active #robot-off-bg {
+  background-color: #172027;
+}
+
+#robot-toggle-container.active #robot-on-bg {
+  background-color: #cb0e00;
+}
+
+#robot-toggle-container.active #robot-on-text {
+  color: #fff6f8;
+}
+
+
+/* --- Status Panels --- */
 .status-message {
   display: flex;
   height: 100%;
@@ -167,20 +298,24 @@ pre {
   border-radius: 16px;
   flex-grow: 1;
 }
+
 #status-panel-left {
   justify-content: flex-start;
   padding-left: 30px;
 }
+
 #status-panel-right {
   align-items: flex-end;
   flex-direction: column;
   justify-content: center;
   padding-right: 30px;
 }
+
 #status-panel-right p {
   margin: 0;
 }
 
+/* --- Robot Button --- */
 #robotBtn {
   height: 100%;
   width: 200px;
@@ -190,6 +325,9 @@ pre {
   color: #f5eff7;
 }
 
+/* ============================================
+   LEFT PANEL & CONTROLS
+   ============================================ */
 #left-panel {
   position: relative;
   display: block;
@@ -198,6 +336,7 @@ pre {
   background-color: #0f1419;
 }
 
+#drawBtn,
 #sendBtn {
   position: relative;
   display: block;
@@ -207,16 +346,10 @@ pre {
   border: 2px solid #2c343b;
   color: #f5eff7;
 }
-#drawBtn {
-  position: relative;
-  display: block;
-  width: 100%;
-  border-radius: 0px;
-  background-color: #172027;
-  border: 2px solid #2c343b;
-  color: #f5eff7;
-}
 
+/* ============================================
+   CANVAS & VIDEO
+   ============================================ */
 #canvas {
   position: absolute;
   bottom: 0;
