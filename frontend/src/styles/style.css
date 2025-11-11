@@ -31,3 +31,21 @@ pre {
   border-radius: 8px;
   border-width: 2px;
 }
+
+#canvas {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 93%;
+  height: 90%;
+  touch-action: none;
+  -ms-touch-action: none;
+}
+
+#video {
+  position: absolute; 
+  bottom: 0; 
+  right: 0; 
+  opacity: 100; 
+  z-index: -1;
+}
