@@ -3,13 +3,13 @@ CC = g++
 all: main CalibrateRobot
 
 main: main.o PandaController.o FrankaSubscriber.o
-	$(CC) -o main.exe main.o PandaController.o FrankaSubscriber.o -L /home/nepacheco/libfranka/build/ \
+	$(CC) -o main main.o PandaController.o FrankaSubscriber.o -L /home/nepacheco/libfranka/build/ \
 	-lfranka -L /home/nepacheco/libfranka/build/examples -lexamples_common -L/opt/ros/noetic/lib \
 	-Wl,-rpath,/opt/ros/noetic/lib -lroscpp -lrosconsole -lrostime \
 	-lroscpp_serialization -lboost_system -lboost_thread -pthread -lactionlib
 
 CalibrateRobot: CalibrateRobot.o PandaController.o 
-	$(CC) -o CalibrateRobot.exe CalibrateRobot.o PandaController.o -L /home/nepacheco/libfranka/build/ \
+	$(CC) -o CalibrateRobot CalibrateRobot.o PandaController.o -L /home/nepacheco/libfranka/build/ \
 	-lfranka -L /home/nepacheco/libfranka/build/examples -lexamples_common -L/opt/ros/noetic/lib \
 	-Wl,-rpath,/opt/ros/noetic/lib -lroscpp -lrosconsole -lrostime \
 	-lroscpp_serialization -lboost_system -lboost_thread -pthread -lactionlib

@@ -2,7 +2,7 @@
 
 ## Docker
 - Run on lab PC:`docker-compose up`
-- Run locally: `docker-compose --profile mock_robot up --build surgical_system`
+- Run locally: `docker-compose --profile mock_robot up --build`
 
 ## Pages
 - [Home](http://localhost:3000)
