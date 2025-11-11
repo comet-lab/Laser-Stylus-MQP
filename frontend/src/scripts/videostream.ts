@@ -53,7 +53,7 @@ window.addEventListener('load', () => {
 
     //Render with MediaMTX WebRTC Reader
     reader = new window.MediaMTXWebRTCReader({
-        url: new URL('http://localhost:8889/mystream/whep'),
+        url: new URL(`http://${window.location.hostname}:8889/mystream/whep`),
         onError: (err: string) => {
             setMessage(err);
         },
@@ -62,7 +62,7 @@ window.addEventListener('load', () => {
             video.requestVideoFrameCallback(updateCanvas);
 
             // Initialize drawing tracker after video is ready
-            drawingTracker = new DrawingTracker(canvas, video, 'http://localhost:443');
+            drawingTracker = new DrawingTracker(canvas, video, `http://${window.location.hostname}:443`);
             
             // Initially disable send button
             sendBtn.disabled = true;

@@ -1,70 +1,78 @@
-import os, time, subprocess, sys, warnings
+import os, time, sys, warnings
+import cv2
 import numpy as np
 import asyncio
 import websockets
+import time
 from scipy.spatial.transform import Rotation
 
 # Classes
-from robot.franka_client import FrankaClient
-from robot.mock_franka_client import MockFrankaClient
-from calibration.Utilities_functions import loadHomePose
-mock_robot = os.getenv("MOCK_ROBOT", "false") == "true"
+mock_robot = os.getenv("MOCK_ROBOT", "0") == "1"
 print(f"Mocking? {mock_robot}")
 if(not mock_robot):
+    from robot.robot_controller import Robot_Controller
     from cameras.thermal_cam import ThermalCam
+    from cameras.RGBD_cam import RGBD_Cam
+    from laser_control.laser_arduino import Laser_Arduino
+else:
+    from robot.mock_franka_client import MockFrankaClient
+    from cameras.mock_camera import MockCamera
+
+from cameras.broadcast import Broadcast
 from backend.listener import BackendConnection
-# RGBD camera
-from laser_control.laser_arduino import Laser_Arduino
+
 
 async def main():
-    pathToCWD = os.getcwd()
     camera_calibration = False
+    
+            
     
     ##################################################################################
     #------------------------------ Robot Config ------------------------------------#
     ##################################################################################
     # Create FrankaNode object for controlling robot
-    robot_obj = FrankaClient() if not mock_robot else MockFrankaClient()
+    # robot_controller = Robot_Controller() if not mock_robot else MockFrankaClient()
     # TODO fix running in container
-    # subprocess.Popen([pathToCWD + "/cpp_src/main"])
-    home_pose = loadHomePose(home_pose_path="home_pose.csv")
-    start_pos = np.array([0,0,0.35]) # [m,m,m]
-    target_pose = np.array([[1.0, 0, 0, start_pos[0]],
-                            [0,1,0,start_pos[1]],
-                            [0,0,1,start_pos[2]],
-                            [0,0,0,1]])
-    robot_obj.send_pose(target_pose@home_pose,1) # Send robot to start position
-    time.sleep(2)
+    # home_pose = robot_controller.load_home_pose()
+    # start_pos = np.array([0,0,0.35]) # [m,m,m]
+    # target_pose = np.array([[1.0, 0, 0, start_pos[0]],
+    #                         [0,1,0,start_pos[1]],
+    #                         [0,0,1,start_pos[2]],
+    #                         [0,0,0,1]])
+    # robot_controller.goToPose(target_pose@home_pose,1) # Send robot to start position
+    # time.sleep(2)
     
     ##################################################################################
     #--------------------------- Thermal Cam Config ---------------------------------#
     ##################################################################################
     # Set up camera object
     window_scale = 1
-    frame_rate = 50
+    frame_rate = 50  
     temp_scale = 100.0  # based on temperature linear 10mK reading
     # start with full window so we can perform camera calibration. Additionally, set maximum frame rate at 50 hz, 
     # and the focal distance to 0.204 m. This seems to be at the right location to maximize the focal point around the 
     # free beam laser spot.
-    cam_obj = None
+    therm_cam = None
     if(not mock_robot):
-        cam_obj = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frameRate="Rate50Hz",focalDistance=0.2) 
-        cam_obj.set_acquisition_mode()
+        therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frameRate="Rate50Hz",focalDistance=0.2)
+    else:
+        therm_cam = MockCamera()
     
     ##################################################################################
     #------------------------------ RGBD Cam Config ---------------------------------#
     ##################################################################################
-    
-    # Empty 
+    # rgbd_cam = RGBD_Cam() #Runs a thread internally
+
     
     ##################################################################################
     #-------------------------------- Laser Config ----------------------------------#
     ##################################################################################
-    try:
+    
+    if(not mock_robot):
         laser_obj = Laser_Arduino()  # controls whether laser is on or off
         laser_on = False
-    except:
-        print("Failed to connect to Laser...")
+        laser_obj.set_output(laser_on)
+
     
     ##################################################################################
     #----------------------------- Backend Connection -------------------------------#
@@ -72,9 +80,10 @@ async def main():
     
     backend_connection = BackendConnection(
         send_fn=lambda: "Hello from robot!",
-        recv_fn=lambda msg: print("Server sent: " + msg)
+        recv_fn=lambda msg: print("Server sent: " + msg),
+        mocking=mock_robot
     )
-    await backend_connection.connect_to_websocket()
+    asyncio.create_task(backend_connection.connect_to_websocket())
     
     ##################################################################################
     #----------------------------- Camera Calibration -------------------------------#
@@ -83,10 +92,37 @@ async def main():
     if camera_calibration:
         pass
 
-    await asyncio.Future()
+    # await asyncio.Future()
     
+    print("Cameras are ready")
+    therm_cam.start_stream() # Start camera stream
+    # rgbd_cam.start_stream()
+    print("Starting Streams ")
+    b = Broadcast(mock_robot)
+    print(f"Broadcast connection status: {b.connect()}")
     
+    while (True):
+        # rgbd_cam.display_all_streams() #Test Streaming
+        img = therm_cam.get_latest()
+        await asyncio.sleep(0.01)
+        if img is None:
+            continue
+        img = img['image']
+        max = np.max(img)
+        img = img / max
+        img = img * 254
+        
+        if(b.connected):
+            b.publish_frame(img)
+        else:
+            b.connect()
+            print('connecting...')
+            time.sleep(2)
+            
+        
     
+    therm_cam.deinitialize_cam()
+
     
     
 

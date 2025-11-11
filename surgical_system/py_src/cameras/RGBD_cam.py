@@ -1,56 +1,108 @@
-## License: Apache 2.0. See LICENSE file in root directory.
-## Copyright(c) 2015-2017 Intel Corporation. All Rights Reserved.
-
-###############################################
-##      Open CV and Numpy integration        ##
-###############################################
-
 import pyrealsense2 as rs
 import numpy as np
-import cv2
+import cv2, threading, queue, time
+if __name__=='__main__':
+    from camera import Camera
+else:
+    from .camera import Camera
 
-# Configure depth and color streams
-pipeline = rs.pipeline()
-config = rs.config()
+class RGBD_Cam(Camera):
+    def __init__(self, width = 640, height = 480, frame_rate = 30, pix_Per_M = 7000):
+        #Threading 
+        super().__init__(width, height, pix_Per_M) 
+        try:
+            # Configure depth and color streams
+            self.pipeline = rs.pipeline()
+            self.config = rs.config()
 
-# Get device product line for setting a supporting resolution
-pipeline_wrapper = rs.pipeline_wrapper(pipeline)
-pipeline_profile = config.resolve(pipeline_wrapper)
-device = pipeline_profile.get_device()
-device_product_line = str(device.get_info(rs.camera_info.product_line))
-print(device_product_line)
+            # Get device product line for setting a supporting resolution
+            self.pipeline_wrapper = rs.pipeline_wrapper(self.pipeline)
+            self.pipeline_profile = self.config.resolve(self.pipeline_wrapper)
+            self.device = self.pipeline_profile.get_device()
+            self.device_name = str(self.device.get_info(rs.camera_info.product_line))
+            print(self.device_name, " Connected")
 
-found_rgb = False
+            self.config.enable_stream(rs.stream.depth, width, height, rs.format.z16, frame_rate)
+            self.config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, frame_rate)
+            self.pipeline.start(self.config)
+            
+            self.thread = threading.Thread(target=self._run, daemon=True)
+            print(f"Starting {self.device_name} Thread...")
+            self._ready = True
+            self.thread.start()
+            
+        except:
+            print("RGBD failed to connect or Init")
+    
+    def _run(self):
+        try:
+            if not self._ready:
+                return 
+            while True:
+                self.thread_ready.wait()
+                frames = self.pipeline.wait_for_frames()
+                depth = frames.get_depth_frame()
+                color = frames.get_color_frame()
+                if not depth or not color:
+                    continue
+                depth_np = np.asanyarray(depth.get_data())
+                color_np = np.asanyarray(color.get_data())
+                ts = frames.get_timestamp()  # milliseconds
+                item = {"color": color_np, "depth": depth_np, "ts": ts}
 
-config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+                self._lock.acquire()
+                self._latest = item
+                self._lock.release()
+        finally:
+            self.pipeline.stop()
+            
+    # def get_latest(self):
+    #     """Return the most recent {'color','depth','ts'} or None if nothing yet."""
+    #     self._lock.acquire()
+    #     item = self._latest
+    #     self._lock.release()
+    #     return item
+    
+    # def is_ready(self):
+    #     return self._ready
 
-# Start streaming
-pipeline.start(config)
-
-try:
-    while True:
-
-        # Wait for a coherent pair of frames: depth and color
-        frames = pipeline.wait_for_frames()
-        depth_frame = frames.get_depth_frame()
-        color_frame = frames.get_color_frame()
-        if not depth_frame or not color_frame:
-            continue
-
-        # Convert images to numpy arrays
-        depth_image = np.asanyarray(depth_frame.get_data())
-        color_image = np.asanyarray(color_frame.get_data())
-
+    # def stop_stream(self):
+    #     self.thread_ready.clear()
+        
+    # def start_stream(self):
+    #     self.thread_ready.set()
+    
+    def display_depth_stream(self):
+        depth_image = self.get_latest()['depth']
+        if depth_image is None:
+            return
+        depth_image = depth_image['depth']
+        depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
+        # Show images
+        cv2.namedWindow('Color Stream', cv2.WINDOW_AUTOSIZE)
+        cv2.imshow('Depth Stream', depth_colormap)
+        cv2.waitKey(1)
+        
+    def display_color_stream(self):
+        color_image = self.get_latest()
+        if color_image is None:
+            return
+        color_image = color_image['color']
+        cv2.namedWindow('Color Stream', cv2.WINDOW_AUTOSIZE)
+        cv2.imshow('Depth Stream', color_image)
+        cv2.waitKey(1)
+        
+    def display_all_streams(self):
+        image = self.get_latest()
+        if image is None:
+            return 
+        color_image = image['color']
+        depth_image = image['depth']
         # Apply colormap on depth image (image must be converted to 8-bit per pixel first)
         depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
-
-        depth_colormap_dim = depth_colormap.shape
-        color_colormap_dim = color_image.shape
-
         # If depth and color resolutions are different, resize color image to match depth image for display
-        if depth_colormap_dim != color_colormap_dim:
-            resized_color_image = cv2.resize(color_image, dsize=(depth_colormap_dim[1], depth_colormap_dim[0]), interpolation=cv2.INTER_AREA)
+        if depth_image.shape != color_image.shape:
+            resized_color_image = cv2.resize(color_image, dsize=(depth_image.shape[1], depth_image.shape[0]), interpolation=cv2.INTER_AREA)
             images = np.hstack((resized_color_image, depth_colormap))
         else:
             images = np.hstack((color_image, depth_colormap))
@@ -60,7 +112,17 @@ try:
         cv2.imshow('RealSense', images)
         cv2.waitKey(1)
 
-finally:
+def main():
+    rgbd_cam = RGBD_Cam()
+    rgbd_cam.start_stream()
+    
+    while (not rgbd_cam.is_ready()):
+        time.sleep(0.5)
+        
+    while(True):
+        rgbd_cam.display_all_streams()
+    
 
-    # Stop streaming
-    pipeline.stop()
+if __name__=='__main__':
+    main()
+    

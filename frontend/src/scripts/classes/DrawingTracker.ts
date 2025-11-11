@@ -16,7 +16,7 @@ export class DrawingTracker {
     private drawingCtx: CanvasRenderingContext2D;
     private apiBaseUrl: string;
 
-    constructor(canvas: HTMLCanvasElement, video: HTMLVideoElement, apiBaseUrl: string = 'http://localhost:443') {
+    constructor(canvas: HTMLCanvasElement, video: HTMLVideoElement, apiBaseUrl: string = `http://${window.location.hostname}:443`) {
         this.canvas = canvas;
         this.video = video;
         this.ctx = canvas.getContext('2d')!;

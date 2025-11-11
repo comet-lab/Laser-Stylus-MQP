@@ -1,7 +1,7 @@
 FROM python:3.8-bookworm
 
 RUN apt-get update && \
-    apt-get install -y make
+    apt-get install -y make libgl1 libglib2.0-0 ffmpeg
 
 WORKDIR /app
 
@@ -12,6 +12,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY cpp_src/ .
 COPY py_src/ .
 
-RUN make cpp_src/ cpp_src/
+# RUN make cpp_src/ cpp_src/
 
 CMD ["python", "main.py"]

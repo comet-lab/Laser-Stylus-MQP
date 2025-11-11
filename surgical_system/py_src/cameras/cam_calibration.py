@@ -4,30 +4,34 @@ import matplotlib.pyplot as plt
 import numpy as np 
 import cv2
 import yaml, csv
-from thermal_cam import ThermalCam
+
+if __name__=='__main__':
+    from camera import Camera
+else:
+    from .camera import Camera
 
 class CameraCalibration():
-    def __init__(self,calibration_folder='img_processing/CalibrationImages_0.2FD/',mode='2D',\
-                 checkerboard_size=[5,5],\
-                 filepath ="/home/nepacheco/Repositories/Laser_control/python_src/thermal_cam_control/", debug=False):
-        self.filepath = filepath
-        self.directory = "python_src/thermal_cam_control/"
+    def __init__(self, calibration_folder='calibration_info',mode='2D',\
+                 checkerboard_size=[5,5], debug=False):
+        
+        self.filepath = os.getcwd()
+        self.directory = "surgical_system/py_src/cameras"
+        
         if mode not in ('2D', '3D'):
             raise Exception("Mode needs to either 2D or 3D")
         self.debug = debug
         self.mode = mode
 
-        camera_folder = 'python_src/thermal_cam_control/' 
         filename = 'Camera_Calibration_Settings.csv'
-        file_address = camera_folder + calibration_folder + filename
+        file_address = self.directory + calibration_folder + filename
     
 
         self.checkboardSize = checkerboard_size
-        if not (calibration_folder == ''):
-            if os.path.exists(file_address):
-                _, self.camera_matrix, self.dist_coeffs = self.read_calibration_settings(file_address)
-            else:
-                self.camera_matrix, self.dist_coeffs = self.calibrate(calibration_folder,checkerboard_size) 
+        # if not (calibration_folder == ''):
+        #     if os.path.exists(file_address):
+        #         _, self.camera_matrix, self.dist_coeffs = self.read_calibration_settings(file_address)
+        #     else:
+        #         self.camera_matrix, self.dist_coeffs = self.calibrate(calibration_folder,checkerboard_size) 
         
     def calibrate(self,foldername,checkerboard_size):
         """
@@ -428,8 +432,8 @@ class CameraCalibration():
     def load_homography(self, M_pix_per_m = 7000, \
                          fileLocation = "/python_src/thermal_cam_control/img_processing/Laser_Alignment_Test", debug = True):
     
-        img_points = CameraCalibration.load_pts(fileLocation + "laser_spots.csv")
-        obj_points = CameraCalibration.load_pts(fileLocation + "laser_world_points.csv")
+        img_points = CameraCalibration.load_pts(self.directory + fileLocation + "laser_spots.csv")
+        obj_points = CameraCalibration.load_pts(self.directory + fileLocation + "laser_world_points.csv")
         
         # self.generate_transform(img_points, obj_points)
         if obj_points.shape[1] == 2:

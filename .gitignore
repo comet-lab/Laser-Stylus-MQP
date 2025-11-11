@@ -2,3 +2,8 @@ __pycache__/
 *.pyc
 static/
 frontend/node_modules/
+venvs/
+.vscode/
+*.csv
+*.o
+*.exe

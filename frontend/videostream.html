@@ -10,7 +10,12 @@
           padding: 0 !important;
       }
     </style>
-    <script defer="" src="http://localhost:8889/mystream/reader.js"></script> <!-- TODO get url dynamically from back end -->
+    <script>
+      var scriptElm = document.createElement('script');
+      scriptElm.defer = true; // Use .defer for the defer attribute
+      scriptElm.src = 'http://' + window.location.hostname + ':8889/mystream/reader.js';
+      document.head.appendChild(scriptElm);
+    </script>
     <script type="module" src="/src/scripts/videostream.ts" defer></script>
   </head>
   <body>

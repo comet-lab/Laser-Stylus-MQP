@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchBtn.addEventListener('click', async () => {
         httpOutput.textContent = 'Fetching current state...';
         try {
-            const res = await fetch('http://localhost:443/current-coordinates');
+            const res = await fetch(`http://${window.location.hostname}:443/current-coordinates`);
             if (!res.ok) throw new Error(`HTTP Error! Status: ${res.status}`);
             
             const data = await res.json() as WebSocketMessage;
