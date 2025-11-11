@@ -6,4 +6,5 @@ venvs/
 .vscode/
 *.csv
 *.o
-*.exe
+surgical_system/cpp_src/main
+surgical_system/cpp_src/CalibrateRobot

@@ -13,7 +13,7 @@ class BackendConnection():
             msg = self.send_fn()
             if msg is not None:
                 await websocket.send(msg)
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(5)
 
     async def _recieve_loop(self, websocket):
         async for message in websocket:

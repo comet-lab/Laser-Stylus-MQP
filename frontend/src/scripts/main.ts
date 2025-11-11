@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ry_input = document.getElementById("ry") as HTMLInputElement;
     const rz_input = document.getElementById("rz") as HTMLInputElement;
     const laserButton = document.getElementById('laserBtn') as HTMLButtonElement;
-    const sendBtn = document.getElementById("sendBtn") as HTMLButtonElement;
+    const sendBtn = document.getElementById("sendCoordsBtn") as HTMLButtonElement;
     const fetchBtn = document.getElementById("fetchBtn") as HTMLButtonElement;
 
     // --- Helper Functions ---
