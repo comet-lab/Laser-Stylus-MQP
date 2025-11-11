@@ -23,7 +23,7 @@ export class WebSocketHandler {
     public onStateUpdate: ((newState: WebSocketMessage) => void) | null = null;
 
     constructor(outputElement: HTMLElement | null) {
-        this.url = `ws://localhost:443/ws/${import.meta.env.VITE_UI_WEBSOCKET_NAME}`;
+        this.url = `ws://${window.location.hostname}:443/ws/${import.meta.env.VITE_UI_WEBSOCKET_NAME}`;
         this.outputElement = outputElement;
     }
 

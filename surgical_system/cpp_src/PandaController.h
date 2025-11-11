@@ -39,6 +39,7 @@ public:
     void setAcceleration(Eigen::Vector3d & currVel, Eigen::Vector3d & desVel, Eigen::Vector3d & outputAccel, double maxVel, double maxAccel);
 
     void setMode(int mode);
+    void velocityMode(double maxTime);
 
     void pivot();
     void RotateAxis(int axis);

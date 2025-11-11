@@ -16,7 +16,7 @@ export class DrawingTracker {
     private drawingCtx: CanvasRenderingContext2D;
     private apiBaseUrl: string;
 
-    constructor(canvas: HTMLCanvasElement, video: HTMLVideoElement, apiBaseUrl: string = 'http://localhost:443') {
+    constructor(canvas: HTMLCanvasElement, video: HTMLVideoElement, apiBaseUrl: string = `http://${window.location.hostname}:443`) {
         this.canvas = canvas;
         this.video = video;
         this.ctx = canvas.getContext('2d')!;
@@ -88,6 +88,9 @@ export class DrawingTracker {
         if (!this.drawingEnabled) return; // Check if drawing is enabled
         
         e.preventDefault();
+
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+
         const pos = this.getPointerPos(e);
         this.isDrawing = true;
         this.lastPos = pos;
@@ -119,11 +122,15 @@ export class DrawingTracker {
         if (!this.drawingEnabled) return;
         
         e.preventDefault();
+
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+
         this.isDrawing = false;
     }
 
     //Handle pointer cancel event
     private handlePointerCancel(e: PointerEvent): void {
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
         this.isDrawing = false;
     }
 
