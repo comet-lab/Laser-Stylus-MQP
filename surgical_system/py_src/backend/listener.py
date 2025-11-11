@@ -3,9 +3,10 @@ import websockets
 import os
 
 class BackendConnection():
-    def __init__(self, send_fn, recv_fn):
+    def __init__(self, send_fn, recv_fn, mocking):
         self.send_fn = send_fn
         self.recv_fn = recv_fn
+        self.mocking = mocking
 
     async def _send_loop(self, websocket):
         while True:
@@ -19,7 +20,10 @@ class BackendConnection():
             self.recv_fn(message)
 
     async def connect_to_websocket(self):
-        uri = f"ws://localhost:443/ws/robot"
+        host = "backend" if self.mocking else "localhost"
+        port = "8080" if self.mocking else "443"
+        ws_robot_name = os.getenv("ROBOT_WEBSOCKET_NAME", "robot")
+        uri = f"ws://{host}:{port}/ws/{ws_robot_name}"
         async with websockets.connect(uri) as websocket:
             # Connection is now open
             print(f"Connected to WebSocket server at {uri}")

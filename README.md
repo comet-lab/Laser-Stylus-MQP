@@ -1,8 +1,8 @@
 # Laser-Stylus-MQP
 
 ## Docker
-- `docker-compose up`
-- `docker-compose up -e MOCK_ROBOT=1`
+- Run on lab PC:`docker-compose up`
+- Run locally: `docker-compose --profile mock_robot up --build surgical_system`
 
 ## Pages
 - [Home](http://localhost:3000)

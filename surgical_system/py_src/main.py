@@ -7,16 +7,16 @@ import time
 from scipy.spatial.transform import Rotation
 
 # Classes
-mock_robot = os.getenv("MOCK_ROBOT", "false") == "true"
-mock_robot = False
+mock_robot = os.getenv("MOCK_ROBOT", "0") == "1"
+print(f"Mocking? {mock_robot}")
 if(not mock_robot):
     from robot.robot_controller import Robot_Controller
-    print(f"Mocking? {mock_robot}")
     from cameras.thermal_cam import ThermalCam
     from cameras.RGBD_cam import RGBD_Cam
     from laser_control.laser_arduino import Laser_Arduino
-
-from robot.mock_franka_client import MockFrankaClient
+else:
+    from robot.mock_franka_client import MockFrankaClient
+    from cameras.mock_camera import MockCamera
 
 from cameras.broadcast import Broadcast
 from backend.listener import BackendConnection
@@ -54,7 +54,9 @@ async def main():
     # free beam laser spot.
     therm_cam = None
     if(not mock_robot):
-        therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frameRate="Rate50Hz",focalDistance=0.2) 
+        therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frameRate="Rate50Hz",focalDistance=0.2)
+    else:
+        therm_cam = MockCamera()
     
     ##################################################################################
     #------------------------------ RGBD Cam Config ---------------------------------#
@@ -66,20 +68,22 @@ async def main():
     #-------------------------------- Laser Config ----------------------------------#
     ##################################################################################
     
-    laser_obj = Laser_Arduino()  # controls whether laser is on or off
-    laser_on = False
-    laser_obj.set_output(laser_on)
+    if(not mock_robot):
+        laser_obj = Laser_Arduino()  # controls whether laser is on or off
+        laser_on = False
+        laser_obj.set_output(laser_on)
 
     
     ##################################################################################
     #----------------------------- Backend Connection -------------------------------#
     ##################################################################################
     
-    # backend_connection = BackendConnection(
-    #     send_fn=lambda: "Hello from robot!",
-    #     recv_fn=lambda msg: print("Server sent: " + msg)
-    # )
-    # await backend_connection.connect_to_websocket()
+    backend_connection = BackendConnection(
+        send_fn=lambda: "Hello from robot!",
+        recv_fn=lambda msg: print("Server sent: " + msg),
+        mocking=mock_robot
+    )
+    asyncio.create_task(backend_connection.connect_to_websocket())
     
     ##################################################################################
     #----------------------------- Camera Calibration -------------------------------#
@@ -94,12 +98,13 @@ async def main():
     therm_cam.start_stream() # Start camera stream
     # rgbd_cam.start_stream()
     print("Starting Streams ")
-    b = Broadcast()
+    b = Broadcast(mock_robot)
     print(f"Broadcast connection status: {b.connect()}")
     
     while (True):
         # rgbd_cam.display_all_streams() #Test Streaming
         img = therm_cam.get_latest()
+        await asyncio.sleep(0.01)
         if img is None:
             continue
         img = img['image']

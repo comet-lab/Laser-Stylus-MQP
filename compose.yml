@@ -43,5 +43,6 @@ services:
     depends_on:
       - backend
       - frontend
+      - media
     profiles:
-      - ["mock_robot"]
+      - "mock_robot"
