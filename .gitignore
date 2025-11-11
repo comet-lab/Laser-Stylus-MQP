@@ -5,9 +5,5 @@ frontend/node_modules/
 venvs/
 .vscode/
 *.csv
-surgical_system/cpp_src/FrankaSubscriber.o
-surgical_system/cpp_src/main
-surgical_system/cpp_src/main.o
-surgical_system/cpp_src/PandaController.o
-surgical_system/cpp_src/CalibrateRobot
-surgical_system/cpp_src/CalibrateRobot.o
+*.o
+*.exe

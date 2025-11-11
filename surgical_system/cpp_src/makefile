@@ -1,6 +1,6 @@
 CC = g++
 
-all: main CalibrateRobot
+all: main.exe CalibrateRobot.exe
 
 
 main: main.o PandaController.o FrankaSubscriber.o
