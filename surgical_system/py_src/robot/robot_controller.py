@@ -95,7 +95,9 @@ class Robot_Controller():
         return self.franka_client.send_velocity(lin_vel, ang_vel)
     
     def robot_stop(self):
-        return self.franka_client.send_velocity(np.array([0, 0, 0]), np.array([0, 0, 0]))
+        pose = self.franka_client.send_velocity(np.array([0, 0, 0]), np.array([0, 0, 0]))
+        time.sleep(1)
+        return pose
     
     def align_robot_input(self):
         newPose = self.home_pose.copy()
@@ -123,6 +125,9 @@ class Robot_Controller():
 
     def get_home_pose(self):
         return self.home_pose
+    
+    def close_robot(self):
+        self.franka_client.close()
 
     def get_current_pose(self):
         pose = self.franka_client.request_pose()
@@ -133,7 +138,11 @@ class Robot_Controller():
         return pose
 
     def create_trajectory(self, path_info):
-        path_info['Positions'] = path_info['Positions'] / 100.0
+        if not isinstance(path_info['Positions'], np.ndarray):
+            path_info['Positions'] = np.array( path_info['Positions'])
+        path_info['MaxVelocity'] = path_info['MaxVelocity'] / 100.0
+        path_info['MaxAcceleration'] = path_info['MaxAcceleration'] / 100.0
+        path_info['Positions'] = path_info['Positions'] / 100.0 #converts from cm to m
         return TrajectoryController(path_info, debug=True)
     
     def run_trajectory(self, traj: TrajectoryController, time_step):
@@ -157,9 +166,10 @@ class Robot_Controller():
                 elapsedTime = elapsedTime + time.time() - t
                 t = time.time()
                 movement = traj.update(elapsedTime)
-                target_vel = self.home_pose[:3, :3].T @ (movement['velocity']/100) # cm to m
+                target_vel = (movement['velocity'])
                 print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel) 
-                # self.set_velocity(target_vel, [0,0,0])
+                self.set_velocity(target_vel, [0,0,0])
+        self.robot_stop()
     
     
 if __name__=='__main__':

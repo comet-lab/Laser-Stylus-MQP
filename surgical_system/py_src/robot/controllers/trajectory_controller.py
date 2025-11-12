@@ -119,8 +119,8 @@ class TrajectoryController():
         if self.debug:
             # print("Spot Temperature: ", np.amax(controller_msg.current_temp))
             # print("Irradiance: ", self._irradiance)
-            print("Laser Position: ", self.laser_pos)
-            print("Laser Velocity: ", self.laser_pos_vel)
+            print("Laser Position [m]: ", self.laser_pos)
+            print("Laser Velocity [m/s]: ", self.laser_pos_vel)
             print("Current Path: ", self.positions[pathIdx+1])
             print("Time: ", self.t)
             print("")

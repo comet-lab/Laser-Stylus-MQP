@@ -111,15 +111,17 @@ if __name__=='__main__':
     y = 0
     target_pose = np.array([[1,0,0,x],[0,1,0,y],[0,0,1,height],[0,0,0,1]])
     
-    target_lin_vel = np.array([0, 0, 0.0])
-    target_ang_vel = np.array([0, 0.00, 0.])
+    target_lin_vel = np.array([0.05, 0.0, 0.0])
+    target_ang_vel = np.array([0.0, 0.00, 0.0])
     
     time.sleep(2)
     returnedPose = franka_client.send_pose(target_pose@home_pose,mode)
-    # returnedPose = franka_client.send_velocity(target_lin_vel, target_ang_vel)
-    # time.sleep(1)
-    # returnedPose = franka_client.send_velocity(np.array([0, 0, 0]), target_ang_vel)
-    time.sleep(4)
+    time.sleep(3)
+    returnedPose = franka_client.send_velocity(target_lin_vel, target_ang_vel)
+    time.sleep(1)
+    print("stop")
+    returnedPose = franka_client.send_velocity(np.array([0, 0, 0]), target_ang_vel)
+    time.sleep(2)
     message = franka_client.request_pose()    
     print("Robot Message: ", message)
     franka_client.close()

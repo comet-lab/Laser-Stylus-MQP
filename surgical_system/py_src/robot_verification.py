@@ -22,24 +22,25 @@ def main():
     returnedPose = robot_controller.go_to_pose(target_pose@home_pose,mode)
     
     height = 25  # [cm] height of the laser above the surface
-    numPasses = 1
+    numPasses = 6
     numScans = 1
-    targetPos = np.array([[0, -1.75, height], # x, y, z [cm]
-                        [0, 1.75, height]])
+    # targetPos = np.array([[-1.75, 0, height], # x, y, z [cm]
+    #                     [1.75, 0, height]])
     
-    # targetPos = [[-0.75, -0.75, height], # x, y, z [cm]
-    #                 [0.75, 0.75, height]]
+    targetPos = [[-1.75, -1.75, height], # x, y, z [cm]
+                    [1.75, 1.75, height]]
 
 
     gains = {"Positions": targetPos, 
-             "Pattern": "Line",
+             "Pattern": "Raster",
              "Passes": numPasses,
-             "MaxVelocity": 0,
-             "MaxAcceleration": 0,
+             "MaxVelocity": 0.1, # [cm/s]
+             "MaxAcceleration": 0,#[cm/s/s]
              "Durations":[10]} # accumulated time 
     
     traj = robot_controller.create_trajectory(gains)
     robot_controller.run_trajectory(traj, 1)
+    robot_controller.close_robot()
     
 
     
