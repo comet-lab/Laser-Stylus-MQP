@@ -6,6 +6,7 @@ import asyncio
 import websockets
 import time
 from scipy.spatial.transform import Rotation
+from robot.robot import RobotSchema
 
 # Classes
 mock_robot = os.getenv("MOCK_ROBOT", "0") == "1"
@@ -16,7 +17,7 @@ if(not mock_robot):
     from cameras.RGBD_cam import RGBD_Cam
     from laser_control.laser_arduino import Laser_Arduino
 else:
-    from robot.mock_franka_client import MockFrankaClient
+    from robot.mock_franka_client import MockRobotController
     from cameras.mock_camera import MockCamera
 
 from cameras.broadcast import Broadcast
@@ -32,16 +33,16 @@ async def main():
     #------------------------------ Robot Config ------------------------------------#
     ##################################################################################
     # Create FrankaNode object for controlling robot
-    # robot_controller = Robot_Controller() if not mock_robot else MockFrankaClient()
-    # TODO fix running in container
-    # home_pose = robot_controller.load_home_pose()
-    # start_pos = np.array([0,0,0.35]) # [m,m,m]
-    # target_pose = np.array([[1.0, 0, 0, start_pos[0]],
-    #                         [0,1,0,start_pos[1]],
-    #                         [0,0,1,start_pos[2]],
-    #                         [0,0,0,1]])
-    # robot_controller.goToPose(target_pose@home_pose,1) # Send robot to start position
-    # time.sleep(2)
+    robot_controller = Robot_Controller() if not mock_robot else MockRobotController()
+    home_pose = robot_controller.load_home_pose()
+    start_pos = np.array([0,0,0.35]) # [m,m,m]
+    target_pose = np.array([[1.0, 0, 0, start_pos[0]],
+                            [0,1,0,start_pos[1]],
+                            [0,0,1,start_pos[2]],
+                            [0,0,0,1]])
+    robot_controller.go_to_pose(target_pose@home_pose,1) # Send robot to start position
+    desired_state = RobotSchema()
+    await asyncio.sleep(2)
     
     ##################################################################################
     #--------------------------- Thermal Cam Config ---------------------------------#
@@ -69,6 +70,7 @@ async def main():
     #-------------------------------- Laser Config ----------------------------------#
     ##################################################################################
     
+    # laser_obj = None
     if(not mock_robot):
         laser_obj = Laser_Arduino()  # controls whether laser is on or off
         laser_on = False
@@ -78,10 +80,22 @@ async def main():
     ##################################################################################
     #----------------------------- Backend Connection -------------------------------#
     ##################################################################################
+
+    def send_fn() -> str:
+        current_state = robot_controller.get_current_pose()
+        return RobotSchema.from_mat(current_state).to_str()
+    
+    def recv_fn(msg: str):
+        data = json.loads(msg)
+        desired_state.update(data)
+        robot_controller.go_to_pose(desired_state.to_mat()) # TODO need to have a target to follow async
+        # TODO enable/disable laser
+        # laser_obj.set_output(desired_pose.isLaserOn)
+
     
     backend_connection = BackendConnection(
-        send_fn=lambda: json.dumps({"x": 0.1, "y": 0.2}),
-        recv_fn=lambda msg: print(msg),
+        send_fn=send_fn,
+        recv_fn=recv_fn,
         mocking=mock_robot
     )
     asyncio.create_task(backend_connection.connect_to_websocket())

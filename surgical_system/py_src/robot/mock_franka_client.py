@@ -1,16 +1,18 @@
-from robot.franka_client import FrankaClient
+import numpy as np
 
-class MockFrankaClient(FrankaClient):
+class MockRobotController():
     def __init__(self):
-        FrankaClient._FrankaClient__instance = self
+        self.pose = np.identity(4)
+        pass
         
-    def send_pose(self, transform, mode=1):
-        print("Sending mock message")
-        return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    def go_to_pose(self, pose, linTol = .05):
+        print("Going to pose")
+        print(pose)
+        self.pose = pose
     
-    def request_pose(self):
+    def get_current_pose(self):
         print("Returning mock pose")
-        return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-
-    def close(self):
-        print("Closing mock client")
+        return self.pose
+    
+    def load_home_pose(self):
+        return self.get_current_pose()
