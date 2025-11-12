@@ -13,7 +13,7 @@ window.addEventListener('load', () => {
     const video = document.getElementById('video') as HTMLVideoElement;
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext("2d")!;
-    const robotBtn = document.getElementById('robotBtn') as HTMLButtonElement;
+    const robotBtn = document.getElementById('robot-toggle-container') as HTMLButtonElement;
     const laserBtn = document.getElementById('laser-toggle-container') as HTMLButtonElement;
     const robotStatus = document.getElementById('robotStatus') as HTMLElement;
     const laserStatus = document.getElementById('laserStatus') as HTMLElement;
@@ -220,5 +220,9 @@ window.addEventListener('load', () => {
           y: y
         };
         wsHandler.updateState(data);
+      });
+
+      robotBtn.addEventListener('click', () => {
+        robotBtn.classList.toggle('active');
       });
 });
