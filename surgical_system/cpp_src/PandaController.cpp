@@ -1,6 +1,4 @@
 #include "PandaController.h" 
- 
-
 
 PandaController::PandaController(std::string ipAddress,char mode, double *posTargetPtr, double orienTargetPtr[][3], double currState[7]){
   this->ipAddress = ipAddress;
@@ -64,15 +62,14 @@ void PandaController::moveToStart(double x, double y, double z){
 }
 
 void PandaController::runController(double maxTime /*=10*/){
-
   // Eigen::Vector3d theFirst = Eigen::Vector3d::Zero();
   while (mode >= 0)
   { // while we haven't received the stop command
     if (mode == 0)
     {
       this->getPose();
-    } else if (mode == 1)
-    {
+    } 
+    else if (mode == 1){
       franka::Model model = this->robot->loadModel();
       modelPtr = &model;
       setDefaultBehavior(*robot);
@@ -111,6 +108,7 @@ void PandaController::runController(double maxTime /*=10*/){
         // Jacobian for preventing excessive joint velocities
         std::array<double, 42> jacobian_array = modelPtr->zeroJacobian(franka::Frame::kFlange, robotState);
         Eigen::Map<const Eigen::Matrix<double, 6, 7>> jacobian(jacobian_array.data());
+
         // We can get the robot's current joint velocities targets
         Eigen::Map<const Eigen::Matrix<double, 7, 1>> jointVel_d(robotState.dq_d.data());
         Eigen::Matrix<double, 6, 1> cartVel_d; // panda desired cartesian velocity
@@ -131,8 +129,6 @@ void PandaController::runController(double maxTime /*=10*/){
         // std::cout << "Current Position: " << currentPos.transpose() << std::endl;
         // std::cout << "Target Position: " << posTarget.transpose() << std::endl;
         // std::cout << "Change in Position: " << changeInPos.transpose() << std::endl;
-
-       
 
         // calculate necessary change in orientation (aka angular velocity vector)
         changeInOrien = theta*omega;
@@ -180,8 +176,134 @@ void PandaController::runController(double maxTime /*=10*/){
         return output;
       });
     }
+    else if (mode == 2){
+      this->velocityMode(maxTime);
+    }
   }
 }
+
+
+void PandaController::velocityMode(double maxTime){
+
+  double maxVel = 0.30; // [m/s]
+  double maxAccel = 1.0/1000.0; // [m/s per ms]
+  double maxAngVel = 1.0; //[rad/sec] 
+  double maxAngAccel = 2.5/1000.0; //[rad/s^2]*[s] essentially how large of a step we can take in our velocity
+
+  auto clampNorm = [](const Eigen::Vector3d& v, double max_n) {
+    double n = v.norm();
+    if (n <= max_n) return v;
+    return (v * (max_n / n)).eval();
+  };
+
+  auto clamp = [](double x, double hi) {
+    return std::min(hi, x);
+  };
+
+  franka::Model model = this->robot->loadModel();
+  modelPtr = &model;
+  setDefaultBehavior(*robot);
+  this->setBehavior();
+  std::cout << "Running Controller" << std::endl;
+  double time = 0;
+
+  this->robot->control([=,&time](const franka::RobotState& robotState,
+                                franka::Duration timeStep) -> franka::CartesianVelocities {
+    
+    double dt = timeStep.toSec();  // Update time at the beginning of the callback.
+    time += dt; // sec
+
+    Eigen::Vector3d linVelTarget(this->posTargetPtr[0], this->posTargetPtr[1], this->posTargetPtr[2]);
+    Eigen::Vector3d omegaVelTarget(this->orienTargetPtr[0][0], this->orienTargetPtr[0][1], this->orienTargetPtr[0][2]);
+
+    linVelTarget = clampNorm(linVelTarget, maxVel);
+    omegaVelTarget = clampNorm(omegaVelTarget, maxAngVel);   
+    
+    
+    // // Calculate if joint acceleration is too high
+    // // Jacobian for preventing excessive joint velocities
+    std::array<double, 42> jacobian_array = modelPtr->zeroJacobian(franka::Frame::kFlange, robotState);
+    Eigen::Map<const Eigen::Matrix<double, 6, 7>> jacobian(jacobian_array.data());
+    // // We can get the robot's current joint velocities targets
+    Eigen::Map<const Eigen::Matrix<double, 7, 1>> jointVel_d(robotState.dq_d.data());
+    Eigen::Matrix<double, 6, 1> cartVel_d; // panda desired cartesian velocity
+    // // current cartesian velocity based on jacobian
+    cartVel_d = jacobian*jointVel_d;
+
+    static Eigen::Vector3d currentCartVel = Eigen::Vector3d::Zero();
+    static Eigen::Vector3d currentOmegaVel = Eigen::Vector3d::Zero();
+
+    currentCartVel(0) = cartVel_d(0); currentCartVel(1) = cartVel_d(1); currentCartVel(2) = cartVel_d(2); 
+    currentOmegaVel(0) = cartVel_d(3); currentOmegaVel(1) = cartVel_d(4); currentOmegaVel(2) = cartVel_d(5);
+
+    Eigen::Vector3d linVelOutput = Eigen::Vector3d::Zero();
+    Eigen::Vector3d omegaVelOutput  = Eigen::Vector3d::Zero();
+
+    // Eigen::Vector3d omega;
+    // double theta = this->getRotationVelocity(robotState,orienTarget,omega);
+
+    Eigen::Vector3d desiredLinAccel = Eigen::Vector3d::Zero();
+    Eigen::Vector3d desiredAngAccel = Eigen::Vector3d::Zero();
+    // use our necessary change in position and current velocity to determine new velocity setpoint
+    setAcceleration(currentCartVel,linVelTarget,desiredLinAccel,maxVel,maxAccel);
+    // use our desired change in rotation about the desired axis to determine new ang velocity setpoint
+    if(sqrt(omegaVelTarget.transpose()*omegaVelTarget) > 0.0000001){
+      setAcceleration(currentOmegaVel,omegaVelTarget,desiredAngAccel,maxAngVel,maxAngAccel);
+    }
+
+    // update our linear and angular velocities
+    linVelOutput = currentCartVel + desiredLinAccel;
+    omegaVelOutput = currentOmegaVel + desiredAngAccel;
+
+    // for(int i = 0; i < 3; i++){
+    //   linVelOutput(i) = clamp(linVelOutput(i), linVelTarget(i));
+    //   omegaVelOutput(i) = clamp(omegaVelOutput(i), omegaVelTarget(i)); 
+    // }
+
+      
+    
+    franka::CartesianVelocities output = {{linVelOutput(0), linVelOutput(1), linVelOutput(2), omegaVelOutput(0), omegaVelOutput(1), omegaVelOutput(2)}};
+    // franka::CartesianVelocities output = {{0, 0, 0, 0, 0, 0}};
+    
+    
+    //debug statements
+    double printFrequency = 100; //[Hz]
+    if (abs(round(time * printFrequency) - time*printFrequency) < 0.0005){     // only print every second   
+      std::cout << "\nC++ Debug at time: " << time  << " seconds" << std::endl;
+      std::cout << "Mode 2 " << std::endl;
+      // std::cout << "Current Joint Velocities: " << jointVel.transpose() << std::endl;
+      // std::cout << "Desired Joint Velocities: " << jointVel_d.transpose() << std::endl;
+      // std::cout << "Commanded Joint Velocities: " << jointVel_c.transpose() << std::endl;
+      std::cout << "Current Cartesian Velocity: " << currentCartVel.transpose() << std::endl;
+      std::cout << "Current target Velocity: " << linVelOutput.transpose() << std::endl;
+      std::cout << "Desired Cartesian Velocities: " << linVelTarget.transpose() << std::endl << std::endl;
+
+      std::cout << "Current Omega Velocity: " << currentOmegaVel.transpose() << std::endl;
+      std::cout << "Current target Velocity: " << omegaVelOutput.transpose() << std::endl;
+      std::cout << "Desired Omega Velocities: " << omegaVelTarget.transpose() << std::endl;
+      // std::cout << "Commanded Cartesian Velocity: " << cartVel_c.transpose() << std::endl;
+      std::cout << "Desired Linear Acceleration: " << desiredLinAccel.transpose() << std::endl;
+      // std::cout << "Orientation Target: \n" << orienTarget << std::endl;
+      // std::cout << "Full transform: \n" << O_T_EE << std::endl;
+    //   for (int i = 0; i < 3; i ++){
+    //     std::cout << orienTarget[i][0] <<" "<< orienTarget[i][1] <<" "<< orienTarget[i][2] << std::endl;
+    //   }
+    //   std::cout << "\n";
+    //   for (int i = 0; i < 3; i ++){
+    //     std::cout << robotState.O_T_EE.data()[i] <<" "<< robotState.O_T_EE.data()[i+4] <<" "<< robotState.O_T_EE.data()[i + 8] << std::endl;
+    //   }
+    } 
+
+    if ((time >= maxTime) || (this->mode <= 0)) 
+    {
+      // Return MotionFinished at the end of the trajectory.
+      std::cout << "Control Finished" << std::endl;
+      return franka::MotionFinished(output);
+    }
+    return output;
+  });
+}
+
 
 void PandaController::getPose(){
   /*
@@ -310,13 +432,15 @@ void PandaController::multiplyMat(double arr1[3][3], double arr2[3][3], double a
 void PandaController::setAcceleration(Eigen::Vector3d & currVel, Eigen::Vector3d & desVel, Eigen::Vector3d & outputAccel, double maxVel, double maxAccel){
   Eigen::Vector3d velDir_d = {0.0,0.0,0.0};
   double velMag_d = sqrt(desVel.transpose()*desVel);
-  // if (velMag_d > 0.00001) {  // if magnitude of the desired velocity is 0, we can't get a proper direction.
+  if (velMag_d > 0.00001) {  // if magnitude of the desired velocity is 0, we can't get a proper direction.
     velDir_d = desVel/velMag_d;
-  // }
+  }
 
   if (velMag_d > maxVel){ // cap our velocity we want to hit
     velMag_d = maxVel;
-  } else {
+    // std::cout << "Bigger " << std::endl;
+  } 
+  else if (this->mode == 1) {
     // scale the velocity by a sine wave. Makes it converge faster;
     // sin(pi/2*x) > x for all values where 0:x:1. In our case, x is a percentage of the maximum speed we want to go.
     velMag_d = maxVel*sin(M_PI_2*velMag_d/maxVel); 
@@ -327,8 +451,13 @@ void PandaController::setAcceleration(Eigen::Vector3d & currVel, Eigen::Vector3d
   // based on our current velocity and desired velocity, determine how we need to accelerate
   Eigen::Vector3d accel_d = vel_d - currVel;
 
+  // std::cout << "Accel D" << accel_d << std::endl;
+
   // Get acceleration direction and magnitude
   double accelMag = sqrt(accel_d.transpose()*accel_d);
+  if(accelMag < 0.0001){
+    return;
+  }
   Eigen::Vector3d accelDir = accel_d/accelMag;
   // set maximum acceleration
   if (accelMag > maxAccel){
