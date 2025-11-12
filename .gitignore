@@ -2,3 +2,11 @@ __pycache__/
 *.pyc
 static/
 frontend/node_modules/
+venvs/
+.vscode/
+surgical_system/cpp_src/CalibrateRobot
+surgical_system/cpp_src/CalibrateRobot.o
+surgical_system/cpp_src/FrankaSubscriber.o
+surgical_system/cpp_src/main
+surgical_system/cpp_src/main.o
+surgical_system/cpp_src/PandaController.o
