@@ -69,6 +69,7 @@ window.addEventListener('load', () => {
     };
 
     wsHandler.connect();
+    //(window as any).wsHandler = wsHandler;
 
     //Update canvas with video frame
     const updateCanvas = (now: DOMHighResTimeStamp, metadata: VideoFrameCallbackMetadata) => {

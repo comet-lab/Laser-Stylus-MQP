@@ -18,7 +18,12 @@ class RobotSchema:
         data = {k: v for k, v in asdict(self).items() if v is not None}
         return json.dumps(data)
 
+    def to_dict(self) -> dict:
+        """Returns the class as a dictionary."""
+        return asdict(self)
+
     def update(self, data: dict):
+        """Update any fields that appear in the incoming data."""
         for k, v in data.items():
-            if(hasattr(self, k) and v is not None):
+            if hasattr(self, k) and v is not None:
                 self.__setattr__(k, v)

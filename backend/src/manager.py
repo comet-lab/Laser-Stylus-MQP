@@ -41,14 +41,7 @@ class ConnectionManager:
                 self.disconnect(connection)
 
     async def manage(self, websocket, state: RobotSchema, connection_group: ConnectionGroup, forwarding_group: ConnectionGroup):
-        """ Handle the lifecycle of a websocket - consume message and forward to subscribers.
-
-        Args:
-            websocket: websocket to handle.
-            state: Target robot state to update and pass along.
-            connection_group: Connection Manager group to join.
-            forwarding_group: Connection Manager group to send messages to.
-        """
+        """Handle the lifecycle of a websocket — consume message and forward to subscribers."""
         await self.connect(websocket, connection_group) 
 
         try:
@@ -61,8 +54,13 @@ class ConnectionManager:
                     if not isinstance(message, dict):
                         await websocket.send_text("Error: Invalid JSON format")
                         continue    
-                    # this updates only the keys that are sent from the frontend
+
+                    # Update the robot's state
                     state.update(message)
+                    # added print statements to show the current state to make sure values persist
+                    print("\nCURRENT ROBOT STATE")
+                    print(json.dumps(state.to_dict()) + "\n")
+
                     await self.broadcast_to_group(forwarding_group, state.to_str())
 
                 except json.JSONDecodeError:
