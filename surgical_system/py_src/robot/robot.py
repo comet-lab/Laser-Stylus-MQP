@@ -16,10 +16,10 @@ class RobotSchema:
     isLaserOn: bool = None
 
     @staticmethod
-    def from_mat(mat):
-        x = mat[0,3]
-        y = mat[1,3]
-        z = mat[2,3]
+    def from_pose(pose: tuple):
+        x = pose[0]
+        y = pose[1]
+        z = pose[2]
         return RobotSchema(x=x, y=y, z=z)
     
     def to_mat(self):

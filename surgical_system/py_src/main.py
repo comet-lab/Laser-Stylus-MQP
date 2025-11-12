@@ -56,7 +56,7 @@ async def main():
     # free beam laser spot.
     therm_cam = None
     if(not mock_robot):
-        therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frameRate="Rate50Hz",focalDistance=0.2)
+        therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frame_rate="Rate50Hz",focal_distance=0.2)
     else:
         therm_cam = MockCamera()
     
@@ -83,12 +83,16 @@ async def main():
 
     def send_fn() -> str:
         current_state = robot_controller.get_current_pose()
-        return RobotSchema.from_mat(current_state).to_str()
+        return RobotSchema.from_pose(current_state).to_str()
     
     def recv_fn(msg: str):
         data = json.loads(msg)
         desired_state.update(data)
-        robot_controller.go_to_pose(desired_state.to_mat()) # TODO need to have a target to follow async
+        desired_pose = robot_controller.home_pose
+        desired_pose[:,3] = desired_state.to_mat()[:,3]
+        print(desired_pose)
+        robot_controller.go_to_pose(desired_pose) # TODO from home pose
+        # robot_controller.go_to_pose(desired_state.to_mat()@robot_controller.home_pose) # TODO need to have a target to follow async
         # TODO enable/disable laser
         # laser_obj.set_output(desired_pose.isLaserOn)
 
@@ -120,9 +124,9 @@ async def main():
         # rgbd_cam.display_all_streams() #Test Streaming
         img = therm_cam.get_latest()
         await asyncio.sleep(0.01)
-        if img is None:
+        if img is None or not 'thermal' in img.keys():
             continue
-        img = img['image']
+        img = img['thermal']
         max = np.max(img)
         img = img / max
         img = img * 254

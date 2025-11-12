@@ -26,6 +26,8 @@ class ThermalCam(Camera):
             self.execute_nuc()
             time.sleep(0.2)
             self.set_acquisition_mode()
+            time.sleep(0.2)
+            self.set_acquisition_mode()
             
             self.thread_ready.clear()
             self.thread = threading.Thread(target=self._run, daemon=True)
