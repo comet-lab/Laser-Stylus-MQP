@@ -11,7 +11,7 @@ body {
   font-family: 'IBM Plex Sans', sans-serif;
   font-weight: 400;
   padding: 1.5rem;
-  color: #111;
+  background-color: #000000;
 }
 
 #app {
@@ -52,27 +52,151 @@ pre {
 .status-message {
   display: flex;
   height: 100%;
-  align-items: center;
   background-color: #151b21;
   color: #e0f2e0;
   border-radius: 16px;
-  flex-grow: 1;
 }
 
 #status-panel-left {
   justify-content: flex-start;
-  padding-left: 30px;
+  align-items: center;
+  padding-left: 5px;
+  padding-right: 5px;
+  flex-grow: 1;
+  gap: 12px;
+}
+
+/* --- Action Buttons --- */
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background-color: #2c343b;
+  color: #e0f2e0;
+  fill: #e0f2e0;
+  border: 2px solid transparent;
+  height: 86%;
+}
+
+.action-btn:hover:not(:disabled) {
+  filter: brightness(115%);
+}
+
+.action-btn:active:not(:disabled) {
+  filter: brightness(95%);
+}
+
+.action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  filter: grayscale(50%);
+}
+
+.action-btn[data-state="drawing"] {
+  background-color: #ffb509;
+  color: #0f1419;
+  border-color: #ffb509;
+  fill: #0f1419;
+}
+
+.action-btn[data-state="drawing"]:hover {
+  filter: brightness(110%);
+}
+
+.action-btn-secondary {
+  background-color: #3a4249;
+}
+
+.action-btn-secondary:hover:not(:disabled) {
+  background-color: #4a5259;
+}
+
+.action-btn-execute {
+  background-color: #cb0e00;
+  color: #ffffff;
+}
+
+.action-btn-execute:hover:not(:disabled) {
+  background-color: #cb0e00;
+  border-color: #cb0e00;
+}
+
+.action-btn-execute:disabled {
+  background-color: #2c343b;
+  color: #e0f2e0;
+}
+
+.btn-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.btn-text {
+  line-height: 1;
 }
 
 #status-panel-right {
-  align-items: flex-end;
-  flex-direction: column;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: auto auto auto auto;
+  grid-template-rows: auto auto;
+  align-content: center;
+  justify-content: end;
+  column-gap: 8px;
+  row-gap: 6px;
   padding-right: 30px;
+  font-weight: bold;
+  font-size: 18px;
+  color: #f5eff7;
+}
+
+.status-label:nth-child(5),
+.status-label:nth-child(7) {
+  padding-left: 30px; /* Adds extra space before column 3 */
 }
 
 #status-panel-right p {
+  font-weight: bold;
+  font-size: 18px;
+  color: #f5eff7;
   margin: 0;
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 0 8px;
+}
+
+.status-label {
+  text-align: right;
+}
+
+.status-label:nth-child(odd) {
+  text-align: right;
+}
+
+.status-value {
+  text-align: left;
+}
+
+.status-off {
+  color: #70ff57;
+}
+
+.status-batch {
+  color: #ffb509;
+}
+
+.status-connected {
+  color: #70ff57;
 }
 
 /* ============================================
@@ -120,25 +244,40 @@ pre {
   border-radius: 12px;
   border: none;
   background-color: #2c343b;
-  color: #f5eff7;
+  color: #e0f2e0;
   border: 3px solid transparent;
   transition: all 0.15s ease-out;
 }
 .icon-btn:hover {
-  filter: brightness(85%);
+  filter: brightness(110%);
 }
 .icon-btn.selected,
 .icon-btn:active {
   background-color: #455256;
-  border-color: #f5eff7;
+  border-color: #e0f2e0;
   box-shadow: inset 2px 2px 8px rgba(0, 0, 0, 0.5);
 }
+.icon-btn-stroke {
+  stroke: #e0f2e0;
+}
+.icon-btn-fill {
+  fill: #e0f2e0;
+}
+
 
 #settings-icon-section {
   display: flex;
   flex-direction: column;
   align-items: center;
   margin-bottom: 0.2vw; 
+}
+
+#settingsBtn {
+  transition: all 0.08s ease-out;
+}
+
+#settingsBtn {
+  fill: #e0f2e0;
 }
 
 /* ============================================

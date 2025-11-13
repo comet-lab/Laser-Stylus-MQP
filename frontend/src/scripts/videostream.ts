@@ -18,19 +18,23 @@ window.addEventListener('load', () => {
     const robotStatus = document.getElementById('robotStatus') as HTMLElement;
     const laserStatus = document.getElementById('laserStatus') as HTMLElement;
     const drawBtn = document.getElementById('drawBtn') as HTMLButtonElement;
+    const clearBtn = document.getElementById('clearBtn') as HTMLButtonElement;
     const sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
-    const coordinateOutput = document.getElementById("status-panel-left") as HTMLElement;
+    const toggleButtons = document.querySelectorAll('#middle-icon-section .icon-btn');
 
     //Canvas setup
     ctx.font = "48px serif";
     let reader: any = null;
+
+    let isDrawing = false;
+    let hasPattern = false;
 
     // Initialize drawing tracker
     let drawingTracker: DrawingTracker | null = null;
     const wsHandler = new WebSocketHandler(null);
 
     // --- Helper Functions ---
-    
+
     /** Reads the laser's *current state* from the button's class or data attribute */
     function getLocalLaserState(): boolean {
         return laserBtn.classList.contains('active');
@@ -44,13 +48,13 @@ window.addEventListener('load', () => {
         // Update laser button and status (only if laser state is present)
         if (state.isLaserOn !== undefined) {
             const newLaserState = !!state.isLaserOn;
-            
+
             // Update button text and class
             laserBtn.classList.toggle('active', newLaserState)
-            
+
             // Update status display
             laserStatus.textContent = `Laser: ${newLaserState ? 'ON' : 'OFF'}`;
-            
+
             // Re-enable button after state sync
             laserBtn.style.pointerEvents = 'auto';
         }
@@ -60,7 +64,7 @@ window.addEventListener('load', () => {
     }
 
     // --- WebSocket Setup ---
-    
+
     // Assign the callback *before* connecting.
     // This function will run every time the backend broadcasts a new state.
     wsHandler.onStateUpdate = (newState: WebSocketMessage) => {
@@ -106,7 +110,7 @@ window.addEventListener('load', () => {
 
             // Initialize drawing tracker after video is ready
             drawingTracker = new DrawingTracker(canvas, video, `http://${window.location.hostname}:443`);
-            
+
             // Initially disable send button
             sendBtn.disabled = true;
         },
@@ -118,16 +122,16 @@ window.addEventListener('load', () => {
     laserBtn.addEventListener('click', () => {
         // 1. Disable button immediately to prevent multiple clicks
         laserBtn.style.pointerEvents = 'none';
-        
+
         // 2. Read the *current* state from the UI
         const isCurrentlyOn = getLocalLaserState();
-        
+
         // 3. Request the *opposite* state
         const desiredNewState = !isCurrentlyOn;
-        
+
         // 4. Send only the laser state update to backend
         const success = wsHandler.updateState({ isLaserOn: desiredNewState });
-        
+
         if (!success) {
             // If send failed, re-enable the button
             laserBtn.style.pointerEvents = 'auto';
@@ -142,46 +146,103 @@ window.addEventListener('load', () => {
         console.log('Draw button clicked');
         if (!drawingTracker) return;
 
-        if (drawingTracker.isDrawingEnabled()) {
-            // Stop drawing
-            drawingTracker.disableDrawing();
-            drawBtn.textContent = 'Start';
-            sendBtn.disabled = false; // Enable send button
-        } else {
+        isDrawing = !isDrawing;
+
+        if (isDrawing) {
             // Start drawing
+            drawBtn.setAttribute('data-state', 'drawing');
+            drawBtn.querySelector('.btn-text')!.textContent = 'STOP DRAWING';
+            clearBtn.disabled = true;
+            sendBtn.disabled = true;
+
             drawingTracker.enableDrawing();
             drawingTracker.clearDrawing(); // Clear previous drawing
-            drawBtn.textContent = 'Stop';
-            sendBtn.disabled = true; // Disable send while drawing
-            coordinateOutput.textContent = ''; // Clear previous output
+        } else {
+            // Stop drawing
+            drawBtn.setAttribute('data-state', 'ready');
+            drawBtn.querySelector('.btn-text')!.textContent = 'DRAW PATTERN';
+            hasPattern = true;
+            clearBtn.disabled = false;
+            sendBtn.disabled = false;
+
+            drawingTracker.disableDrawing();
         }
     });
+
+    clearBtn.addEventListener('click', () => {
+        console.log('Clear button clicked');
+        if (!drawingTracker) return;
+
+        // Clear the drawing
+        drawingTracker.clearDrawing();
+
+        // Update state
+        hasPattern = false;
+        clearBtn.disabled = true;
+        sendBtn.disabled = true;
+
+        // Reset draw button state if needed
+        if (!isDrawing) {
+            drawBtn.setAttribute('data-state', 'ready');
+            drawBtn.querySelector('.btn-text')!.textContent = 'DRAW PATTERN';
+        }
+    });
+
 
     // Handler for the send button
     sendBtn.addEventListener('click', async () => {
         if (!drawingTracker) return;
 
+        // Show confirmation modal
+        if (!confirm('Execute this pattern on the robot? This action cannot be undone.')) {
+            return;
+        }
+
         sendBtn.disabled = true;
-        coordinateOutput.textContent = 'Sending coordinates...';
+        clearBtn.disabled = true;
 
         try {
+            console.log('Sending coordinates to robot...');
             const result = await drawingTracker.sendCoordinates();
 
-            if (result) {
-                coordinateOutput.textContent = `Sent ${result.pixel_count} pixels. Server response: ${result.message}`;
-            }
-            else {
-                coordinateOutput.textContent = 'No pixels to send.';
-            }
+            // Clear the drawing after successful send
             drawingTracker.clearDrawing();
+            hasPattern = false;
+
+            // Reset button states
+            drawBtn.setAttribute('data-state', 'ready');
+            drawBtn.querySelector('.btn-text')!.textContent = 'DRAW PATTERN';
         }
         catch (e) {
             console.error('Error sending coordinates:', e);
-            coordinateOutput.textContent = 'Error sending coordinates: ' + (e instanceof Error ? e.message : String(e));
+            // Re-enable buttons on error
+            if (hasPattern) {
+                sendBtn.disabled = false;
+                clearBtn.disabled = false;
+            }
         }
-        finally {
-            sendBtn.disabled = false;
-        }
+    });
+
+
+
+    toggleButtons.forEach(clickedButton => {
+        clickedButton.addEventListener('click', () => {
+
+            // Check if the clicked button is already selected
+            const isAlreadySelected = clickedButton.classList.contains('selected');
+
+            // 1. Remove 'selected' from ALL middle buttons
+            toggleButtons.forEach(btn => {
+                btn.classList.remove('selected');
+            });
+
+            // 2. If it wasn't already selected, add the class to it.
+            // (If it *was* selected, step 1 already deselected it,
+            // which creates the "toggle off" behavior)
+            if (!isAlreadySelected) {
+                clickedButton.classList.add('selected');
+            }
+        });
     });
 
     // Window event handlers
@@ -204,7 +265,7 @@ window.addEventListener('load', () => {
         }
     });
 
-    canvas.addEventListener('click', function(event) {
+    canvas.addEventListener('click', function (event) {
         if (drawingTracker?.isDrawingEnabled()) {
             return;
         }
@@ -216,13 +277,13 @@ window.addEventListener('load', () => {
         let y = event.clientY / canvas.height * video.videoHeight;
 
         const data = {
-          x: x,
-          y: y
+            x: x,
+            y: y
         };
         wsHandler.updateState(data);
-      });
+    });
 
-      robotBtn.addEventListener('click', () => {
+    robotBtn.addEventListener('click', () => {
         robotBtn.classList.toggle('active');
-      });
+    });
 });
