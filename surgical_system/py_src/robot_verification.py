@@ -36,7 +36,7 @@ def main():
 
     gains = {"Positions": targetPos, 
              "Pattern": "Circle",
-             "Radius": 5,
+             "Radius": 2,
              "Passes": numPasses,
              "MaxVelocity": 0.1, # [cm/s]
              "MaxAcceleration": 0,#[cm/s/s]

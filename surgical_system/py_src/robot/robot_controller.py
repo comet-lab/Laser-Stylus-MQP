@@ -31,7 +31,7 @@ class Robot_Controller():
             
             #-75
             # Default robot starting location 
-            homePosition = np.array([[0.5275],[0.0893],[0.1985]])
+            homePosition = np.array([[0.5275],[0.0893],[0.3085]])
             homePose = np.concatenate((rotM,homePosition),axis=1)
             homePose = np.concatenate((homePose,[[0,0,0,1]]),axis=0)
             np.savetxt(home_pose_path, homePose, delimiter=",")

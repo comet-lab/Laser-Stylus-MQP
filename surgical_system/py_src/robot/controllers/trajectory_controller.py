@@ -84,8 +84,10 @@ class TrajectoryController():
         # endpoints
         v_way[0]  = 0.0
         v_way[-1] = 0.0
-        for i in range(1, self.n_points-2):
+        for i in range(1, self.n_points-1):
             dt = durations[i] - durations[i-1]
+            if dt <= 0:
+                raise ValueError("durations must be strictly increasing")
             v_way[i] = (position[i] - position[i-1]) / dt
         
         a_way = np.zeros_like(position)
@@ -110,8 +112,9 @@ class TrajectoryController():
                     v0=v0[d], vf=vf[d],
                     a0=a0[d], af=af[d]
                 )
-        new_time = 0
-        data_num = durations.size
+        
+        time_step = 0.05
+        data_num = int(math.ceil(durations[-1]/time_step)) 
         actual_vel_list = np.empty((data_num, 3))
         times = np.linspace(0, durations[-1], data_num)
         for i in range(data_num):
@@ -120,8 +123,8 @@ class TrajectoryController():
             actual_vel_list[i] = target_vel
             
         plt.figure(figsize=(6,4))
-        plt.plot(durations, actual_vel_list[:, 0], label="actual x")
-        plt.plot(durations, actual_vel_list[:, 1], label="actual y")
+        plt.plot(times, actual_vel_list[:, 0], label="actual x")
+        plt.plot(times, actual_vel_list[:, 1], label="actual y")
         plt.xlabel("Time [s]")
         plt.ylabel("velcity [m]")
         plt.title("Time vs Position (Guess)")
