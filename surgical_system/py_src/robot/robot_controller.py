@@ -1,4 +1,4 @@
-import os, subprocess, time, sys
+import os, subprocess, time, sys, math
 from scipy.spatial.transform import Rotation
 import numpy as np
 import matplotlib.pyplot as plt
@@ -96,9 +96,9 @@ class Robot_Controller():
         return self.franka_client.send_velocity(lin_vel, ang_vel)
     
     def robot_stop(self):
-        pose = self.franka_client.send_velocity(np.array([0, 0, 0]), np.array([0, 0, 0]))
+        velocity = self.franka_client.send_velocity(np.array([0, 0, 0]), np.array([0, 0, 0]))
         time.sleep(1)
-        return pose
+        return velocity
     
     def align_robot_input(self):
         newPose = self.home_pose.copy()
@@ -173,7 +173,7 @@ class Robot_Controller():
         target_vel = np.zeros(3)
         
         #record data
-        data_num = int(total_time/time_step) 
+        data_num = int(math.ceil(total_time/time_step)) 
         actual_vel_list = np.empty((data_num, 3))
         target_vel_list = np.empty((data_num, 3))
         i = 0
@@ -186,13 +186,13 @@ class Robot_Controller():
                 print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel) 
                 velocity = self.set_velocity(target_vel, [0,0,0])
                 # new_pose = np.array(self.franka_client.request_pose())
-                actual_vel_list[i, :] =  velocity[:3] #TODO THERE IS A BUG HEEEEREEEE
+                actual_vel_list[i, :] =  velocity[:3] if i != 0 else np.zeros(3)
                 target_vel_list[i, :] = target_vel
                 # current_pose = new_pose
                 i += 1
         self.robot_stop()
         
-        plt.figure(figsize=(6,4))
+        plt.figure(figsize=(10,6))
         time_range = np.arange(0, total_time, time_step)
         plt.plot(time_range, actual_vel_list[:, 0], label="actual x")
         plt.plot(time_range, actual_vel_list[:, 1], label="actual y")
@@ -202,14 +202,14 @@ class Robot_Controller():
         plt.plot(time_range, target_vel_list[:, 2], '--', label="target z")
         plt.xlabel("Time [s]")
         plt.ylabel("velcity [m]")
-        plt.ylim(-.3, 0.3)
-        plt.title("Time vs Position")
+        title = "Time vs velocity "+ traj.pattern
+        plt.title(title)
         plt.grid(True)
         plt.legend()
         plt.tight_layout()
 
         # Save and also display inline
-        out_path = "time_vs_velocity_raster6.png"
+        out_path = "time_vs_velocity_" + traj.pattern + ".png"
         plt.savefig(out_path, dpi=200)
         plt.show()
         # np.savetxt("actualVel.npy", actual_vel_list)

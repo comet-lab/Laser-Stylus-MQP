@@ -52,7 +52,7 @@ class TrajectoryController():
             
         elif(self.pattern == "Line"):
             points = self.positions.copy()
-            durations = self.durations.copy()
+            durations = np.cumsum(self.durations)
             return points, durations
         elif(self.pattern == "Circle"):
             points = Path_Gen.generate_circle(self.positions[0, :2], self.radius)
@@ -84,9 +84,9 @@ class TrajectoryController():
         # endpoints
         v_way[0]  = 0.0
         v_way[-1] = 0.0
-        for i in range(1, self.n_points-1):
-            dt = durations[i+1] - durations[i-1]
-            v_way[i] = (position[i+1] - position[i-1]) / dt
+        for i in range(1, self.n_points-2):
+            dt = durations[i] - durations[i-1]
+            v_way[i] = (position[i] - position[i-1]) / dt
         
         a_way = np.zeros_like(position)
         self.trajectories = np.empty((self.n_points - 1, self.n_dims), dtype=object)
@@ -111,9 +111,9 @@ class TrajectoryController():
                     a0=a0[d], af=af[d]
                 )
         new_time = 0
-        data_num = math.ceil(durations[-1]/0.05) 
+        data_num = durations.size
         actual_vel_list = np.empty((data_num, 3))
-        times = np.arange(0, durations[-1], 0.05)
+        times = np.linspace(0, durations[-1], data_num)
         for i in range(data_num):
             movement = self.update(times[i])
             target_vel = (movement['velocity'])
@@ -124,13 +124,12 @@ class TrajectoryController():
         plt.plot(durations, actual_vel_list[:, 1], label="actual y")
         plt.xlabel("Time [s]")
         plt.ylabel("velcity [m]")
-        plt.title("Time vs Position")
+        plt.title("Time vs Position (Guess)")
         plt.grid(True)
         plt.legend()
         plt.tight_layout()
         plt.show()
-        # plt.close(3)
-        print("wait")
+        plt.close(3)
 
     def update(self, time):
         self.t = time

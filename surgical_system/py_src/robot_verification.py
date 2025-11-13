@@ -25,7 +25,8 @@ def main():
     numPasses = 6
     numScans = 1
     # targetPos = np.array([[-1.75, 0, height], # x, y, z [cm]
-    #                     [1.75, 0, height]])
+    #                     [1.75, 0, height],
+    #                     [1.75, 1.75, height]])
     
     # targetPos = [[-1.75, -1.75, height], # x, y, z [cm]
     #                 [1.75, 1.75, height]]
@@ -39,7 +40,7 @@ def main():
              "Passes": numPasses,
              "MaxVelocity": 0.1, # [cm/s]
              "MaxAcceleration": 0,#[cm/s/s]
-             "Durations":[10]} # accumulated time 
+             "Durations":[10]} #time per step
     
     traj = robot_controller.create_trajectory(gains)
     robot_controller.run_trajectory(traj)
