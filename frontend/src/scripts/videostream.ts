@@ -21,6 +21,8 @@ window.addEventListener('load', () => {
     const sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
     const coordinateOutput = document.getElementById("status-panel-left") as HTMLElement;
 
+    let laserConfirmationTimeout: number | null = null;
+
     //Canvas setup
     ctx.font = "48px serif";
     let reader: any = null;
@@ -30,7 +32,7 @@ window.addEventListener('load', () => {
     const wsHandler = new WebSocketHandler(null);
 
     // --- Helper Functions ---
-    
+
     /** Reads the laser's *current state* from the button's class or data attribute */
     function getLocalLaserState(): boolean {
         return laserBtn.classList.contains('active');
@@ -43,14 +45,17 @@ window.addEventListener('load', () => {
     function syncUiToState(state: Partial<WebSocketMessage>) {
         // Update laser button and status (only if laser state is present)
         if (state.isLaserOn !== undefined) {
+            //Clear timeout if you get a response from the robot
+            if (laserConfirmationTimeout) {
+                clearTimeout(laserConfirmationTimeout);
+                laserConfirmationTimeout = null;
+            }
+
             const newLaserState = !!state.isLaserOn;
-            
             // Update button text and class
             laserBtn.classList.toggle('active', newLaserState)
-            
             // Update status display
             laserStatus.textContent = `Laser: ${newLaserState ? 'ON' : 'OFF'}`;
-            
             // Re-enable button after state sync
             laserBtn.style.pointerEvents = 'auto';
         }
@@ -60,7 +65,7 @@ window.addEventListener('load', () => {
     }
 
     // --- WebSocket Setup ---
-    
+
     // Assign the callback *before* connecting.
     // This function will run every time the backend broadcasts a new state.
     wsHandler.onStateUpdate = (newState: WebSocketMessage) => {
@@ -69,6 +74,7 @@ window.addEventListener('load', () => {
     };
 
     wsHandler.connect();
+    //(window as any).wsHandler = wsHandler;
 
     //Update canvas with video frame
     const updateCanvas = (now: DOMHighResTimeStamp, metadata: VideoFrameCallbackMetadata) => {
@@ -106,7 +112,7 @@ window.addEventListener('load', () => {
 
             // Initialize drawing tracker after video is ready
             drawingTracker = new DrawingTracker(canvas, video, `http://${window.location.hostname}:443`);
-            
+
             // Initially disable send button
             sendBtn.disabled = true;
         },
@@ -118,16 +124,29 @@ window.addEventListener('load', () => {
     laserBtn.addEventListener('click', () => {
         // 1. Disable button immediately to prevent multiple clicks
         laserBtn.style.pointerEvents = 'none';
-        
+
+        //Clear old timeouts
+        if (laserConfirmationTimeout) {
+            clearTimeout(laserConfirmationTimeout);
+        }
+
         // 2. Read the *current* state from the UI
         const isCurrentlyOn = getLocalLaserState();
-        
+
         // 3. Request the *opposite* state
         const desiredNewState = !isCurrentlyOn;
-        
+
         // 4. Send only the laser state update to backend
         const success = wsHandler.updateState({ isLaserOn: desiredNewState });
-        
+
+        // 5. Set timeout to re-enable the button if no response received
+        if (success) {
+            laserConfirmationTimeout = setTimeout(() => {
+                console.error("No confirmation from robot. Resetting UI.");
+                laserBtn.style.pointerEvents = 'auto'; // Re-enable button on timeout, don't change state
+            }, 2000); // 2-second timeout
+        }
+
         if (!success) {
             // If send failed, re-enable the button
             laserBtn.style.pointerEvents = 'auto';
@@ -204,7 +223,7 @@ window.addEventListener('load', () => {
         }
     });
 
-    canvas.addEventListener('click', function(event) {
+    canvas.addEventListener('click', function (event) {
         if (drawingTracker?.isDrawingEnabled()) {
             return;
         }
@@ -216,9 +235,9 @@ window.addEventListener('load', () => {
         let y = event.clientY / canvas.height * video.videoHeight;
 
         const data = {
-          x: x,
-          y: y
+            x: x,
+            y: y
         };
         wsHandler.updateState(data);
-      });
+    });
 });

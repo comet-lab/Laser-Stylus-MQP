@@ -1,4 +1,5 @@
 import os, time, sys, warnings
+import json
 import cv2
 import numpy as np
 import asyncio
@@ -79,8 +80,8 @@ async def main():
     ##################################################################################
     
     backend_connection = BackendConnection(
-        send_fn=lambda: "Hello from robot!",
-        recv_fn=lambda msg: print("Server sent: " + msg),
+        send_fn=lambda: json.dumps({"x": 0.1, "y": 0.2}),
+        recv_fn=lambda msg: print(msg),
         mocking=mock_robot
     )
     asyncio.create_task(backend_connection.connect_to_websocket())
