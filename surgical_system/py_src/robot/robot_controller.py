@@ -1,6 +1,7 @@
 import os, subprocess, time, sys
 from scipy.spatial.transform import Rotation
 import numpy as np
+import matplotlib.pyplot as plt
 
 if __name__=='__main__':    
     from franka_client import FrankaClient
@@ -89,7 +90,7 @@ class Robot_Controller():
         sys.stdout.flush()    
         print("Error Flag 2 value: ", errorFlag2)
         # time.sleep(5)
-        return error, angleError
+        return currPose
     
     def set_velocity(self, lin_vel, ang_vel):
         return self.franka_client.send_velocity(lin_vel, ang_vel)
@@ -133,19 +134,27 @@ class Robot_Controller():
         pose = self.franka_client.request_pose()
         position, quat = pose[:3], pose[3:]
         Rmat = Rotation.from_quat(quat).as_matrix()
-        new_pose = np.zeros((4,4))
-        new_pose[0:3, -1], new_pose[:3, :3], new_pose[-1, -1] = position, Rmat, 1
+        new_pose = np.eye(4)
+        new_pose[0:3, -1], new_pose[:3, :3] = position, Rmat
         return pose
+
+    def quat_to_Mat(self, pose):
+        #raw robot pose [x, y, z, qx, qy, qz, w]
+        pose_M = np.eye(4)
+        pose_M[:3, :3] = Rotation.from_quat(pose[3:]).as_matrix()
+        pose_M[:3, -1] = pose[:3]
+        return pose_M
 
     def create_trajectory(self, path_info):
         if not isinstance(path_info['Positions'], np.ndarray):
             path_info['Positions'] = np.array( path_info['Positions'])
         path_info['MaxVelocity'] = path_info['MaxVelocity'] / 100.0
         path_info['MaxAcceleration'] = path_info['MaxAcceleration'] / 100.0
+        path_info['Radius'] = path_info['Radius'] / 100.0
         path_info['Positions'] = path_info['Positions'] / 100.0 #converts from cm to m
         return TrajectoryController(path_info, debug=True)
     
-    def run_trajectory(self, traj: TrajectoryController, time_step):
+    def run_trajectory(self, traj: TrajectoryController):
         #
         total_time = traj.durations[-1]
         print("Path Duration: ", total_time)
@@ -154,13 +163,20 @@ class Robot_Controller():
         start_pose = np.eye(4)
         start_pose[:3, -1] = start_pos
         print(start_pose)
-        self.go_to_pose(start_pose@self.home_pose)
+        current_pose = np.array(self.go_to_pose(start_pose@self.home_pose))
+        # current_pose = self.quat_to_Mat(current_pose)
         
         time_step = 0.05
         elapsedTime = 0
         t = time.time()
         # TODO ask user to verify they want to continue
         target_vel = np.zeros(3)
+        
+        #record data
+        data_num = int(total_time/time_step) 
+        actual_vel_list = np.empty((data_num, 3))
+        target_vel_list = np.empty((data_num, 3))
+        i = 0
         while (elapsedTime) < total_time:
             if (time.time() - t) >= time_step:    
                 elapsedTime = elapsedTime + time.time() - t
@@ -168,8 +184,36 @@ class Robot_Controller():
                 movement = traj.update(elapsedTime)
                 target_vel = (movement['velocity'])
                 print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel) 
-                self.set_velocity(target_vel, [0,0,0])
+                velocity = self.set_velocity(target_vel, [0,0,0])
+                # new_pose = np.array(self.franka_client.request_pose())
+                actual_vel_list[i, :] =  velocity[:3] #TODO THERE IS A BUG HEEEEREEEE
+                target_vel_list[i, :] = target_vel
+                # current_pose = new_pose
+                i += 1
         self.robot_stop()
+        
+        plt.figure(figsize=(6,4))
+        time_range = np.arange(0, total_time, time_step)
+        plt.plot(time_range, actual_vel_list[:, 0], label="actual x")
+        plt.plot(time_range, actual_vel_list[:, 1], label="actual y")
+        plt.plot(time_range, actual_vel_list[:, 2], label="actual z")
+        plt.plot(time_range, target_vel_list[:, 0], '--', label="target x")
+        plt.plot(time_range, target_vel_list[:, 1], '--', label="target y")
+        plt.plot(time_range, target_vel_list[:, 2], '--', label="target z")
+        plt.xlabel("Time [s]")
+        plt.ylabel("velcity [m]")
+        plt.ylim(-.3, 0.3)
+        plt.title("Time vs Position")
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+
+        # Save and also display inline
+        out_path = "time_vs_velocity_raster6.png"
+        plt.savefig(out_path, dpi=200)
+        plt.show()
+        # np.savetxt("actualVel.npy", actual_vel_list)
+        # np.savetxt("targetVel.npy", actual_vel_list)
     
     
 if __name__=='__main__':

@@ -27,19 +27,22 @@ def main():
     # targetPos = np.array([[-1.75, 0, height], # x, y, z [cm]
     #                     [1.75, 0, height]])
     
-    targetPos = [[-1.75, -1.75, height], # x, y, z [cm]
-                    [1.75, 1.75, height]]
+    # targetPos = [[-1.75, -1.75, height], # x, y, z [cm]
+    #                 [1.75, 1.75, height]]
+    
+    targetPos = [[0, 0, height]]
 
 
     gains = {"Positions": targetPos, 
-             "Pattern": "Raster",
+             "Pattern": "Circle",
+             "Radius": 5,
              "Passes": numPasses,
              "MaxVelocity": 0.1, # [cm/s]
              "MaxAcceleration": 0,#[cm/s/s]
              "Durations":[10]} # accumulated time 
     
     traj = robot_controller.create_trajectory(gains)
-    robot_controller.run_trajectory(traj, 1)
+    robot_controller.run_trajectory(traj)
     robot_controller.close_robot()
     
 

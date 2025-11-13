@@ -16,8 +16,44 @@ class Path_Gen:
     def generatePolygon():
         pass
     
-    def generateCircle(center: np.array, radius: float):
-        pass
+    def generate_circle(center: np.ndarray,
+                        radius: float,
+                        num_points: int = 200,
+                        start_angle: float = 0.0,
+                        end_angle: float = 2*np.pi,
+                        clockwise: bool = False):
+
+        if center.shape != (2,):
+            raise ValueError("center must be a 2-element array-like [cx, cy].")
+        if radius <= 0:
+            raise ValueError("radius must be > 0.")
+        if num_points < 2:
+            raise ValueError("num_points must be >= 2.")
+        
+        # Determine if this is a full circle
+        sweep = end_angle - start_angle
+        two_pi = 2*np.pi
+        is_full = np.isclose((sweep % two_pi), 0.0)
+
+        # Handle direction 
+        if clockwise:
+            start_angle, end_angle = end_angle, start_angle
+            sweep = end_angle - start_angle  # recompute
+
+        endpoint = True
+        if is_full:
+            endpoint = False
+
+        theta = np.linspace(start_angle, end_angle, num_points, endpoint=endpoint)
+        x = center[0] + radius * np.cos(theta)
+        y = center[1] + radius * np.sin(theta)
+        path = np.column_stack((x, y))
+
+        if not is_full:
+            # append the first point to close the loop explicitly
+            path = np.vstack([path, path[0]])
+
+        return path
     
     
      

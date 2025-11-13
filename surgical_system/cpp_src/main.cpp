@@ -38,6 +38,7 @@ int main(int argc, char** argv) {
   int count = 0;
   while (mode >=0) {
     udpServer.waitForRequest(receiveBuffer,currState,sizeof(currState));
+    
     parseMessage(receiveBuffer,posTarget,orienTargetPtr,&mode);
     controller->setMode(mode);
 

@@ -238,6 +238,14 @@ void PandaController::velocityMode(double maxTime){
     currentCartVel(0) = cartVel_d(0); currentCartVel(1) = cartVel_d(1); currentCartVel(2) = cartVel_d(2); 
     currentOmegaVel(0) = cartVel_d(3); currentOmegaVel(1) = cartVel_d(4); currentOmegaVel(2) = cartVel_d(5);
 
+    this->currState[0] = cartVel_d(0);
+    this->currState[1] = cartVel_d(1);
+    this->currState[2] = cartVel_d(2);
+    this->currState[3] = cartVel_d(3);
+    this->currState[4] = cartVel_d(4);
+    this->currState[5] = cartVel_d(5);
+    this->currState[5] = -1.0;
+    
     Eigen::Vector3d linVelOutput = Eigen::Vector3d::Zero();
     Eigen::Vector3d omegaVelOutput  = Eigen::Vector3d::Zero();
 
