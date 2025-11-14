@@ -69,7 +69,7 @@ window.addEventListener('load', () => {
         settingsPopup.classList.remove('active');
         settingsOverlay.classList.remove('active');
 
-        [drawBtn, clearBtn, sendBtn, robotBtn, laserBtn].forEach(btn => {
+        [drawBtn, robotBtn, laserBtn].forEach(btn => {
             btn.disabled = false;
         });
     };
