@@ -25,6 +25,51 @@
 </head>
 
 <body>
+  <div id="settingsOverlay"></div>
+  <div id="settingsPopup">
+    <div class="settings-header">
+      <h2>Settings</h2>
+      <button id="settingsCloseBtn">
+        <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M18 6L6 18M6 6L18 18" stroke="#E0F2E0" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" />
+        </svg>
+      </button>
+    </div>
+    <div class="settings-body">
+      <div class="settings-sidebar">
+        <button class="sidebar-btn active" data-target="general-settings">General</button>
+        <button class="sidebar-btn" data-target="robot-settings">Robot</button>
+        <button class="sidebar-btn" data-target="camera-settings">Camera</button>
+        <button class="sidebar-btn" data-target="laser-settings">Laser</button>
+      </div>
+      <div class="settings-main">
+        <div id="general-settings" class="settings-panel active">
+          <h3>General Settings</h3>
+          <div class="setting-item">
+            <span class="setting-label">Processing Mode</span>
+            <div class="switch-container">
+              <span class="switch-label">Batch</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="processing-mode">
+                <span class="slider round"></span>
+              </label>
+              <span class="switch-label">Real-Time</span>
+            </div>
+          </div>
+        </div>
+        <div id="robot-settings" class="settings-panel">
+          <h3>Robot Settings</h3>
+        </div>
+        <div id="camera-settings" class="settings-panel">
+          <h3>Camera Settings</h3>
+        </div>
+        <div id="laser-settings" class="settings-panel">
+          <h3>Laser Settings</h3>
+        </div>
+      </div>
+    </div>
+  </div>
   <div id="top-panel">
     <div id="laser-toggle-container">
       <div id="laser-off-bg" class="laser-bg-section"></div>
@@ -41,8 +86,7 @@
         <span class="btn-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
             <path
-              d="M11.0273 0.6625L9.62418 2.06562L13.9336 6.375L15.3367 4.97188C15.7617 4.55 15.9992 3.975 15.9992 3.375C15.9992 2.775 15.7617 2.2 15.3367 1.77813L14.2211 0.6625C13.7992 0.2375 13.2242 0 12.6242 0C12.0242 0 11.4492 0.2375 11.0273 0.6625ZM8.56481 3.125L1.83981 9.84688C1.50543 10.1813 1.26168 10.6 1.13356 11.0562L0.0273051 15.05C-0.0445699 15.3094 0.0273051 15.5906 0.221055 15.7812C0.414805 15.9719 0.69293 16.0469 0.952305 15.975L4.94605 14.8656C5.4023 14.7375 5.81793 14.4969 6.15543 14.1594L12.8742 7.43437L8.56481 3.125Z"
-              />
+              d="M11.0273 0.6625L9.62418 2.06562L13.9336 6.375L15.3367 4.97188C15.7617 4.55 15.9992 3.975 15.9992 3.375C15.9992 2.775 15.7617 2.2 15.3367 1.77813L14.2211 0.6625C13.7992 0.2375 13.2242 0 12.6242 0C12.0242 0 11.4492 0.2375 11.0273 0.6625ZM8.56481 3.125L1.83981 9.84688C1.50543 10.1813 1.26168 10.6 1.13356 11.0562L0.0273051 15.05C-0.0445699 15.3094 0.0273051 15.5906 0.221055 15.7812C0.414805 15.9719 0.69293 16.0469 0.952305 15.975L4.94605 14.8656C5.4023 14.7375 5.81793 14.4969 6.15543 14.1594L12.8742 7.43437L8.56481 3.125Z" />
           </svg>
         </span>
         <span class="btn-text">DRAW PATTERN</span>
@@ -51,9 +95,9 @@
         <span class="btn-icon">↺</span>
         <span class="btn-text">CLEAR</span>
       </button>
-      <button id="sendBtn" class="action-btn action-btn-execute" disabled>
+      <button id="sendBtn" class="action-btn action-btn-prepare" disabled>
         <span class="btn-icon">→</span>
-        <span class="btn-text">EXECUTE</span>
+        <span class="btn-text">PREPARE</span>
       </button>
     </div>
     <div id="status-panel-right" class="status-message">
@@ -65,7 +109,7 @@
       <span class="status-label">CONTROL:</span>
       <span class="status-value status-batch">BATCH</span>
       <span class="status-label">CAMERA:</span>
-      <span class="status-value status-connected">OFF</span>
+      <span class="status-value status-camera-off">OFF</span>
     </div>
 
     <div id="robot-toggle-container">

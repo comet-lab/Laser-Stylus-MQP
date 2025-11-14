@@ -10,17 +10,23 @@ declare global {
 //Wait for the window to load
 window.addEventListener('load', () => {
     //Get all components
+    const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
+    const settingsPopup = document.getElementById('settingsPopup') as HTMLElement;
+    const settingsOverlay = document.getElementById('settingsOverlay') as HTMLElement;
+    const settingsCloseBtn = document.getElementById('settingsCloseBtn') as HTMLButtonElement;
+
     const video = document.getElementById('video') as HTMLVideoElement;
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext("2d")!;
     const robotBtn = document.getElementById('robot-toggle-container') as HTMLButtonElement;
     const laserBtn = document.getElementById('laser-toggle-container') as HTMLButtonElement;
-    const robotStatus = document.getElementById('robotStatus') as HTMLElement;
-    const laserStatus = document.getElementById('laserStatus') as HTMLElement;
     const drawBtn = document.getElementById('drawBtn') as HTMLButtonElement;
     const clearBtn = document.getElementById('clearBtn') as HTMLButtonElement;
     const sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
     const toggleButtons = document.querySelectorAll('#middle-icon-section .icon-btn');
+
+    const sidebarButtons: NodeListOf<HTMLButtonElement> = document.querySelectorAll('.settings-sidebar .sidebar-btn');
+    const settingsPanels: NodeListOf<HTMLElement> = document.querySelectorAll('.settings-main .settings-panel');
 
     let laserConfirmationTimeout: number | null = null;
 
@@ -36,6 +42,59 @@ window.addEventListener('load', () => {
     const wsHandler = new WebSocketHandler(null);
 
     // --- Helper Functions ---
+
+    const openSettings = (): void => {
+        if (isDrawing) {
+            drawBtn.click(); // Stop drawing
+        }
+
+        // Disable all controls
+        [drawBtn, clearBtn, sendBtn, robotBtn, laserBtn].forEach(btn => {
+            btn.disabled = true;
+        });
+
+        //Clear drawing
+        drawingTracker?.clearDrawing();
+
+        //Disable laser
+        changeLaserState(false);
+        
+        //DISABLE ROBOT WHEN IMPLEMENTED
+
+        settingsPopup.classList.add('active');
+        settingsOverlay.classList.add('active');
+    };
+
+    const closeSettings = (): void => {
+        settingsPopup.classList.remove('active');
+        settingsOverlay.classList.remove('active');
+
+        [drawBtn, clearBtn, sendBtn, robotBtn, laserBtn].forEach(btn => {
+            btn.disabled = false;
+        });
+    };
+
+    settingsBtn.addEventListener('click', openSettings);
+    settingsCloseBtn.addEventListener('click', closeSettings);
+    settingsOverlay.addEventListener('click', closeSettings);
+
+    sidebarButtons.forEach((button: HTMLButtonElement) => {
+        button.addEventListener('click', () => {
+            const targetId: string | null = button.getAttribute('data-target');
+            if (!targetId) return;
+
+            // Remove 'active' from all buttons and panels
+            sidebarButtons.forEach((btn: HTMLButtonElement) => btn.classList.remove('active'));
+            settingsPanels.forEach((panel: HTMLElement) => panel.classList.remove('active'));
+
+            // Add 'active' to the clicked button and target panel
+            button.classList.add('active');
+            const targetPanel: HTMLElement | null = document.getElementById(targetId);
+            if (targetPanel) {
+                targetPanel.classList.add('active');
+            }
+        });
+    });
 
     /** Reads the laser's *current state* from the button's class or data attribute */
     function getLocalLaserState(): boolean {
@@ -59,7 +118,6 @@ window.addEventListener('load', () => {
             // Update button text and class
             laserBtn.classList.toggle('active', newLaserState)
             // Update status display
-            laserStatus.textContent = `Laser: ${newLaserState ? 'ON' : 'OFF'}`;
             // Re-enable button after state sync
             laserBtn.style.pointerEvents = 'auto';
         }
@@ -141,9 +199,14 @@ window.addEventListener('load', () => {
         const desiredNewState = !isCurrentlyOn;
 
         // 4. Send only the laser state update to backend
-        const success = wsHandler.updateState({ isLaserOn: desiredNewState });
+        changeLaserState(desiredNewState);
+        // Note: Button will be re-enabled when we receive the state update from backend
+        // via the onStateUpdate -> syncUiToState flow
+    });
 
-        // 5. Set timeout to re-enable the button if no response received
+    function changeLaserState(newState: boolean) {
+        const success = wsHandler.updateState({ isLaserOn: newState });
+
         if (success) {
             laserConfirmationTimeout = setTimeout(() => {
                 console.error("No confirmation from robot. Resetting UI.");
@@ -156,9 +219,7 @@ window.addEventListener('load', () => {
             laserBtn.style.pointerEvents = 'auto';
             console.error('Failed to send laser state update');
         }
-        // Note: Button will be re-enabled when we receive the state update from backend
-        // via the onStateUpdate -> syncUiToState flow
-    });
+    }
 
     // Handler for the draw button
     drawBtn.addEventListener('click', () => {
