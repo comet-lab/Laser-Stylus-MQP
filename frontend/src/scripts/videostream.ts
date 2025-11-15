@@ -12,8 +12,13 @@ window.addEventListener('load', () => {
     //Get all components
     const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
     const settingsPopup = document.getElementById('settingsPopup') as HTMLElement;
-    const settingsOverlay = document.getElementById('settingsOverlay') as HTMLElement;
+    const overlay = document.getElementById('overlay') as HTMLElement;
     const settingsCloseBtn = document.getElementById('settingsCloseBtn') as HTMLButtonElement;
+
+    const preparePopup = document.getElementById('preparePopup') as HTMLElement;
+    const prepareCloseBtn = document.getElementById('prepareCloseBtn') as HTMLButtonElement;
+    const prepareCancelBtn = document.getElementById('prepareCancelBtn') as HTMLButtonElement;
+    const executeBtn = document.getElementById('executeBtn') as HTMLButtonElement;
 
     const video = document.getElementById('video') as HTMLVideoElement;
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -21,7 +26,7 @@ window.addEventListener('load', () => {
     const robotBtn = document.getElementById('robot-toggle-container') as HTMLButtonElement;
     const laserBtn = document.getElementById('laser-toggle-container') as HTMLButtonElement;
     const drawBtn = document.getElementById('drawBtn') as HTMLButtonElement;
-    const sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
+    const prepareBtn = document.getElementById('prepareBtn') as HTMLButtonElement;
     const toggleButtons = document.querySelectorAll('#middle-icon-section .icon-btn');
 
     const sidebarButtons: NodeListOf<HTMLButtonElement> = document.querySelectorAll('.settings-sidebar .sidebar-btn');
@@ -55,7 +60,7 @@ window.addEventListener('load', () => {
         }
 
         // Disable all controls
-        [drawBtn, sendBtn, robotBtn, laserBtn].forEach(btn => {
+        [drawBtn, prepareBtn, robotBtn, laserBtn].forEach(btn => {
             btn.disabled = true;
         });
 
@@ -65,12 +70,12 @@ window.addEventListener('load', () => {
         //DISABLE ROBOT WHEN IMPLEMENTED
 
         settingsPopup.classList.add('active');
-        settingsOverlay.classList.add('active');
+        overlay.classList.add('active');
     };
 
     const closeSettings = (): void => {
         settingsPopup.classList.remove('active');
-        settingsOverlay.classList.remove('active');
+        overlay.classList.remove('active');
 
         [drawBtn, robotBtn, laserBtn].forEach(btn => {
             btn.disabled = false;
@@ -79,7 +84,34 @@ window.addEventListener('load', () => {
 
     settingsBtn.addEventListener('click', openSettings);
     settingsCloseBtn.addEventListener('click', closeSettings);
-    settingsOverlay.addEventListener('click', closeSettings);
+    
+
+    const openPrepareMenu = (): void => {
+        overlay.classList.add('active');
+        preparePopup.classList.add('active');
+    };
+
+    const closePrepareMenu = (): void => {
+        overlay.classList.remove('active');
+        preparePopup.classList.remove('active');
+    };
+
+    prepareBtn.addEventListener('click', openPrepareMenu);
+    prepareCloseBtn.addEventListener('click', closePrepareMenu);
+    prepareCancelBtn.addEventListener('click', () => {
+        closePrepareMenu();
+    });
+
+    overlay.addEventListener('click', () => {
+        if (settingsPopup.classList.contains('active')) {
+            closeSettings();
+        }
+        if (preparePopup.classList.contains('active')) {
+            closePrepareMenu();
+        }
+    });
+
+    
 
     sidebarButtons.forEach((button: HTMLButtonElement) => {
         button.addEventListener('click', () => {
@@ -106,17 +138,20 @@ window.addEventListener('load', () => {
             case 'idle':
                 drawBtn.setAttribute('data-state', 'ready');
                 btnText.textContent = 'DRAW PATH';
-                sendBtn.disabled = true;
+                executeBtn.disabled = true;
+                prepareBtn.disabled = true;
                 break;
             case 'drawing':
                 drawBtn.setAttribute('data-state', 'drawing');
                 btnText.textContent = 'DRAWING...';
-                sendBtn.disabled = true;
+                executeBtn.disabled = true;
+                prepareBtn.disabled = true;
                 break;
             case 'complete':
                 drawBtn.setAttribute('data-state', 'clear');
                 btnText.textContent = 'CLEAR PATH';
-                sendBtn.disabled = false;
+                executeBtn.disabled = false;
+                prepareBtn.disabled = false;
                 break;
         }
     }
@@ -201,7 +236,8 @@ window.addEventListener('load', () => {
             drawingTracker = new DrawingTracker(canvas, video, `http://${window.location.hostname}:443`);
 
             // Initially disable send button
-            sendBtn.disabled = true;
+            executeBtn.disabled = true;
+            prepareBtn.disabled = true;
         },
     });
 
@@ -273,16 +309,11 @@ window.addEventListener('load', () => {
     });
 
     // Handler for the send button
-    // Handler for the send button
-    sendBtn.addEventListener('click', async () => {
+    executeBtn.addEventListener('click', async () => {
         if (!drawingTracker) return;
 
-        // Show confirmation modal
-        if (!confirm('Execute this pattern on the robot? This action cannot be undone.')) {
-            return;
-        }
-
-        sendBtn.disabled = true;
+        executeBtn.disabled = true;
+        prepareBtn.disabled = true;
 
         try {
             console.log('Sending coordinates to robot...');
@@ -292,12 +323,14 @@ window.addEventListener('load', () => {
             drawingTracker.clearDrawing();
             drawingState = 'idle';
             updateDrawButtonState();
+            closePrepareMenu();
         }
         catch (e) {
             console.error('Error sending coordinates:', e);
             // Re-enable button on error
             if (drawingState === 'complete') {
-                sendBtn.disabled = false;
+                executeBtn.disabled = false;
+                prepareBtn.disabled = false;
             }
         }
     });

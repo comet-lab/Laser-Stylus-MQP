@@ -2,9 +2,9 @@
    FONTS & IMPORTS
    ============================================ */
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;700&display=swap');
-@import url('./toggleButtons.css');
-@import url('./drawButtons.css');
+@import url('./buttons.css');
 @import url('./settingsPage.css');
+@import url('./preparePage.css');
 
 /* ============================================
    GLOBAL STYLES
@@ -14,6 +14,11 @@ body {
   font-weight: 400;
   padding: 1.5rem;
   background-color: #000000;
+}
+
+body, html {
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 #app {
