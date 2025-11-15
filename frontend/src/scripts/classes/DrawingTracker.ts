@@ -15,6 +15,8 @@ export class DrawingTracker {
     private drawingCanvas: HTMLCanvasElement;
     private drawingCtx: CanvasRenderingContext2D;
     private apiBaseUrl: string;
+    private onLineCompleteCallback: (() => void) | null;
+
 
     constructor(canvas: HTMLCanvasElement, video: HTMLVideoElement, apiBaseUrl: string = `http://${window.location.hostname}:443`) {
         this.canvas = canvas;
@@ -25,6 +27,7 @@ export class DrawingTracker {
         this.isDrawing = false;
         this.drawingEnabled = false; // Start disabled
         this.lastPos = null;
+        this.onLineCompleteCallback = null;
 
         // Create a separate canvas for drawing that won't be cleared
         this.drawingCanvas = document.createElement('canvas');
@@ -86,7 +89,7 @@ export class DrawingTracker {
     //When you click, check if drawing is enabled and start drawing
     private handlePointerDown(e: PointerEvent): void {
         if (!this.drawingEnabled) return; // Check if drawing is enabled
-        
+
         e.preventDefault();
 
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -104,7 +107,7 @@ export class DrawingTracker {
     //When you move it, check if drawing is enabled and you're drawing
     private handlePointerMove(e: PointerEvent): void {
         if (!this.drawingEnabled) return; // Check if drawing is enabled
-        
+
         e.preventDefault();
         if (!this.isDrawing || !this.lastPos) return;
 
@@ -120,18 +123,36 @@ export class DrawingTracker {
     //Stop drawing when you release
     private handlePointerUp(e: PointerEvent): void {
         if (!this.drawingEnabled) return;
-        
+
         e.preventDefault();
 
         (e.target as HTMLElement).releasePointerCapture(e.pointerId);
 
         this.isDrawing = false;
+
+        // Automatically disable drawing after completing one line
+        this.disableDrawing();
+
+        // Call the completion callback if set
+        if (this.onLineCompleteCallback) {
+            this.onLineCompleteCallback();
+            this.onLineCompleteCallback = null; // Clear callback after use
+        }
     }
 
+    //Handle pointer cancel event
     //Handle pointer cancel event
     private handlePointerCancel(e: PointerEvent): void {
         (e.target as HTMLElement).releasePointerCapture(e.pointerId);
         this.isDrawing = false;
+
+        // Also disable on cancel
+        this.disableDrawing();
+
+        if (this.onLineCompleteCallback) {
+            this.onLineCompleteCallback();
+            this.onLineCompleteCallback = null;
+        }
     }
 
     //Return list of drawn pixels
@@ -166,10 +187,12 @@ export class DrawingTracker {
     }
 
     //Enable drawing mode
-    public enableDrawing(): void {
+    public enableDrawing(onLineComplete?: () => void): void {
         this.drawingEnabled = true;
         this.canvas.style.cursor = 'crosshair';
+        this.onLineCompleteCallback = onLineComplete || null;
     }
+
 
     //Disable drawing mode
     public disableDrawing(): void {

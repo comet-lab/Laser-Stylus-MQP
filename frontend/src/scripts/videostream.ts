@@ -21,7 +21,6 @@ window.addEventListener('load', () => {
     const robotBtn = document.getElementById('robot-toggle-container') as HTMLButtonElement;
     const laserBtn = document.getElementById('laser-toggle-container') as HTMLButtonElement;
     const drawBtn = document.getElementById('drawBtn') as HTMLButtonElement;
-    const clearBtn = document.getElementById('clearBtn') as HTMLButtonElement;
     const sendBtn = document.getElementById('sendBtn') as HTMLButtonElement;
     const toggleButtons = document.querySelectorAll('#middle-icon-section .icon-btn');
 
@@ -29,13 +28,11 @@ window.addEventListener('load', () => {
     const settingsPanels: NodeListOf<HTMLElement> = document.querySelectorAll('.settings-main .settings-panel');
 
     let laserConfirmationTimeout: number | null = null;
+    let drawingState: 'idle' | 'drawing' | 'complete' = 'idle';
 
     //Canvas setup
     ctx.font = "48px serif";
     let reader: any = null;
-
-    let isDrawing = false;
-    let hasPattern = false;
 
     // Initialize drawing tracker
     let drawingTracker: DrawingTracker | null = null;
@@ -44,21 +41,27 @@ window.addEventListener('load', () => {
     // --- Helper Functions ---
 
     const openSettings = (): void => {
-        if (isDrawing) {
-            drawBtn.click(); // Stop drawing
+        if (drawingState === 'drawing') {
+            drawingTracker?.disableDrawing();
+            drawingTracker?.clearDrawing();
+            drawingState = 'idle';
+            updateDrawButtonState();
+        }
+        else if (drawingState === 'complete') {
+            // If drawing is complete, just clear
+            drawingTracker?.clearDrawing();
+            drawingState = 'idle';
+            updateDrawButtonState();
         }
 
         // Disable all controls
-        [drawBtn, clearBtn, sendBtn, robotBtn, laserBtn].forEach(btn => {
+        [drawBtn, sendBtn, robotBtn, laserBtn].forEach(btn => {
             btn.disabled = true;
         });
 
-        //Clear drawing
-        drawingTracker?.clearDrawing();
-
         //Disable laser
         changeLaserState(false);
-        
+
         //DISABLE ROBOT WHEN IMPLEMENTED
 
         settingsPopup.classList.add('active');
@@ -95,6 +98,28 @@ window.addEventListener('load', () => {
             }
         });
     });
+
+    function updateDrawButtonState() {
+        const btnText = drawBtn.querySelector('.btn-text')!;
+
+        switch (drawingState) {
+            case 'idle':
+                drawBtn.setAttribute('data-state', 'ready');
+                btnText.textContent = 'DRAW PATH';
+                sendBtn.disabled = true;
+                break;
+            case 'drawing':
+                drawBtn.setAttribute('data-state', 'drawing');
+                btnText.textContent = 'DRAWING...';
+                sendBtn.disabled = true;
+                break;
+            case 'complete':
+                drawBtn.setAttribute('data-state', 'clear');
+                btnText.textContent = 'CLEAR PATH';
+                sendBtn.disabled = false;
+                break;
+        }
+    }
 
     /** Reads the laser's *current state* from the button's class or data attribute */
     function getLocalLaserState(): boolean {
@@ -223,52 +248,31 @@ window.addEventListener('load', () => {
 
     // Handler for the draw button
     drawBtn.addEventListener('click', () => {
-        console.log('Draw button clicked');
+        console.log('Draw button clicked, state:', drawingState);
         if (!drawingTracker) return;
 
-        isDrawing = !isDrawing;
-
-        if (isDrawing) {
+        if (drawingState === 'idle') {
             // Start drawing
-            drawBtn.setAttribute('data-state', 'drawing');
-            drawBtn.querySelector('.btn-text')!.textContent = 'STOP DRAWING';
-            clearBtn.disabled = true;
-            sendBtn.disabled = true;
+            drawingState = 'drawing';
+            updateDrawButtonState();
+            drawingTracker.clearDrawing();
 
-            drawingTracker.enableDrawing();
-            drawingTracker.clearDrawing(); // Clear previous drawing
-        } else {
-            // Stop drawing
-            drawBtn.setAttribute('data-state', 'ready');
-            drawBtn.querySelector('.btn-text')!.textContent = 'DRAW PATTERN';
-            hasPattern = true;
-            clearBtn.disabled = false;
-            sendBtn.disabled = false;
+            // Set up callback for when line is complete
+            drawingTracker.enableDrawing(() => {
+                // This callback is called when the user finishes drawing the line
+                drawingState = 'complete';
+                updateDrawButtonState();
+            });
 
-            drawingTracker.disableDrawing();
+        } else if (drawingState === 'complete') {
+            // Clear the drawing
+            drawingTracker.clearDrawing();
+            drawingState = 'idle';
+            updateDrawButtonState();
         }
     });
 
-    clearBtn.addEventListener('click', () => {
-        console.log('Clear button clicked');
-        if (!drawingTracker) return;
-
-        // Clear the drawing
-        drawingTracker.clearDrawing();
-
-        // Update state
-        hasPattern = false;
-        clearBtn.disabled = true;
-        sendBtn.disabled = true;
-
-        // Reset draw button state if needed
-        if (!isDrawing) {
-            drawBtn.setAttribute('data-state', 'ready');
-            drawBtn.querySelector('.btn-text')!.textContent = 'DRAW PATTERN';
-        }
-    });
-
-
+    // Handler for the send button
     // Handler for the send button
     sendBtn.addEventListener('click', async () => {
         if (!drawingTracker) return;
@@ -279,7 +283,6 @@ window.addEventListener('load', () => {
         }
 
         sendBtn.disabled = true;
-        clearBtn.disabled = true;
 
         try {
             console.log('Sending coordinates to robot...');
@@ -287,18 +290,14 @@ window.addEventListener('load', () => {
 
             // Clear the drawing after successful send
             drawingTracker.clearDrawing();
-            hasPattern = false;
-
-            // Reset button states
-            drawBtn.setAttribute('data-state', 'ready');
-            drawBtn.querySelector('.btn-text')!.textContent = 'DRAW PATTERN';
+            drawingState = 'idle';
+            updateDrawButtonState();
         }
         catch (e) {
             console.error('Error sending coordinates:', e);
-            // Re-enable buttons on error
-            if (hasPattern) {
+            // Re-enable button on error
+            if (drawingState === 'complete') {
                 sendBtn.disabled = false;
-                clearBtn.disabled = false;
             }
         }
     });
