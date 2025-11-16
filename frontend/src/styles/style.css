@@ -222,3 +222,9 @@ pre {
   opacity: 100; 
   z-index: -1;
 }
+
+/* for the different tools on the left side */
+.activeTool {
+  outline: 3px solid #6df06d;
+  border-radius: 6px;
+}

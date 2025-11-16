@@ -7,6 +7,33 @@ declare global {
     }
 }
 
+function drawSquare(ctx: CanvasRenderingContext2D, sx: number, sy: number, x: number, y: number) {
+    ctx.strokeRect(sx, sy, x - sx, y - sy);
+}
+
+function drawCircle(ctx: CanvasRenderingContext2D, sx: number, sy: number, x: number, y: number) {
+    const radius = Math.sqrt((x - sx) ** 2 + (y - sy) ** 2);
+    ctx.beginPath();
+    ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+    ctx.stroke();
+}
+
+function drawLine(ctx: CanvasRenderingContext2D, sx: number, sy: number, x: number, y: number) {
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+}
+
+function drawTriangle(ctx: CanvasRenderingContext2D, sx: number, sy: number, x: number, y: number) {
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(x, y);
+    ctx.lineTo(sx * 2 - x, y);
+    ctx.closePath();
+    ctx.stroke();
+}
+
 //Wait for the window to load
 window.addEventListener('load', () => {
     //Get all components
@@ -36,12 +63,50 @@ window.addEventListener('load', () => {
     let drawingState: 'idle' | 'drawing' | 'complete' = 'idle';
 
     //Canvas setup
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight; 
     ctx.font = "48px serif";
     let reader: any = null;
+   
 
     // Initialize drawing tracker
     let drawingTracker: DrawingTracker | null = null;
     const wsHandler = new WebSocketHandler(null);
+
+    // Tool State
+    let currentTool: "pen" | "square" | "circle" | "triangle" | "line" = "pen";
+    let isDrawingShape = false;
+    let startX = 0;
+    let startY = 0;
+    let shapeSnapshot: ImageData | null = null;
+
+
+
+    const toolButtons = {
+        penBtn: "pen",
+        squareBtn: "square",
+        circleBtn: "circle",
+        triangleBtn: "triangle",
+        lineBtn: "line",
+        };
+
+    Object.entries(toolButtons).forEach(([id, toolName]) => {
+        const btn = document.getElementById(id);
+        btn?.addEventListener("click", () => {
+            // makes sure that the drawing is enabled
+            if (drawingTracker?.isDrawingEnabled()) return;
+
+            currentTool = toolName as any;
+
+            Object.keys(toolButtons).forEach(b =>
+                document.getElementById(b)?.classList.remove("activeTool")
+            );
+
+            btn.classList.add("activeTool");
+        });
+    });
+
+
 
     // --- Helper Functions ---
 
@@ -356,6 +421,56 @@ window.addEventListener('load', () => {
             }
         });
     });
+
+    function takeShapeSnapshot() {
+        shapeSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    }
+
+    function restoreShapeSnapshot() {
+        if (shapeSnapshot) ctx.putImageData(shapeSnapshot, 0, 0);
+    }
+
+    canvas.addEventListener("mousedown", (e) => {
+
+        if (drawingTracker?.isDrawingEnabled()) return;
+
+        startX = e.offsetX;
+        startY = e.offsetY;
+        isDrawingShape = true;
+
+        takeShapeSnapshot();
+
+        if (currentTool === "pen") {
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+        }
+    });
+
+    canvas.addEventListener("mousemove", (e) => {
+        if (!isDrawingShape) return;
+
+        const x = e.offsetX;
+        const y = e.offsetY;
+
+        restoreShapeSnapshot();
+
+        switch (currentTool) {
+            case "pen":
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                break;
+            case "square": drawSquare(ctx, startX, startY, x, y); break;
+            case "circle": drawCircle(ctx, startX, startY, x, y); break;
+            case "triangle": drawTriangle(ctx, startX, startY, x, y); break;
+            case "line": drawLine(ctx, startX, startY, x, y); break;
+        }
+    });
+
+    canvas.addEventListener("mouseup", () => {
+        isDrawingShape = false;
+        shapeSnapshot = null;
+    });
+
 
     // Window event handlers
     window.addEventListener('beforeunload', () => {
