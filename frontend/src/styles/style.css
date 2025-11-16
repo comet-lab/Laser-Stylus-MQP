@@ -228,3 +228,8 @@ pre {
   outline: 3px solid #6df06d;
   border-radius: 6px;
 }
+
+/* Code to allow for drawing on the tablet */
+html, body {
+  touch-action: none;
+}
