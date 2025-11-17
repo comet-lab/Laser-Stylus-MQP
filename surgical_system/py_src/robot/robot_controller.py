@@ -50,7 +50,7 @@ class Robot_Controller():
     '''
     Code is blocking
     '''
-    def go_to_pose(self, pose, linTol = .05, rotTol = 0.05, maxIterations = 24):
+    def go_to_pose(self, pose, linTol = .05, rotTol = 0.05, maxIterations = 24, blocking = True):
         # tolerances are in mm and degrees 
         error, angleError = 10000, 10000
         currPose = self.franka_client.send_pose(pose, 1)
@@ -58,7 +58,7 @@ class Robot_Controller():
         print("Moving to Pose ...")
         errorFlag1 = True
         errorFlag2 = True
-        while (errorFlag1 or errorFlag2) and iterations < maxIterations:
+        while (errorFlag1 or errorFlag2) and iterations < maxIterations and not blocking:
             time.sleep(.5)
             currPose = self.franka_client.send_pose(pose, 1)
             error = currPose[:3] - pose[:3, -1]
