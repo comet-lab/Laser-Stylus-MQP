@@ -167,16 +167,43 @@ window.addEventListener('load', () => {
     Object.entries(toolButtons).forEach(([id, toolName]) => {
         const btn = document.getElementById(id);
         btn?.addEventListener("click", () => {
-            // makes sure that the drawing is enabled
+            // Moved the turn on drawing logic to activate when penBtn is clicked instead
+            if (id === 'penBtn') {
+                if (!drawingTracker) return;
+
+                if (drawingState === 'idle') {
+                    // Start drawing
+                    drawingState = 'drawing';
+                    updateDrawButtonState();
+                    drawingTracker.clearDrawing();
+
+                    // Set up callback for when line is complete
+                    drawingTracker.enableDrawing(() => {
+                        drawingState = 'complete';
+                        updateDrawButtonState();
+                        prepareBtn.disabled = false;
+                    });
+
+                    // mark pen button as active
+                    Object.keys(toolButtons).forEach(b => document.getElementById(b)?.classList.remove('activeTool'));
+                    btn.classList.add('activeTool');
+                    currentTool = 'pen';
+                } else if (drawingState === 'complete') {
+                    // Clear the drawing
+                    drawingTracker.clearDrawing();
+                    drawingState = 'idle';
+                    updateDrawButtonState();
+                    btn.classList.remove('activeTool');
+                }
+                return;
+            }
+
+            // for the other drawing tools
             if (drawingTracker?.isDrawingEnabled()) return;
 
             currentTool = toolName as any;
-
-            Object.keys(toolButtons).forEach(b =>
-                document.getElementById(b)?.classList.remove("activeTool")
-            );
-
-            btn.classList.add("activeTool");
+            Object.keys(toolButtons).forEach(b => document.getElementById(b)?.classList.remove('activeTool'));
+            btn.classList.add('activeTool');
         });
     });
 
@@ -421,30 +448,14 @@ window.addEventListener('load', () => {
         }
     }
 
-    // Handler for the draw button
+    // Handler for the draw button, which is now being used as the clear canvas button
     drawBtn.addEventListener('click', () => {
-        console.log('Draw button clicked, state:', drawingState);
         if (!drawingTracker) return;
-
-        if (drawingState === 'idle') {
-            // Start drawing
-            drawingState = 'drawing';
-            updateDrawButtonState();
-            drawingTracker.clearDrawing();
-
-            // Set up callback for when line is complete
-            drawingTracker.enableDrawing(() => {
-                // This callback is called when the user finishes drawing the line
-                drawingState = 'complete';
-                updateDrawButtonState();
-            });
-
-        } else if (drawingState === 'complete') {
-            // Clear the drawing
-            drawingTracker.clearDrawing();
-            drawingState = 'idle';
-            updateDrawButtonState();
-        }
+        drawingTracker.clearDrawing();
+        drawingState = 'idle';
+        updateDrawButtonState();
+        prepareBtn.disabled = true;
+        executeBtn.disabled = true;
     });
 
     // --- Batch mode state ---
@@ -466,20 +477,21 @@ window.addEventListener('load', () => {
         isDrawingShape = true;
         takeShapeSnapshot();
         if (currentTool === "pen") {
-            ctx.beginPath();
-            ctx.moveTo(startX, startY);
+            // ctx.beginPath();
+            // ctx.moveTo(startX, startY);
+            // drawingTracker.enableDrawing();
+            
         }
     });
 
     canvas.addEventListener("mousemove", (e) => {
-        if (!isDrawingShape) return;
+        if (!isDrawingShape || !drawingTracker?.isDrawingEnabled) return;
         const x = e.offsetX;
         const y = e.offsetY;
         restoreShapeSnapshot();
         switch (currentTool) {
             case "pen":
-                ctx.lineTo(x, y);
-                ctx.stroke();
+                // drawingTracker.enableDrawing();
                 break;
             case "square": drawSquare(ctx, startX, startY, x, y); break;
             case "circle": drawCircle(ctx, startX, startY, x, y); break;
