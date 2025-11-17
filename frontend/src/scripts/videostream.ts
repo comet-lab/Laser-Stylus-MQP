@@ -541,6 +541,7 @@ window.addEventListener('load', () => {
             executeBtn.disabled = false;
         }
         closePrepareMenu();
+        drawingTracker.clearDrawing();
     });
 
 
