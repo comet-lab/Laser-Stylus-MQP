@@ -524,12 +524,23 @@ window.addEventListener('load', () => {
     prepareBtn.addEventListener('click', async () => {
         if (!drawingTracker) return;
         prepareBtn.disabled = true;
+        // try {
+        //     await drawingTracker.sendCoordinates();
+        //     // Optionally, enable executeBtn here
+        // } catch (e) {
+        //     prepareBtn.disabled = false;
+        // }
+    });
+
+    executeBtn.addEventListener('click', async () => {
+        if (!drawingTracker) return;
+        executeBtn.disabled = true;
         try {
             await drawingTracker.sendCoordinates();
-            // Optionally, enable executeBtn here
         } catch (e) {
-            prepareBtn.disabled = false;
+            executeBtn.disabled = false;
         }
+        closePrepareMenu();
     });
 
 
