@@ -83,16 +83,14 @@ async def main():
 
     def send_fn() -> str:
         current_state = robot_controller.get_current_pose()
-        return RobotSchema.from_pose(current_state).to_str()
+        return RobotSchema.from_pose(current_state@np.linalg.inv(home_pose)).to_str()
     
     def recv_fn(msg: str):
         data = json.loads(msg)
         desired_state.update(data)
-        desired_pose = robot_controller.home_pose
-        desired_pose[:,3] = desired_state.to_mat()[:,3]
-        print(desired_pose)
-        robot_controller.go_to_pose(desired_pose) # TODO from home pose
-        # robot_controller.go_to_pose(desired_state.to_mat()@robot_controller.home_pose) # TODO need to have a target to follow async
+        desired_task_pose = desired_state.to_mat()
+        desired_robot_pose = desired_task_pose@home_pose
+        robot_controller.go_to_pose(desired_robot_pose)
         # TODO enable/disable laser
         # laser_obj.set_output(desired_pose.isLaserOn)
 
