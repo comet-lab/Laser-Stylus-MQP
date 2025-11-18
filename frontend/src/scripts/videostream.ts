@@ -1,111 +1,11 @@
-import { DrawingTracker } from './classes/DrawingTracker';
+import { DrawingTracker } from './drawing/DrawingTracker';
+import { ShapeType } from './drawing/types';
 import { WebSocketHandler, WebSocketMessage } from './classes/WebSocketHandler';
 
 declare global {
     interface Window {
         MediaMTXWebRTCReader: any;
     }
-}
-
-// Shape functions for drawing 
-function drawSquare(ctx: CanvasRenderingContext2D, sx: number, sy: number, x: number, y: number) {
-    ctx.strokeRect(sx, sy, x - sx, y - sy);
-}
-
-function drawCircle(ctx: CanvasRenderingContext2D, sx: number, sy: number, x: number, y: number) {
-    const radius = Math.sqrt((x - sx) ** 2 + (y - sy) ** 2);
-    ctx.beginPath();
-    ctx.arc(sx, sy, radius, 0, Math.PI * 2);
-    ctx.stroke();
-}
-
-function drawLine(ctx: CanvasRenderingContext2D, sx: number, sy: number, x: number, y: number) {
-    ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(x, y);
-    ctx.stroke();
-}
-
-function drawTriangle(ctx: CanvasRenderingContext2D, sx: number, sy: number, x: number, y: number) {
-    ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(x, y);
-    ctx.lineTo(sx * 2 - x, y);
-    ctx.closePath();
-    ctx.stroke();
-}
-
-// functions for actually commiting the shapes 
-function commitCircleToTracker(tracker: DrawingTracker, sx: number, sy: number, ex: number, ey: number) {
-    const ctx = tracker['drawingCtx'];
-    const r = Math.round(Math.sqrt((ex - sx) ** 2 + (ey - sy) ** 2));
-    ctx.save();
-    ctx.strokeStyle = '#ff0000';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.arc(sx, sy, r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-
-    const samples = Math.max(12, Math.ceil(2 * Math.PI * r));
-    let prevX = Math.round(sx + r);
-    let prevY = Math.round(sy);
-    for (let i = 1; i <= samples; i++) {
-        const theta = (i / samples) * (Math.PI * 2);
-        const x = Math.round(sx + r * Math.cos(theta));
-        const y = Math.round(sy + r * Math.sin(theta));
-        tracker['addPixelsAlongLine'](prevX, prevY, x, y, 5);
-        prevX = x;
-        prevY = y;
-    }
-}
-
-function commitSquareToTracker(tracker: DrawingTracker, sx: number, sy: number, ex: number, ey: number) {
-    const ctx = tracker['drawingCtx'];
-    ctx.save();
-    ctx.strokeStyle = '#ff0000';
-    ctx.lineWidth = 5;
-    ctx.strokeRect(sx, sy, ex - sx, ey - sy);
-    ctx.restore();
-
-    tracker['addPixelsAlongLine'](sx, sy, ex, sy, 5);
-    tracker['addPixelsAlongLine'](ex, sy, ex, ey, 5);
-    tracker['addPixelsAlongLine'](ex, ey, sx, ey, 5);
-    tracker['addPixelsAlongLine'](sx, ey, sx, sy, 5);
-}
-
-function commitLineToTracker(tracker: DrawingTracker, sx: number, sy: number, ex: number, ey: number) {
-    const ctx = tracker['drawingCtx'];
-    ctx.save();
-    ctx.strokeStyle = '#ff0000';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(ex, ey);
-    ctx.stroke();
-    ctx.restore();
-
-    tracker['addPixelsAlongLine'](sx, sy, ex, ey, 5);
-}
-
-function commitTriangleToTracker(tracker: DrawingTracker, sx: number, sy: number, ex: number, ey: number) {
-    const ctx = tracker['drawingCtx'];
-    const x2 = sx * 2 - ex;
-    const y2 = ey;
-    ctx.save();
-    ctx.strokeStyle = '#ff0000';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(ex, ey);
-    ctx.lineTo(x2, y2);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.restore();
-
-    tracker['addPixelsAlongLine'](sx, sy, ex, ey, 5);
-    tracker['addPixelsAlongLine'](ex, ey, x2, y2, 5);
-    tracker['addPixelsAlongLine'](x2, y2, sx, sy, 5);
 }
 
 //Wait for the window to load
@@ -128,98 +28,34 @@ window.addEventListener('load', () => {
     const laserBtn = document.getElementById('laser-toggle-container') as HTMLButtonElement;
     const drawBtn = document.getElementById('drawBtn') as HTMLButtonElement;
     const prepareBtn = document.getElementById('prepareBtn') as HTMLButtonElement;
+    
+    // Shape buttons
+    const penBtn = document.getElementById('penBtn') as HTMLButtonElement;
+    const squareBtn = document.getElementById('squareBtn') as HTMLButtonElement;
+    const circleBtn = document.getElementById('circleBtn') as HTMLButtonElement;
+    const triangleBtn = document.getElementById('triangleBtn') as HTMLButtonElement;
+    const lineBtn = document.getElementById('lineBtn') as HTMLButtonElement;
     const toggleButtons = document.querySelectorAll('#middle-icon-section .icon-btn');
 
     const sidebarButtons: NodeListOf<HTMLButtonElement> = document.querySelectorAll('.settings-sidebar .sidebar-btn');
     const settingsPanels: NodeListOf<HTMLElement> = document.querySelectorAll('.settings-main .settings-panel');
 
     let laserConfirmationTimeout: number | null = null;
-    let drawingState: 'idle' | 'drawing' | 'complete' = 'idle';
+    let drawingState: 'idle' | 'complete' = 'idle';
+    let selectedShape: ShapeType | null = null;
 
     //Canvas setup
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight; 
     ctx.font = "48px serif";
     let reader: any = null;
-   
 
     // Initialize drawing tracker
     let drawingTracker: DrawingTracker | null = null;
     const wsHandler = new WebSocketHandler(null);
 
-    // Tool State
-    let currentTool: "pen" | "square" | "circle" | "triangle" | "line" = "pen";
-    let isDrawingShape = false;
-    let startX = 0;
-    let startY = 0;
-    let shapeSnapshot: ImageData | null = null;
-
-
-
-    const toolButtons = {
-        penBtn: "pen",
-        squareBtn: "square",
-        circleBtn: "circle",
-        triangleBtn: "triangle",
-        lineBtn: "line",
-        };
-
-    Object.entries(toolButtons).forEach(([id, toolName]) => {
-        const btn = document.getElementById(id);
-        btn?.addEventListener("click", () => {
-            // Moved the turn on drawing logic to activate when penBtn is clicked instead
-            if (id === 'penBtn') {
-                if (!drawingTracker) return;
-
-                if (drawingState === 'idle') {
-                    // Start drawing
-                    drawingState = 'drawing';
-                    updateDrawButtonState();
-                    drawingTracker.clearDrawing();
-
-                    // Set up callback for when line is complete
-                    drawingTracker.enableDrawing(() => {
-                        drawingState = 'complete';
-                        updateDrawButtonState();
-                        prepareBtn.disabled = false;
-                    });
-
-                    // mark pen button as active
-                    Object.keys(toolButtons).forEach(b => document.getElementById(b)?.classList.remove('activeTool'));
-                    btn.classList.add('activeTool');
-                    currentTool = 'pen';
-                } else if (drawingState === 'complete') {
-                    // Clear the drawing
-                    drawingTracker.clearDrawing();
-                    drawingState = 'idle';
-                    updateDrawButtonState();
-                    btn.classList.remove('activeTool');
-                }
-                return;
-            }
-
-            // for the other drawing tools
-            if (drawingTracker?.isDrawingEnabled()) return;
-
-            currentTool = toolName as any;
-            Object.keys(toolButtons).forEach(b => document.getElementById(b)?.classList.remove('activeTool'));
-            btn.classList.add('activeTool');
-        });
-    });
-
-
-
     // --- Helper Functions ---
 
     const openSettings = (): void => {
-        if (drawingState === 'drawing') {
-            drawingTracker?.disableDrawing();
-            drawingTracker?.clearDrawing();
-            drawingState = 'idle';
-            updateDrawButtonState();
-        }
-        else if (drawingState === 'complete') {
-            // If drawing is complete, just clear
+        if (drawingState === 'complete') {
             drawingTracker?.clearDrawing();
             drawingState = 'idle';
             updateDrawButtonState();
@@ -303,19 +139,15 @@ window.addEventListener('load', () => {
         switch (drawingState) {
             case 'idle':
                 drawBtn.setAttribute('data-state', 'ready');
-                btnText.textContent = 'DRAW PATH';
-                executeBtn.disabled = true;
-                prepareBtn.disabled = true;
-                break;
-            case 'drawing':
-                drawBtn.setAttribute('data-state', 'drawing');
-                btnText.textContent = 'DRAWING...';
+                btnText.textContent = 'CLEAR PATH';
+                drawBtn.disabled = true;
                 executeBtn.disabled = true;
                 prepareBtn.disabled = true;
                 break;
             case 'complete':
                 drawBtn.setAttribute('data-state', 'clear');
                 btnText.textContent = 'CLEAR PATH';
+                drawBtn.disabled = false;
                 executeBtn.disabled = false;
                 prepareBtn.disabled = false;
                 break;
@@ -401,9 +233,10 @@ window.addEventListener('load', () => {
             // Initialize drawing tracker after video is ready
             drawingTracker = new DrawingTracker(canvas, video, `http://${window.location.hostname}:443`);
 
-            // Initially disable send button
+            // Initially disable buttons
             executeBtn.disabled = true;
             prepareBtn.disabled = true;
+            drawBtn.disabled = true;
         },
     });
 
@@ -448,187 +281,95 @@ window.addEventListener('load', () => {
         }
     }
 
-    // Handler for the draw button, which is now being used as the clear canvas button
+    // Handler for the clear button (formerly draw button)
     drawBtn.addEventListener('click', () => {
+        console.log('Clear button clicked');
         if (!drawingTracker) return;
-        drawingTracker.clearDrawing();
-        drawingState = 'idle';
-        updateDrawButtonState();
-        prepareBtn.disabled = true;
-        executeBtn.disabled = true;
-    });
 
-    // --- Batch mode state ---
-    let batchModeEnabled = true;
-    const processingModeCheckbox = document.getElementById('processing-mode') as HTMLInputElement;
-    if (processingModeCheckbox) {
-        batchModeEnabled = processingModeCheckbox.checked;
-        processingModeCheckbox.addEventListener('change', () => {
-            batchModeEnabled = processingModeCheckbox.checked;
-        });
-    }
-
-    // --- Shape drawing handlers ---
-    canvas.addEventListener("mousedown", (e) => {
-        // Only allow drawing if drawing mode is enabled and batch mode is on
-        if (!drawingTracker?.isDrawingEnabled() || !batchModeEnabled) return;
-        startX = e.offsetX;
-        startY = e.offsetY;
-        isDrawingShape = true;
-        takeShapeSnapshot();
-        if (currentTool === "pen") {
-            // ctx.beginPath();
-            // ctx.moveTo(startX, startY);
-            // drawingTracker.enableDrawing();
+        if (drawingState === 'complete') {
+            // Clear the drawing
+            drawingTracker.clearDrawing();
+            drawingState = 'idle';
+            updateDrawButtonState();
             
+            // Deselect all shape buttons
+            toggleButtons.forEach(btn => btn.classList.remove('selected'));
+            selectedShape = null;
         }
     });
 
-    canvas.addEventListener("mousemove", (e) => {
-        if (!isDrawingShape || !drawingTracker?.isDrawingEnabled) return;
-        const x = e.offsetX;
-        const y = e.offsetY;
-        restoreShapeSnapshot();
-        switch (currentTool) {
-            case "pen":
-                // drawingTracker.enableDrawing();
-                break;
-            case "square": drawSquare(ctx, startX, startY, x, y); break;
-            case "circle": drawCircle(ctx, startX, startY, x, y); break;
-            case "triangle": drawTriangle(ctx, startX, startY, x, y); break;
-            case "line": drawLine(ctx, startX, startY, x, y); break;
-        }
-    });
-
-    canvas.addEventListener("mouseup", (e) => {
-        if (!isDrawingShape || !drawingTracker) return;
-        const endX = e.offsetX;
-        const endY = e.offsetY;
-        if (currentTool === "circle") {
-            commitCircleToTracker(drawingTracker, startX, startY, endX, endY);
-        } else if (currentTool === "square") {
-            commitSquareToTracker(drawingTracker, startX, startY, endX, endY);
-        } else if (currentTool === "triangle") {
-            commitTriangleToTracker(drawingTracker, startX, startY, endX, endY);
-        } else if (currentTool === "line") {
-            commitLineToTracker(drawingTracker, startX, startY, endX, endY);
-        }
-        isDrawingShape = false;
-        shapeSnapshot = null;
-        drawingState = 'complete';
-        updateDrawButtonState();
-        prepareBtn.disabled = false; // Enable prepare after shape is drawn
-    });
-
-    // --- Only send coordinates when Prepare Path is clicked ---
-    prepareBtn.addEventListener('click', async () => {
-        if (!drawingTracker) return;
-        prepareBtn.disabled = true;
-        // try {
-        //     await drawingTracker.sendCoordinates();
-        //     // Optionally, enable executeBtn here
-        // } catch (e) {
-        //     prepareBtn.disabled = false;
-        // }
-    });
-
+    // Handler for the execute button
     executeBtn.addEventListener('click', async () => {
         if (!drawingTracker) return;
+
         executeBtn.disabled = true;
+        prepareBtn.disabled = true;
+
         try {
-            await drawingTracker.sendCoordinates();
-        } catch (e) {
-            executeBtn.disabled = false;
+            console.log('Sending coordinates to robot...');
+            const result = await drawingTracker.sendCoordinates();
+
+            // Clear the drawing after successful send
+            drawingTracker.clearDrawing();
+            drawingState = 'idle';
+            updateDrawButtonState();
+            closePrepareMenu();
+            
+            // Deselect all shape buttons
+            toggleButtons.forEach(btn => btn.classList.remove('selected'));
+            selectedShape = null;
         }
-        closePrepareMenu();
-        drawingTracker.clearDrawing();
-    });
-
-
-
-    toggleButtons.forEach(clickedButton => {
-        clickedButton.addEventListener('click', () => {
-
-            // Check if the clicked button is already selected
-            const isAlreadySelected = clickedButton.classList.contains('selected');
-
-            // 1. Remove 'selected' from ALL middle buttons
-            toggleButtons.forEach(btn => {
-                btn.classList.remove('selected');
-            });
-
-            // 2. If it wasn't already selected, add the class to it.
-            // (If it *was* selected, step 1 already deselected it,
-            // which creates the "toggle off" behavior)
-            if (!isAlreadySelected) {
-                clickedButton.classList.add('selected');
+        catch (e) {
+            console.error('Error sending coordinates:', e);
+            // Re-enable button on error
+            if (drawingState === 'complete') {
+                executeBtn.disabled = false;
+                prepareBtn.disabled = false;
             }
-        });
+        }
     });
 
-    function takeShapeSnapshot() {
-        shapeSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    // Shape button handlers
+    function handleShapeSelection(button: HTMLButtonElement, shape: ShapeType) {
+        // Check if the clicked button is already selected
+        const isAlreadySelected = button.classList.contains('selected');
+
+        // Remove 'selected' from all buttons
+        toggleButtons.forEach(btn => btn.classList.remove('selected'));
+
+        if (isAlreadySelected) {
+            // Deselect
+            selectedShape = null;
+            if (drawingTracker) {
+                drawingTracker.disableDrawing();
+            }
+        } else {
+            // Select new shape
+            button.classList.add('selected');
+            selectedShape = shape;
+            
+            if (drawingTracker) {
+                // Clear any existing drawing when selecting a new shape
+                drawingTracker.clearDrawing();
+                drawingState = 'idle';
+                updateDrawButtonState();
+                
+                // Enable drawing with the selected shape
+                drawingTracker.setShapeType(shape);
+                drawingTracker.enableDrawing(() => {
+                    // Callback when shape is complete
+                    drawingState = 'complete';
+                    updateDrawButtonState();
+                });
+            }
+        }
     }
 
-    function restoreShapeSnapshot() {
-        if (shapeSnapshot) ctx.putImageData(shapeSnapshot, 0, 0);
-    }
-
-    canvas.addEventListener("mousedown", (e) => {
-    if (drawingTracker?.isDrawingEnabled()) return;
-
-    startX = e.offsetX;
-    startY = e.offsetY;
-    isDrawingShape = true;
-
-    takeShapeSnapshot();
-
-    if (currentTool === "pen") {
-        ctx.beginPath();
-        ctx.moveTo(startX, startY);
-    }
-});
-
-canvas.addEventListener("mousemove", (e) => {
-    if (!isDrawingShape) return;
-
-    const x = e.offsetX;
-    const y = e.offsetY;
-
-    restoreShapeSnapshot();
-
-    switch (currentTool) {
-        case "pen":
-            ctx.lineTo(x, y);
-            ctx.stroke();
-            break;
-        case "square": drawSquare(ctx, startX, startY, x, y); break;
-        case "circle": drawCircle(ctx, startX, startY, x, y); break;
-        case "triangle": drawTriangle(ctx, startX, startY, x, y); break;
-        case "line": drawLine(ctx, startX, startY, x, y); break;
-    }
-});
-
-canvas.addEventListener("mouseup", async (e) => {
-    if (!isDrawingShape || !drawingTracker) return;
-
-    const endX = e.offsetX;
-    const endY = e.offsetY;
-
-    if (currentTool === "circle") {
-        commitCircleToTracker(drawingTracker, startX, startY, endX, endY);
-    } else if (currentTool === "square") {
-        commitSquareToTracker(drawingTracker, startX, startY, endX, endY);
-    } else if (currentTool === "triangle") {
-        commitTriangleToTracker(drawingTracker, startX, startY, endX, endY);
-    } else if (currentTool === "line") {
-        commitLineToTracker(drawingTracker, startX, startY, endX, endY);
-    }
-
-    isDrawingShape = false;
-    shapeSnapshot = null;
-});
-
+    penBtn.addEventListener('click', () => handleShapeSelection(penBtn, 'freehand'));
+    squareBtn.addEventListener('click', () => handleShapeSelection(squareBtn, 'square'));
+    circleBtn.addEventListener('click', () => handleShapeSelection(circleBtn, 'circle'));
+    triangleBtn.addEventListener('click', () => handleShapeSelection(triangleBtn, 'triangle'));
+    lineBtn.addEventListener('click', () => handleShapeSelection(lineBtn, 'line'));
 
     // Window event handlers
     window.addEventListener('beforeunload', () => {
