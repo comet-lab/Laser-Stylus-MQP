@@ -1,7 +1,8 @@
-import threading
+import threading, time
 
 class Camera:
-    def __init__(self, width, height, pix_Per_M):
+    def __init__(self, name, width, height, pix_Per_M):
+        self.name = name
         self.width = width
         self.height = height
         self.pix_Per_M = pix_Per_M
@@ -32,5 +33,8 @@ class Camera:
         
     def start_stream(self):
         self.thread_ready.set()
+        while not self.get_latest():
+            print(f"Waiting for {self.name} response...")
+            time.sleep(0.5)
     
     

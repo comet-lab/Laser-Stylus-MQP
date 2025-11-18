@@ -38,48 +38,38 @@ class Camera_Registration(System_Calibration):
         self.rgbd_cam.start_stream()
         
     def run(self): 
-        home_pose = robot_controller.get_home_pose()
+        debug = True
+        self.home_pose = self.robot_controller.load_edit_pose()
         start_pos = np.array([0,0,0.05]) # [m,m,m]
         target_pose = np.array([[1.0, 0, 0, start_pos[0]],
                                 [0,1,0,start_pos[1]],
                                 [0,0,1,start_pos[2]],
                                 [0,0,0,1]])
-        robot_controller.go_to_pose(target_pose@home_pose,1)
-       
-        while(True):
-            # image = self.rgbd_cam.get_latest()
-            img = self.rgbd_cam.get_latest()['color']
-            if img is None:
-                continue 
-            pixel = self.get_beam_pixel(img)
-            print(pixel)
-            cv2.circle(img, pixel, radius=5, color=(0, 255, 0), thickness=-1)
-            cv2.imshow("pixel marker", img)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
-                break
+        self.robot_controller.go_to_pose(target_pose@home_pose,1)
+        self.therm_cam.start_stream()
+        self.rgbd_cam.start_stream()
         
+        while not self.therm_cam.get_latest() or not self.rgbd_cam.get_latest():
+            print("Waiting for camera response...")
+            time.sleep(0.5)
         
-        
-        # debug = True
         # pathToCWD = os.getcwd()        
-        # homePose = self.robot_controller.load_edit_pose()
         
-        # # Create checkerboard
-        # img, imgPoints, obj_points = self.create_checkerboard(gridShape = np.array([9, 8]), \
-        #                                                     saveLocation=self.calibration_folder, debug=debug)
-        # self.laser_controller.set_output(False)
+        # Create checkerboard
+        img, imgPoints, obj_points = self.create_checkerboard(gridShape = np.array([9, 8]), \
+                                                            saveLocation=self.calibration_folder, debug=debug)
+        self.laser_controller.set_output(False)
         
-        # self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder, debug = debug)
-        # self.therm = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder, debug = debug)
+        self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder, debug = debug)
+        self.therm = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder, debug = debug)
         
-        # self.reprojection_test('color', gridShape = np.array([2, 2]), laserDuration = .15, \
-        #                 debug=debug, height=0)
+        self.reprojection_test('color', gridShape = np.array([2, 2]), laserDuration = .15, \
+                        debug=debug, height=0)
         
-        # self.reprojection_test('thermal', gridShape = np.array([2, 2]), laserDuration = .15, \
-        #                 debug=debug, height=0)
+        self.reprojection_test('thermal', gridShape = np.array([2, 2]), laserDuration = .15, \
+                        debug=debug, height=0)
         
-        # cam_obj.deinitialize_cam()
+        self.therm_cam.deinitialize_cam()
         # pass
     
     def create_checkerboard(self, gridShape = np.array([2, 6]), squareSize = 0.005, laserDuration = .15, debug=False, \
@@ -137,7 +127,7 @@ class Camera_Registration(System_Calibration):
             # print("Hottest pixel: ", laserPixelOld, "Centroid Pixel: ", laserPixel)
             
             ##rgbd image pixel
-            rgb_laser_pixel = self.get_beam_pixel(color_img, method="Centroid", threshold= 0.8)
+            rgb_laser_pixel = self.get_hot_pixel(color_img, method="Centroid")
             
         
             therm_img_points[:, i] = therm_laser_pixel
@@ -147,10 +137,15 @@ class Camera_Registration(System_Calibration):
             rgb_image_set[:, :, :, i] = color_img
             
             if debug:
-                cv2.imshow('Laser Spot', therm_img)
-                cv2.waitKey(500)
-                cv2.imshow('Laser Spot', color_img)
-                cv2.waitKey(500)
+                therm_img_copy = cv2.cvtColor(therm_img.copy(), cv2.COLOR_GRAY2BGR)
+                color_img_copy = color_img.copy()
+                cv2.circle(therm_img_copy, np.rint(therm_laser_pixel).astype(int), 5, (0, 255, 0), 2)   # green: laser
+                cv2.circle(color_img_copy, np.rint(rgb_laser_pixel).astype(int), 5, (0, 255, 0), 2)   #green
+
+                cv2.imshow('Thermal Laser Spot', therm_img_copy)
+                cv2.waitKey(1000)
+                cv2.imshow('color Laser Spot', color_img_copy)
+                cv2.waitKey(1000)
                 cv2.destroyAllWindows()
                 # print(laserPixel)
             

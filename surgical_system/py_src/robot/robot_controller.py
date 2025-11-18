@@ -58,7 +58,7 @@ class Robot_Controller():
         print("Moving to Pose ...")
         errorFlag1 = True
         errorFlag2 = True
-        while (errorFlag1 or errorFlag2) and iterations < maxIterations and not blocking:
+        while (errorFlag1 or errorFlag2) and iterations < maxIterations and blocking:
             time.sleep(.5)
             currPose = self.franka_client.send_pose(pose, 1)
             error = currPose[:3] - pose[:3, -1]
