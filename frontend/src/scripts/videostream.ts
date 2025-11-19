@@ -28,7 +28,7 @@ window.addEventListener('load', () => {
     const laserBtn = document.getElementById('laser-toggle-container') as HTMLButtonElement;
     const clearBtn = document.getElementById('clearBtn') as HTMLButtonElement;
     const prepareBtn = document.getElementById('prepareBtn') as HTMLButtonElement;
-    
+
     // Shape buttons
     const penBtn = document.getElementById('penBtn') as HTMLButtonElement;
     const squareBtn = document.getElementById('squareBtn') as HTMLButtonElement;
@@ -86,7 +86,7 @@ window.addEventListener('load', () => {
 
     settingsBtn.addEventListener('click', openSettings);
     settingsCloseBtn.addEventListener('click', closeSettings);
-    
+
 
     const openPrepareMenu = (): void => {
         overlay.classList.add('active');
@@ -113,7 +113,7 @@ window.addEventListener('load', () => {
         }
     });
 
-    
+
 
     sidebarButtons.forEach((button: HTMLButtonElement) => {
         button.addEventListener('click', () => {
@@ -291,7 +291,7 @@ window.addEventListener('load', () => {
             drawingTracker.clearDrawing();
             drawingState = 'idle';
             updateDrawButtonState();
-            
+
             // Deselect all shape buttons
             toggleButtons.forEach(btn => btn.classList.remove('selected'));
             selectedShape = null;
@@ -309,12 +309,19 @@ window.addEventListener('load', () => {
             console.log('Sending coordinates to robot...');
             const result = await drawingTracker.sendCoordinates();
 
+            if (result) {
+                console.log("Response from robot:", result); // <--- Restore the log you were missing
+                console.log(`Sent ${result.pixel_count} pixels successfully.`);
+            } else {
+                console.warn("No pixels were found to send.");
+            }
+
             // Clear the drawing after successful send
             drawingTracker.clearDrawing();
             drawingState = 'idle';
             updateDrawButtonState();
             closePrepareMenu();
-            
+
             // Deselect all shape buttons
             toggleButtons.forEach(btn => btn.classList.remove('selected'));
             selectedShape = null;
@@ -347,13 +354,13 @@ window.addEventListener('load', () => {
             // Select new shape
             button.classList.add('selected');
             selectedShape = shape;
-            
+
             if (drawingTracker) {
                 // Clear any existing drawing when selecting a new shape
                 drawingTracker.clearDrawing();
                 drawingState = 'idle';
                 updateDrawButtonState();
-                
+
                 // Enable drawing with the selected shape
                 drawingTracker.setShapeType(shape);
                 drawingTracker.enableDrawing(() => {

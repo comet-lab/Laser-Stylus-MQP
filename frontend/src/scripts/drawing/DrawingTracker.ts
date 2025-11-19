@@ -453,13 +453,27 @@ export class DrawingTracker {
         return this.drawingEnabled;
     }
 
+    // In DrawingTracker.ts
+
     public async sendCoordinates(): Promise<any> {
+        // 1. Safety check: Ensure video dimensions are loaded
+        if (this.video.videoWidth === 0 || this.video.videoHeight === 0) {
+            console.error("Video dimensions not loaded yet. Cannot calculate coordinates.");
+            return null;
+        }
+
         const pixels = Array.from(this.drawnPixels).map(key => {
             const [x, y] = key.split(',').map(Number);
             return { x, y };
         });
 
-        if (pixels.length === 0) return null;
+        // 2. Debug log to see if we actually have data
+        console.log(`Attempting to send ${pixels.length} points...`);
+
+        if (pixels.length === 0) {
+            console.warn("No pixels recorded in shape.");
+            return null;
+        }
 
         const videoPixels = pixels.map(p => ({
             x: p.x / this.canvas.width * this.video.videoWidth,
@@ -474,6 +488,8 @@ export class DrawingTracker {
             });
 
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            
+            // 3. Return the JSON so main.ts can alert the user
             return await response.json();
         } catch (error) {
             console.error('Error sending coordinates:', error);
