@@ -489,7 +489,7 @@ export class DrawingTracker {
 
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             
-            // 3. Return the JSON so main.ts can alert the user
+            // 3. Return the JSON so main script can alert the user
             return await response.json();
         } catch (error) {
             console.error('Error sending coordinates:', error);

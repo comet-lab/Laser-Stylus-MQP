@@ -291,10 +291,6 @@ window.addEventListener('load', () => {
             drawingTracker.clearDrawing();
             drawingState = 'idle';
             updateDrawButtonState();
-
-            // Deselect all shape buttons
-            toggleButtons.forEach(btn => btn.classList.remove('selected'));
-            selectedShape = null;
         }
     });
 
