@@ -1,6 +1,6 @@
 import pyrealsense2 as rs
 import numpy as np
-import cv2, threading, queue, time
+import cv2, threading, time
 if __name__=='__main__':
     from camera import Camera
 else:

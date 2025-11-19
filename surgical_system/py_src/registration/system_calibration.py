@@ -22,7 +22,7 @@ from laser_control.laser_arduino import Laser_Arduino
 class System_Calibration():
     def __init__(self, therm_cam: ThermalCam, rgbd_cam: RGBD_Cam, robot_controller: Robot_Controller, laser_controller:Laser_Arduino):
         self.pathToCWD = os.getcwd()
-        self.directory = self.pathToCWD + r"surgical_system/py_src/registration"
+        self.directory = self.pathToCWD + r"/surgical_system/py_src/registration"
         
         self.laser_controller = laser_controller
         self.robot_controller = robot_controller
@@ -49,7 +49,7 @@ class System_Calibration():
                             [0,0,1,roi_height],
                             [0,0,0,1]])
         self.robot_controller.go_to_pose(roi_pose @ self.home_pose)
-        rowROI, colROI = self.SelectROI(targetPose, cam_type)
+        rowROI, colROI = self.select_ROI(cam_type = cam_type)
         
         xPoints = (np.linspace(colROI[0], colROI[1], gridShape[0]))
         yPoints = (np.linspace(rowROI[0], rowROI[1], gridShape[1]))
@@ -64,7 +64,12 @@ class System_Calibration():
         
         imgCount = gridShape[0] * gridShape[1]
         laserPixelPoints = np.empty((2, imgCount))
-        imageSet = np.empty((startImage.shape[0], startImage.shape[1], imgCount))
+        if cam_type == "thermal":
+            imageSet = np.empty((startImage.shape[0], startImage.shape[1], imgCount))
+        elif cam_type == "color":
+            imageSet = np.empty((startImage.shape[0], startImage.shape[1], startImage.shape[2], imgCount))
+        else:
+            raise(f"Wrong camera type: {cam_type}")
         
         img_points = np.vstack((xValues.flatten(), yValues.flatten())).T.reshape(-1, 2)
         proj = cv2.perspectiveTransform(img_points.reshape(-1,1,2).astype(np.float32), M).reshape(-1,2) / pix_Per_M
@@ -79,15 +84,18 @@ class System_Calibration():
             self.laser_controller.set_output(True)
             time.sleep(laserDuration)
             self.laser_controller.set_output(False)
-            img = CameraCalibration.get_thermal_image(cam_obj)
-            img = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-
+            img = self.get_cam_latest(cam_type)
+            
             if cam_type == "thermal":
-                laserPixel = self.get_hot_pixel(img, method="Centroid")
-            else:
-                laserPixel = self.get_beam_pixel(img, method="Centroid")
+                img = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+
+
+            laserPixel = self.get_hot_pixel(img, method="Centroid")
             laserPixelPoints[:, i] = laserPixel
-            imageSet[:, :, i] = img
+            if cam_type == "thermal":
+                imageSet[:, :, i] = img
+            elif cam_type == "color":
+                imageSet[:, :, :, i] = img
             
             print("Laser Error [pixels]: ", np.linalg.norm(laserPixel - img_points[i, :]))
             # Prepare a color image for drawing
@@ -131,8 +139,7 @@ class System_Calibration():
         # laser_controller.set_output(0)
         # print("Laser Off")
         
-        image = cam_obj.get_latest()
-        image = image['thermal'] if cam_type == "thermal" else image["color"]
+        image = self.get_cam_latest(cam_type)
         # im = (image_list[4] - image_list[4].min())
         # im = np.array(im*255.0/im.max(),dtype=np.uint8)
         bbox = cv2.selectROI('select', image)
@@ -140,6 +147,10 @@ class System_Calibration():
         colROI = [bbox[0], bbox[0]+bbox[2]]
         cv2.destroyWindow('select')
         return rowROI, colROI
+    
+    def get_cam_latest(self, cam_type):
+        cam_obj = self.get_cam_obj(cam_type)
+        return cam_obj.get_latest()[cam_type]
         
     def get_cam_obj(self, cam_type = "color"):
         if cam_type == "color" or "depth":

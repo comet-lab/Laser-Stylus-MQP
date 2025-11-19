@@ -31,9 +31,9 @@ else:
 class Camera_Registration(System_Calibration):
     def __init__(self, therm_cam: ThermalCam, rgbd_cam: RGBD_Cam, robot_controller: Robot_Controller, laser_controller:Laser_Arduino):
         super().__init__(therm_cam, rgbd_cam, robot_controller, laser_controller)
-        self.calibration_folder = "calibration_info/"
-        self.rgb_cali_folder = "calibration_info/rgb/"
-        self.therm_cali_folder = "calibration_info/thermal/"
+        self.calibration_folder = "/calibration_info"
+        self.rgb_cali_folder = "/calibration_info/rgb_cali/"
+        self.therm_cali_folder = "/calibration_info/thermal_cali/"
         self.therm_cam.start_stream()
         self.rgbd_cam.start_stream()
         
@@ -56,17 +56,18 @@ class Camera_Registration(System_Calibration):
         # pathToCWD = os.getcwd()        
         
         # Create checkerboard
-        img, imgPoints, obj_points = self.create_checkerboard(gridShape = np.array([9, 8]), \
-                                                            saveLocation=self.calibration_folder, debug=debug)
+        # self.create_checkerboard(gridShape = np.array([9, 8]), \
+        #                          saveLocation=self.calibration_folder, debug=debug)
+        
         self.laser_controller.set_output(False)
         
         self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder, debug = debug)
-        self.therm = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder, debug = debug)
+        self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder, debug = debug)
         
-        self.reprojection_test('color', gridShape = np.array([2, 2]), laserDuration = .15, \
+        self.reprojection_test('color', self.rgb_M, gridShape = np.array([2, 2]), laserDuration = .15, \
                         debug=debug, height=0)
         
-        self.reprojection_test('thermal', gridShape = np.array([2, 2]), laserDuration = .15, \
+        self.reprojection_test('thermal', self.therm_M, gridShape = np.array([2, 2]), laserDuration = .15, \
                         debug=debug, height=0)
         
         self.therm_cam.deinitialize_cam()
@@ -157,21 +158,21 @@ class Camera_Registration(System_Calibration):
             cv2.destroyAllWindows()
         
         
-        therm_saveLocation = self.directory + saveLocation + "thermal_cali/"
+        therm_saveLocation = self.directory + saveLocation + "/thermal_cali/"
         therm_save_dir = Path(therm_saveLocation)      
         therm_save_dir.mkdir(parents=True, exist_ok=True) 
         
-        rgb_saveLocation = saveLocation + "rgb_cali/"
+        rgb_saveLocation = self.directory + saveLocation + "/rgb_cali/"
         rgb_saveLocation = Path(rgb_saveLocation)      
         rgb_saveLocation.mkdir(parents=True, exist_ok=True) 
 
         np.savetxt(therm_save_dir / "laser_spots.csv",        therm_img_points.T, delimiter=",")
         np.savetxt(therm_save_dir / "laser_world_points.csv", obj_Points,          delimiter=",")
         
-        np.savetxt(rgb_saveLocation / "laser_spots.csv",        therm_img_points.T, delimiter=",")
+        np.savetxt(rgb_saveLocation / "laser_spots.csv",        rgb_img_points.T, delimiter=",")
         np.savetxt(rgb_saveLocation / "laser_world_points.csv", obj_Points,          delimiter=",")
         # np.save    (save_dir / "laser_spots.npy",       therm_image_set)
-        return combinedImg, therm_img_points, obj_Points
+        return combinedImg, therm_img_points, rgb_img_points, obj_Points
 
 
 
