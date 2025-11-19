@@ -3,17 +3,18 @@ import websockets
 import os
 
 class BackendConnection():
-    def __init__(self, send_fn, recv_fn, mocking):
+    def __init__(self, send_fn, recv_fn, mocking, refresh_ms = 50):
         self.send_fn = send_fn
         self.recv_fn = recv_fn
         self.mocking = mocking
+        self.refresh_ms = refresh_ms
 
     async def _send_loop(self, websocket):
         while True:
             msg = self.send_fn()
             if msg is not None:
                 await websocket.send(msg)
-            await asyncio.sleep(5)
+            await asyncio.sleep(self.refresh_ms / 1000.0)
 
     async def _recieve_loop(self, websocket):
         async for message in websocket:

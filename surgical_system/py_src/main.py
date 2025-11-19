@@ -1,10 +1,12 @@
 import os, time, sys, warnings
+import json
 import cv2
 import numpy as np
 import asyncio
 import websockets
 import time
 from scipy.spatial.transform import Rotation
+from robot.robot import RobotSchema
 
 # Classes
 mock_robot = os.getenv("MOCK_ROBOT", "0") == "1"
@@ -15,7 +17,7 @@ if(not mock_robot):
     from cameras.RGBD_cam import RGBD_Cam
     from laser_control.laser_arduino import Laser_Arduino
 else:
-    from robot.mock_franka_client import MockFrankaClient
+    from robot.mock_franka_client import MockRobotController
     from cameras.mock_camera import MockCamera
 
 from cameras.broadcast import Broadcast
@@ -31,16 +33,16 @@ async def main():
     #------------------------------ Robot Config ------------------------------------#
     ##################################################################################
     # Create FrankaNode object for controlling robot
-    # robot_controller = Robot_Controller() if not mock_robot else MockFrankaClient()
-    # TODO fix running in container
-    # home_pose = robot_controller.load_home_pose()
-    # start_pos = np.array([0,0,0.35]) # [m,m,m]
-    # target_pose = np.array([[1.0, 0, 0, start_pos[0]],
-    #                         [0,1,0,start_pos[1]],
-    #                         [0,0,1,start_pos[2]],
-    #                         [0,0,0,1]])
-    # robot_controller.goToPose(target_pose@home_pose,1) # Send robot to start position
-    # time.sleep(2)
+    robot_controller = Robot_Controller() if not mock_robot else MockRobotController()
+    home_pose = robot_controller.load_home_pose()
+    start_pos = np.array([0,0,0.35]) # [m,m,m]
+    target_pose = np.array([[1.0, 0, 0, start_pos[0]],
+                            [0,1,0,start_pos[1]],
+                            [0,0,1,start_pos[2]],
+                            [0,0,0,1]])
+    robot_controller.go_to_pose(target_pose@home_pose,1) # Send robot to start position
+    desired_state = RobotSchema()
+    await asyncio.sleep(2)
     
     ##################################################################################
     #--------------------------- Thermal Cam Config ---------------------------------#
@@ -54,7 +56,7 @@ async def main():
     # free beam laser spot.
     therm_cam = None
     if(not mock_robot):
-        therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frameRate="Rate50Hz",focalDistance=0.2)
+        therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frame_rate="Rate50Hz",focal_distance=0.2)
     else:
         therm_cam = MockCamera()
     
@@ -68,6 +70,7 @@ async def main():
     #-------------------------------- Laser Config ----------------------------------#
     ##################################################################################
     
+    # laser_obj = None
     if(not mock_robot):
         laser_obj = Laser_Arduino()  # controls whether laser is on or off
         laser_on = False
@@ -77,10 +80,24 @@ async def main():
     ##################################################################################
     #----------------------------- Backend Connection -------------------------------#
     ##################################################################################
+
+    def send_fn() -> str:
+        current_state = robot_controller.get_current_pose()
+        return RobotSchema.from_pose(current_state@np.linalg.inv(home_pose)).to_str()
+    
+    def recv_fn(msg: str):
+        data = json.loads(msg)
+        desired_state.update(data)
+        desired_task_pose = desired_state.to_mat()
+        desired_robot_pose = desired_task_pose@home_pose
+        robot_controller.go_to_pose(desired_robot_pose)
+        # TODO enable/disable laser
+        # laser_obj.set_output(desired_pose.isLaserOn)
+
     
     backend_connection = BackendConnection(
-        send_fn=lambda: "Hello from robot!",
-        recv_fn=lambda msg: print("Server sent: " + msg),
+        send_fn=send_fn,
+        recv_fn=recv_fn,
         mocking=mock_robot
     )
     asyncio.create_task(backend_connection.connect_to_websocket())
@@ -105,9 +122,9 @@ async def main():
         # rgbd_cam.display_all_streams() #Test Streaming
         img = therm_cam.get_latest()
         await asyncio.sleep(0.01)
-        if img is None:
+        if img is None or not 'thermal' in img.keys():
             continue
-        img = img['image']
+        img = img['thermal']
         max = np.max(img)
         img = img / max
         img = img * 254
