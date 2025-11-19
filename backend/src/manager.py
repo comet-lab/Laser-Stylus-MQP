@@ -33,7 +33,6 @@ class ConnectionManager:
                 self.disconnect(connection)
 
     async def broadcast_to_group(self, group: ConnectionGroup, message):
-        print(f"{message} -> {group.__getattribute__('name')}")
         for connection in group:
             try:
                 await connection.send_text(message)
@@ -49,10 +48,10 @@ class ConnectionManager:
                 data = await websocket.receive_text()
                 try:
                     message = json.loads(data)
-                    print(f"{connection_group.name} -> {message}")
                     
                     if not isinstance(message, dict):
-                        await websocket.send_text("Error: Invalid JSON format")
+                        print("Error: Invalid JSON format")
+                        print(message)
                         continue    
 
                     # Update the robot's state
@@ -64,9 +63,10 @@ class ConnectionManager:
                     await self.broadcast_to_group(forwarding_group, state.to_str())
 
                 except json.JSONDecodeError:
-                    await websocket.send_text("Error: Invalid JSON format")
+                    print("Error: Invalid JSON format")
+                    print(message)
 
         except WebSocketDisconnect:
             self.disconnect(websocket)
-            await self.broadcast_to_group(self.robot_connections, self.desired_state.to_str())
             print("Websocket disconnected. Sending signals to turn laser off")
+            await self.broadcast_to_group(self.robot_connections, self.desired_state.to_str())
