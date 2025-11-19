@@ -38,14 +38,6 @@ document.addEventListener('DOMContentLoaded', () => {
      * It's called by the WebSocket handler and the fetch button.
      */
     function syncUiToState(state: Partial<WebSocketMessage>) {
-        // Update sliders (only if values are present)
-        if (state.x !== undefined) x_input.value = String(state.x);
-        if (state.y !== undefined) y_input.value = String(state.y);
-        if (state.z !== undefined) z_input.value = String(state.z);
-        if (state.rx !== undefined) rx_input.value = String(state.rx);
-        if (state.ry !== undefined) ry_input.value = String(state.ry);
-        if (state.rz !== undefined) rz_input.value = String(state.rz);
-
         // Update laser button (only if laser state is present)
         if (state.isLaserOn !== undefined) {
             const newLaserState = !!state.isLaserOn;
