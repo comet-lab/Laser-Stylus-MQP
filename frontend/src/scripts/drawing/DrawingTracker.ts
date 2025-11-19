@@ -278,6 +278,10 @@ export class DrawingTracker {
             }
         }
 
+        if (this.drawnPixels.size > 0) {
+            return;
+        }
+
         // 3. Start new drawing
         this.isDrawing = true;
         this.startPos = pos;

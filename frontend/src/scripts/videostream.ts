@@ -26,7 +26,7 @@ window.addEventListener('load', () => {
     const ctx = canvas.getContext("2d")!;
     const robotBtn = document.getElementById('robot-toggle-container') as HTMLButtonElement;
     const laserBtn = document.getElementById('laser-toggle-container') as HTMLButtonElement;
-    const drawBtn = document.getElementById('drawBtn') as HTMLButtonElement;
+    const clearBtn = document.getElementById('clearBtn') as HTMLButtonElement;
     const prepareBtn = document.getElementById('prepareBtn') as HTMLButtonElement;
     
     // Shape buttons
@@ -62,7 +62,7 @@ window.addEventListener('load', () => {
         }
 
         // Disable all controls
-        [drawBtn, prepareBtn, robotBtn, laserBtn].forEach(btn => {
+        [clearBtn, prepareBtn, robotBtn, laserBtn].forEach(btn => {
             btn.disabled = true;
         });
 
@@ -79,7 +79,7 @@ window.addEventListener('load', () => {
         settingsPopup.classList.remove('active');
         overlay.classList.remove('active');
 
-        [drawBtn, robotBtn, laserBtn].forEach(btn => {
+        [clearBtn, robotBtn, laserBtn].forEach(btn => {
             btn.disabled = false;
         });
     };
@@ -134,20 +134,20 @@ window.addEventListener('load', () => {
     });
 
     function updateDrawButtonState() {
-        const btnText = drawBtn.querySelector('.btn-text')!;
+        const btnText = clearBtn.querySelector('.btn-text')!;
 
         switch (drawingState) {
             case 'idle':
-                drawBtn.setAttribute('data-state', 'ready');
+                clearBtn.setAttribute('data-state', 'ready');
                 btnText.textContent = 'CLEAR PATH';
-                drawBtn.disabled = true;
+                clearBtn.disabled = true;
                 executeBtn.disabled = true;
                 prepareBtn.disabled = true;
                 break;
             case 'complete':
-                drawBtn.setAttribute('data-state', 'clear');
+                clearBtn.setAttribute('data-state', 'clear');
                 btnText.textContent = 'CLEAR PATH';
-                drawBtn.disabled = false;
+                clearBtn.disabled = false;
                 executeBtn.disabled = false;
                 prepareBtn.disabled = false;
                 break;
@@ -236,7 +236,7 @@ window.addEventListener('load', () => {
             // Initially disable buttons
             executeBtn.disabled = true;
             prepareBtn.disabled = true;
-            drawBtn.disabled = true;
+            clearBtn.disabled = true;
         },
     });
 
@@ -282,7 +282,7 @@ window.addEventListener('load', () => {
     }
 
     // Handler for the clear button (formerly draw button)
-    drawBtn.addEventListener('click', () => {
+    clearBtn.addEventListener('click', () => {
         console.log('Clear button clicked');
         if (!drawingTracker) return;
 
