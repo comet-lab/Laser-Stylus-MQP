@@ -38,14 +38,6 @@ document.addEventListener('DOMContentLoaded', () => {
      * It's called by the WebSocket handler and the fetch button.
      */
     function syncUiToState(state: Partial<WebSocketMessage>) {
-        // Update sliders (only if values are present)
-        if (state.x !== undefined) x_input.value = String(state.x);
-        if (state.y !== undefined) y_input.value = String(state.y);
-        if (state.z !== undefined) z_input.value = String(state.z);
-        if (state.rx !== undefined) rx_input.value = String(state.rx);
-        if (state.ry !== undefined) ry_input.value = String(state.ry);
-        if (state.rz !== undefined) rz_input.value = String(state.rz);
-
         // Update laser button (only if laser state is present)
         if (state.isLaserOn !== undefined) {
             const newLaserState = !!state.isLaserOn;
@@ -58,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const wsHandler = new WebSocketHandler(wsOutput);
     // implemented the following line of code so that the console has access to the handler
     // then I can do wsHandler.disconnect() and wsHandler.connect() to test that it properly turns the laser off
-    //(window as any).wsHandler = wsHandler;
+    // (window as any).wsHandler = wsHandler;
     
     // Assign the callback *before* connecting.
     // This function will run every time the backend broadcasts a new state.
