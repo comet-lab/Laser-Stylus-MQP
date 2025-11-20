@@ -109,6 +109,7 @@ async def main():
         # TODO enable/disable laser
         # laser_obj.set_output(desired_pose.isLaserOn)
 
+    # TODO this is a hotfix, overload update to accept a robot schema
     desired_state.update(asdict(RobotSchema.from_pose(robot_controller.get_current_pose()@np.linalg.inv(home_pose))))
 
     backend_connection = BackendConnection(
