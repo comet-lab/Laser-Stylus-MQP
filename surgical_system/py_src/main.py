@@ -108,8 +108,6 @@ async def main():
         # TODO enable/disable laser
         # laser_obj.set_output(desired_pose.isLaserOn)
 
-    send_fn()
-    
     backend_connection = BackendConnection(
         send_fn=send_fn,
         recv_fn=recv_fn,
