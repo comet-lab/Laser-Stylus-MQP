@@ -8,6 +8,7 @@ import websockets
 import time
 from scipy.spatial.transform import Rotation
 from robot.robot import RobotSchema
+from dataclasses import dataclass, asdict
 
 # Classes
 mock_robot = os.getenv("MOCK_ROBOT", "0") == "1"
@@ -107,6 +108,8 @@ async def main():
         
         # TODO enable/disable laser
         # laser_obj.set_output(desired_pose.isLaserOn)
+
+    desired_state.update(asdict(RobotSchema.from_pose(robot_controller.get_current_pose()@np.linalg.inv(home_pose))))
 
     backend_connection = BackendConnection(
         send_fn=send_fn,
