@@ -1,6 +1,7 @@
 import os, time, sys, warnings
 import json
 import cv2
+import base64
 import numpy as np
 import asyncio
 import websockets
@@ -83,17 +84,31 @@ async def main():
 
     def send_fn() -> str:
         current_state = robot_controller.get_current_pose()
+        # TODO send other status (laser on, current path, etc)
         return RobotSchema.from_pose(current_state@np.linalg.inv(home_pose)).to_str()
     
     def recv_fn(msg: str):
         data = json.loads(msg)
         desired_state.update(data)
-        desired_task_pose = desired_state.to_mat()
-        desired_robot_pose = desired_task_pose@home_pose
-        robot_controller.go_to_pose(desired_robot_pose)
+        if(desired_state.raster_mask is not None):
+            # Do raster 
+            image_bytes = desired_state.raster_mask.encode('utf-8')
+            numpy_array = np.frombuffer(image_bytes, np.uint8)
+            cv2.imdecode(numpy_array, cv2.IMREAD_COLOR)
+            print("recieved raster png")
+        elif(desired_state.path is not None and len(desired_state.path) > 1):
+            # Do path
+            target = desired_state.path.pop(0)
+            desired_state.z = 0
+            desired_state.update(data=target)
+
+        # TODO keep looping
+        desired_state.go_to_pose(home_t=home_pose, robot_controller=robot_controller)
+        
         # TODO enable/disable laser
         # laser_obj.set_output(desired_pose.isLaserOn)
 
+    send_fn()
     
     backend_connection = BackendConnection(
         send_fn=send_fn,
@@ -120,15 +135,19 @@ async def main():
     
     while (True):
         # rgbd_cam.display_all_streams() #Test Streaming
-        img = therm_cam.get_latest()
+        latest = therm_cam.get_latest()
         await asyncio.sleep(0.01)
-        if img is None or not 'thermal' in img.keys():
-            continue
-        img = img['thermal']
-        max = np.max(img)
-        img = img / max
-        img = img * 254
-        
+        img = None
+        if latest is not None:
+            if('themal') in latest.keys():
+                img = latest['thermal']
+                max = np.max(img)
+                img = img / max
+                img = img * 254
+            elif('image') in latest.keys():
+                img = latest['image']
+            else:
+                continue
         if(b.connected):
             b.publish_frame(img)
         else:

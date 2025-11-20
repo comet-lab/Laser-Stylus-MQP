@@ -32,10 +32,10 @@ class ConnectionManager:
             except Exception:
                 self.disconnect(connection)
 
-    async def broadcast_to_group(self, group: ConnectionGroup, message):
+    async def broadcast_to_group(self, group: ConnectionGroup, state: RobotSchema):
         for connection in group:
             try:
-                await connection.send_text(message)
+                await connection.send_text(state.flush())
             except Exception:
                 self.disconnect(connection)
 
@@ -62,7 +62,7 @@ class ConnectionManager:
                         continue    
                     # this updates only the keys that are sent from the frontend
                     state.update(message)
-                    await self.broadcast_to_group(forwarding_group, state.to_str())
+                    await self.broadcast_to_group(forwarding_group, state)
 
                 except json.JSONDecodeError:
                     print("Error: Invalid JSON format")
@@ -71,4 +71,4 @@ class ConnectionManager:
         except WebSocketDisconnect:
             self.disconnect(websocket)
             print("Websocket disconnected. Sending signals to turn laser off")
-            await self.broadcast_to_group(self.robot_connections, self.desired_state.to_str())
+            await self.broadcast_to_group(self.robot_connections, self.desired_state)
