@@ -1,5 +1,5 @@
 // DrawingTracker.ts
-import { Position, ShapeType, Shape, HandleType, DragOffsets, DrawingMode, RealTimeCallbacks } from './types';
+import { Position, ShapeType, Shape, HandleType, DragOffsets } from './types';
 import * as Utils from './utils';
 
 export class DrawingTracker {
@@ -9,14 +9,14 @@ export class DrawingTracker {
     private drawnPixels: Set<string>;
     private isDrawing: boolean = false;
     private drawingEnabled: boolean = false;
-
+    
     // State
     private lastPos: Position | null = null;
     private startPos: Position | null = null;
     private currentPos: Position | null = null;
     private shapeType: ShapeType = 'freehand';
     private currentShape: Shape | null = null;
-
+    
     // Edit Mode State
     private showHandles: boolean = false;
     private selectedHandle: HandleType = null;
@@ -25,10 +25,6 @@ export class DrawingTracker {
     // Off-screen canvas
     private drawingCanvas: HTMLCanvasElement;
     private drawingCtx: CanvasRenderingContext2D;
-
-    //Drawing Modes
-    private mode: DrawingMode = 'batch';
-    private realTimeCallbacks: RealTimeCallbacks | null = null;
 
     // Config
     private apiBaseUrl: string;
@@ -87,7 +83,7 @@ export class DrawingTracker {
 
         // 1. Check handle dots
         for (const [key, handlePos] of Object.entries(handles)) {
-            if (Math.abs(pos.x - handlePos.x) <= this.HANDLE_HIT_AREA &&
+            if (Math.abs(pos.x - handlePos.x) <= this.HANDLE_HIT_AREA && 
                 Math.abs(pos.y - handlePos.y) <= this.HANDLE_HIT_AREA) {
                 return key as HandleType;
             }
@@ -98,7 +94,7 @@ export class DrawingTracker {
         const center = { x: bbox.centerX, y: bbox.centerY };
         const unrotatedMouse = Utils.rotatePoint(pos, center, -this.currentShape.rotation);
 
-        if (unrotatedMouse.x >= bbox.minX && unrotatedMouse.x <= bbox.maxX &&
+        if (unrotatedMouse.x >= bbox.minX && unrotatedMouse.x <= bbox.maxX && 
             unrotatedMouse.y >= bbox.minY && unrotatedMouse.y <= bbox.maxY) {
             return 'move';
         }
@@ -215,14 +211,14 @@ export class DrawingTracker {
             this.addPixelsToSet(startPos.x, startPos.y, endPos.x, endPos.y);
             return;
         }
-
+        
         if (type === 'circle') {
             const bbox = Utils.getLocalBoundingBox(shape);
             const radius = Math.min(bbox.width, bbox.height) / 2;
             const steps = Math.max(120, Math.floor(radius * 2));
             let prevX = Math.floor(bbox.centerX + radius);
             let prevY = Math.floor(bbox.centerY);
-
+            
             for (let i = 1; i <= steps; i++) {
                 const angle = (i / steps) * 2 * Math.PI;
                 const x = Math.floor(bbox.centerX + radius * Math.cos(angle));
@@ -238,7 +234,7 @@ export class DrawingTracker {
         const vertices = Utils.getShapeVertices(shape);
         for (let i = 0; i < vertices.length; i++) {
             const p1 = vertices[i];
-            const p2 = vertices[(i + 1) % vertices.length];
+            const p2 = vertices[(i + 1) % vertices.length]; 
             this.addPixelsToSet(p1.x, p1.y, p2.x, p2.y);
         }
     }
@@ -246,224 +242,164 @@ export class DrawingTracker {
     // --- Event Handlers ---
 
     private handlePointerDown(e: PointerEvent): void {
-        //Real-time Logic
-        if (this.mode === 'realtime') {
-            if (!this.drawingEnabled) return;
+        if (!this.drawingEnabled) return;
+        e.preventDefault();
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
 
-            //WOULD VERIFY THAT LASER IS ON BEFORE ALLOWING PATH
-            /*
-            if (!this.isLaserOn) {
-                console.warn("Cannot draw: Laser is OFF");
+        const pos = this.getPointerPos(e);
+
+        // 1. Try to select/manipulate existing shape
+        if (this.showHandles && this.currentShape) {
+            const handle = this.getHandleAtPosition(pos);
+            if (handle) {
+                this.selectedHandle = handle;
+                if (handle === 'move') {
+                    this.dragOffsets = {
+                        start: { x: pos.x - this.currentShape.startPos.x, y: pos.y - this.currentShape.startPos.y },
+                        end: { x: pos.x - this.currentShape.endPos.x, y: pos.y - this.currentShape.endPos.y }
+                    };
+                } 
+                return;
+            } else {
+                // Clicked outside handles, deselect
+                this.showHandles = false;
+                this.redraw();
                 return;
             }
-            */
-            e.preventDefault();
-            (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        }
 
-            this.isDrawing = true;
-            this.startPos = this.getPointerPos(e);
+        // 2. Check if we clicked a shape to select it (if not currently selected)
+        if (this.currentShape && !this.showHandles) {
+            const handle = this.getHandleAtPosition(pos);
+            if (handle === 'move') {
+                this.showHandles = true;
+                this.redraw();
+                return;
+            }
+        }
 
-            this.drawingCtx.beginPath();
-            this.drawingCtx.moveTo(this.startPos.x, this.startPos.y);
-
-            if (this.realTimeCallbacks) this.realTimeCallbacks.onStart();
+        if (this.drawnPixels.size > 0) {
             return;
         }
-        //Batch Logic
-        else if (this.mode === 'batch') {
-            if (!this.drawingEnabled) return;
-            e.preventDefault();
-            (e.target as HTMLElement).setPointerCapture(e.pointerId);
 
-            const pos = this.getPointerPos(e);
+        // 3. Start new drawing
+        this.isDrawing = true;
+        this.startPos = pos;
+        this.lastPos = pos;
+        this.currentPos = pos;
 
-            // 1. Try to select/manipulate existing shape
-            if (this.showHandles && this.currentShape) {
-                const handle = this.getHandleAtPosition(pos);
-                if (handle) {
-                    this.selectedHandle = handle;
-                    if (handle === 'move') {
-                        this.dragOffsets = {
-                            start: { x: pos.x - this.currentShape.startPos.x, y: pos.y - this.currentShape.startPos.y },
-                            end: { x: pos.x - this.currentShape.endPos.x, y: pos.y - this.currentShape.endPos.y }
-                        };
-                    }
-                    return;
-                } else {
-                    // Clicked outside handles, deselect
-                    this.showHandles = false;
-                    this.redraw();
-                    return;
-                }
-            }
-
-            // 2. Check if we clicked a shape to select it (if not currently selected)
-            if (this.currentShape && !this.showHandles) {
-                const handle = this.getHandleAtPosition(pos);
-                if (handle === 'move') {
-                    this.showHandles = true;
-                    this.redraw();
-                    return;
-                }
-            }
-
-            if (this.drawnPixels.size > 0) {
-                return;
-            }
-
-            // 3. Start new drawing
-            this.isDrawing = true;
-            this.startPos = pos;
-            this.lastPos = pos;
-            this.currentPos = pos;
-
-            if (this.shapeType === 'freehand') {
-                this.drawingCtx.beginPath();
-                this.drawingCtx.moveTo(pos.x, pos.y);
-                this.addPixelsToSet(pos.x, pos.y, pos.x, pos.y);
-                this.currentShape = null;
-            }
+        if (this.shapeType === 'freehand') {
+            this.drawingCtx.beginPath();
+            this.drawingCtx.moveTo(pos.x, pos.y);
+            this.addPixelsToSet(pos.x, pos.y, pos.x, pos.y);
+            this.currentShape = null;
         }
     }
 
     private handlePointerMove(e: PointerEvent): void {
-        //Real-time Logic
-        if (this.mode === 'realtime') {
-            if (!this.drawingEnabled || !this.isDrawing) return;
-            e.preventDefault();
-            
-            const pos = this.getPointerPos(e);
-            
-            this.drawingCtx.lineTo(pos.x, pos.y);
-            this.drawingCtx.stroke();
-            
-            if (this.realTimeCallbacks) {
-                 const vidX = pos.x / this.canvas.width * this.video.videoWidth;
-                 const vidY = pos.y / this.canvas.height * this.video.videoHeight;
-                 this.realTimeCallbacks.onMove(vidX, vidY);
+        if (!this.drawingEnabled) return;
+        e.preventDefault();
+        const pos = this.getPointerPos(e);
+
+        // Handle Transformations
+        if (this.selectedHandle && this.currentShape) {
+            const bbox = Utils.getLocalBoundingBox(this.currentShape);
+            const center = { x: bbox.centerX, y: bbox.centerY };
+
+            if (this.selectedHandle === 'move' && this.dragOffsets) {
+                this.currentShape.startPos.x = pos.x - this.dragOffsets.start.x;
+                this.currentShape.startPos.y = pos.y - this.dragOffsets.start.y;
+                this.currentShape.endPos.x = pos.x - this.dragOffsets.end.x;
+                this.currentShape.endPos.y = pos.y - this.dragOffsets.end.y;
+            } 
+            else if (this.selectedHandle === 'rot') {
+                const angle = Math.atan2(pos.y - center.y, pos.x - center.x);
+                this.currentShape.rotation = angle + Math.PI / 2;
             }
-            return; 
-        }
-        //Batch Logic
-        else if (this.mode === 'batch') {
-            if (!this.drawingEnabled) return;
-            e.preventDefault();
-            const pos = this.getPointerPos(e);
+            else {
+                // Symmetric Resizing Logic
+                const unrotatedPos = Utils.rotatePoint(pos, center, -this.currentShape.rotation);
+                const halfWidth = Math.abs(unrotatedPos.x - center.x);
+                const halfHeight = Math.abs(unrotatedPos.y - center.y);
 
-            // Handle Transformations
-            if (this.selectedHandle && this.currentShape) {
-                const bbox = Utils.getLocalBoundingBox(this.currentShape);
-                const center = { x: bbox.centerX, y: bbox.centerY };
-
-                if (this.selectedHandle === 'move' && this.dragOffsets) {
-                    this.currentShape.startPos.x = pos.x - this.dragOffsets.start.x;
-                    this.currentShape.startPos.y = pos.y - this.dragOffsets.start.y;
-                    this.currentShape.endPos.x = pos.x - this.dragOffsets.end.x;
-                    this.currentShape.endPos.y = pos.y - this.dragOffsets.end.y;
-                }
-                else if (this.selectedHandle === 'rot') {
-                    const angle = Math.atan2(pos.y - center.y, pos.x - center.x);
-                    this.currentShape.rotation = angle + Math.PI / 2;
-                }
-                else {
-                    // Symmetric Resizing Logic
-                    const unrotatedPos = Utils.rotatePoint(pos, center, -this.currentShape.rotation);
-                    const halfWidth = Math.abs(unrotatedPos.x - center.x);
-                    const halfHeight = Math.abs(unrotatedPos.y - center.y);
-
-                    if (this.currentShape.type === 'circle') {
-                        const radius = Math.max(halfWidth, halfHeight);
-                        this.currentShape.startPos = { x: center.x - radius, y: center.y - radius };
-                        this.currentShape.endPos = { x: center.x + radius, y: center.y + radius };
-                    } else {
-                        if (['nw', 'ne', 'sw', 'se', 'e', 'w'].includes(this.selectedHandle)) {
-                            this.currentShape.startPos.x = center.x - halfWidth;
-                            this.currentShape.endPos.x = center.x + halfWidth;
-                        }
-                        if (['nw', 'ne', 'sw', 'se', 'n', 's'].includes(this.selectedHandle)) {
-                            this.currentShape.startPos.y = center.y - halfHeight;
-                            this.currentShape.endPos.y = center.y + halfHeight;
-                        }
+                if (this.currentShape.type === 'circle') {
+                     const radius = Math.max(halfWidth, halfHeight);
+                     this.currentShape.startPos = { x: center.x - radius, y: center.y - radius };
+                     this.currentShape.endPos = { x: center.x + radius, y: center.y + radius };
+                } else {
+                    if (['nw', 'ne', 'sw', 'se', 'e', 'w'].includes(this.selectedHandle)) {
+                        this.currentShape.startPos.x = center.x - halfWidth;
+                        this.currentShape.endPos.x = center.x + halfWidth;
+                    }
+                    if (['nw', 'ne', 'sw', 'se', 'n', 's'].includes(this.selectedHandle)) {
+                        this.currentShape.startPos.y = center.y - halfHeight;
+                        this.currentShape.endPos.y = center.y + halfHeight;
                     }
                 }
-                this.redraw();
-                return;
             }
+            this.redraw();
+            return;
+        }
 
-            // Update Cursors
-            if (this.showHandles && this.currentShape) {
-                const handle = this.getHandleAtPosition(pos);
-                if (handle === 'move') this.canvas.style.cursor = 'move';
-                else if (handle === 'rot') this.canvas.style.cursor = 'alias';
-                else if (handle) this.canvas.style.cursor = 'pointer';
-                else this.canvas.style.cursor = 'default';
-            } else {
-                this.canvas.style.cursor = 'crosshair';
-            }
+        // Update Cursors
+        if (this.showHandles && this.currentShape) {
+            const handle = this.getHandleAtPosition(pos);
+            if (handle === 'move') this.canvas.style.cursor = 'move';
+            else if (handle === 'rot') this.canvas.style.cursor = 'alias';
+            else if (handle) this.canvas.style.cursor = 'pointer';
+            else this.canvas.style.cursor = 'default';
+        } else {
+            this.canvas.style.cursor = 'crosshair';
+        }
 
-            // Handle Drawing (Creation)
-            if (!this.isDrawing || !this.lastPos || !this.startPos) return;
-            this.currentPos = pos;
+        // Handle Drawing (Creation)
+        if (!this.isDrawing || !this.lastPos || !this.startPos) return;
+        this.currentPos = pos;
 
-            if (this.shapeType === 'freehand') {
-                this.drawingCtx.lineTo(pos.x, pos.y);
-                this.drawingCtx.stroke();
-                this.addPixelsToSet(this.lastPos.x, this.lastPos.y, pos.x, pos.y);
-                this.lastPos = pos;
-            } else {
-                const shape: Shape = {
-                    type: this.shapeType,
-                    startPos: this.startPos,
-                    endPos: pos,
-                    rotation: 0
-                };
-                this.drawingCtx.clearRect(0, 0, this.drawingCanvas.width, this.drawingCanvas.height);
-                this.drawShape(shape);
-            }
+        if (this.shapeType === 'freehand') {
+            this.drawingCtx.lineTo(pos.x, pos.y);
+            this.drawingCtx.stroke();
+            this.addPixelsToSet(this.lastPos.x, this.lastPos.y, pos.x, pos.y);
+            this.lastPos = pos;
+        } else {
+            const shape: Shape = {
+                type: this.shapeType,
+                startPos: this.startPos,
+                endPos: pos,
+                rotation: 0
+            };
+            this.drawingCtx.clearRect(0, 0, this.drawingCanvas.width, this.drawingCanvas.height);
+            this.drawShape(shape);
         }
     }
 
     private handlePointerUp(e: PointerEvent): void {
-        //Real-time Logic
-        if (this.mode === 'realtime') {
-             if (!this.isDrawing) return;
-             e.preventDefault();
-             (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-             this.isDrawing = false;
-             
-             if (this.realTimeCallbacks) this.realTimeCallbacks.onEnd();
-             this.drawingCtx.clearRect(0, 0, this.drawingCanvas.width, this.drawingCanvas.height);
-             return;
-        }
-        //Batch Logic
-        else if (this.mode === 'batch') {
-            if (!this.drawingEnabled) return;
-            e.preventDefault();
-            (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+        if (!this.drawingEnabled) return;
+        e.preventDefault();
+        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
 
-            if (this.selectedHandle) {
-                this.selectedHandle = null;
-                this.dragOffsets = null;
-                if (this.currentShape) this.finalizeShape(this.currentShape);
-                return;
-            }
-
-            if (this.isDrawing && this.startPos && this.currentPos) {
-                if (this.shapeType !== 'freehand') {
-                    this.currentShape = {
-                        type: this.shapeType,
-                        startPos: this.startPos,
-                        endPos: this.currentPos,
-                        rotation: 0
-                    };
-                    this.finalizeShape(this.currentShape);
-                    this.showHandles = true;
-                    this.redraw();
-                }
-                if (this.onShapeCompleteCallback) this.onShapeCompleteCallback();
-            }
-            this.isDrawing = false;
+        if (this.selectedHandle) {
+            this.selectedHandle = null;
+            this.dragOffsets = null; 
+            if (this.currentShape) this.finalizeShape(this.currentShape);
+            return;
         }
+
+        if (this.isDrawing && this.startPos && this.currentPos) {
+            if (this.shapeType !== 'freehand') {
+                this.currentShape = {
+                    type: this.shapeType,
+                    startPos: this.startPos,
+                    endPos: this.currentPos,
+                    rotation: 0
+                };
+                this.finalizeShape(this.currentShape);
+                this.showHandles = true;
+                this.redraw();
+            }
+            if (this.onShapeCompleteCallback) this.onShapeCompleteCallback();
+        }
+        this.isDrawing = false;
     }
 
     private handlePointerCancel(e: PointerEvent): void {
@@ -475,28 +411,9 @@ export class DrawingTracker {
 
     // --- Public API ---
 
-    public setMode(mode: DrawingMode) {
-        this.mode = mode;
-        this.clearDrawing();
-    }
-
-    public setRealTimeCallbacks(callbacks: RealTimeCallbacks) {
-        this.realTimeCallbacks = callbacks;
-    }
-
     public drawOnMainCanvas(): void {
         this.ctx.drawImage(this.drawingCanvas, 0, 0);
     }
-
-    /* TODO: Call this in the future when laser state changes
-    public updateLaserSafety(isLaserOn: boolean): void {
-        if (this.mode === 'realtime') {
-            if (!isLaserOn) {
-                this.isDrawing = false;
-            }
-        }
-    }
-    */
 
     public clearDrawing(): void {
         this.drawingCtx.clearRect(0, 0, this.drawingCanvas.width, this.drawingCanvas.height);
@@ -571,7 +488,7 @@ export class DrawingTracker {
             });
 
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
+            
             // 3. Return the JSON so main script can alert the user
             return await response.json();
         } catch (error) {

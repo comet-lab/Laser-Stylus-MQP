@@ -8,9 +8,9 @@ declare global {
     }
 }
 
-//Wait for the window to load
+// Wait for the window to load
 window.addEventListener('load', () => {
-    //Get all components
+    // --- 1. Get DOM Elements ---
     const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
     const settingsPopup = document.getElementById('settingsPopup') as HTMLElement;
     const overlay = document.getElementById('overlay') as HTMLElement;
@@ -29,10 +29,9 @@ window.addEventListener('load', () => {
     const clearBtn = document.getElementById('clearBtn') as HTMLButtonElement;
     const prepareBtn = document.getElementById('prepareBtn') as HTMLButtonElement;
 
-    // Processing Mode Toggle
+    // Toggle Switch & Batch UI
     const processingModeSwitch = document.getElementById('processing-mode') as HTMLInputElement;
-    // Elements that should hide in Real-Time mode (Make sure to add class="batch-ui" to these in HTML)
-    const batchUiElements = document.querySelectorAll('.batch-ui'); 
+    const batchUiElements = document.querySelectorAll('.batch-ui');
     const statusControlValue = document.querySelector('.status-value.status-batch') as HTMLElement;
 
     // Shape buttons
@@ -46,19 +45,21 @@ window.addEventListener('load', () => {
     const sidebarButtons: NodeListOf<HTMLButtonElement> = document.querySelectorAll('.settings-sidebar .sidebar-btn');
     const settingsPanels: NodeListOf<HTMLElement> = document.querySelectorAll('.settings-main .settings-panel');
 
+    // --- 2. State Variables ---
     let laserConfirmationTimeout: number | null = null;
     let drawingState: 'idle' | 'complete' = 'idle';
     let selectedShape: ShapeType | null = null;
-
-    //Canvas setup
-    ctx.font = "48px serif";
     let reader: any = null;
-
-    // Initialize drawing tracker
     let drawingTracker: DrawingTracker | null = null;
+    
+    // Real-Time State
+    let isRealTimeDrawing = false;
+    let realTimePath: { x: number, y: number }[] = [];
+
+    // Initialize WebSocket
     const wsHandler = new WebSocketHandler(null);
 
-    // --- Helper Functions ---
+    // --- 3. UI Helpers ---
 
     const openSettings = (): void => {
         if (drawingState === 'complete') {
@@ -66,17 +67,8 @@ window.addEventListener('load', () => {
             drawingState = 'idle';
             updateDrawButtonState();
         }
-
-        // Disable all controls
-        [clearBtn, prepareBtn, robotBtn, laserBtn].forEach(btn => {
-            btn.disabled = true;
-        });
-
-        //Disable laser
-        changeLaserState(false);
-
-        //DISABLE ROBOT WHEN IMPLEMENTED
-
+        [clearBtn, prepareBtn, robotBtn, laserBtn].forEach(btn => btn.disabled = true);
+        changeLaserState(false); // Safety: force laser off in settings
         settingsPopup.classList.add('active');
         overlay.classList.add('active');
     };
@@ -84,15 +76,11 @@ window.addEventListener('load', () => {
     const closeSettings = (): void => {
         settingsPopup.classList.remove('active');
         overlay.classList.remove('active');
-
-        [clearBtn, robotBtn, laserBtn].forEach(btn => {
-            btn.disabled = false;
-        });
+        [clearBtn, robotBtn, laserBtn].forEach(btn => btn.disabled = false);
     };
 
     settingsBtn.addEventListener('click', openSettings);
     settingsCloseBtn.addEventListener('click', closeSettings);
-
 
     const openPrepareMenu = (): void => {
         overlay.classList.add('active');
@@ -106,40 +94,27 @@ window.addEventListener('load', () => {
 
     prepareBtn.addEventListener('click', openPrepareMenu);
     prepareCloseBtn.addEventListener('click', closePrepareMenu);
-    prepareCancelBtn.addEventListener('click', () => {
-        closePrepareMenu();
-    });
+    prepareCancelBtn.addEventListener('click', closePrepareMenu);
 
     overlay.addEventListener('click', () => {
-        if (settingsPopup.classList.contains('active')) {
-            closeSettings();
-        }
-        if (preparePopup.classList.contains('active')) {
-            closePrepareMenu();
-        }
+        if (settingsPopup.classList.contains('active')) closeSettings();
+        if (preparePopup.classList.contains('active')) closePrepareMenu();
     });
 
     sidebarButtons.forEach((button: HTMLButtonElement) => {
         button.addEventListener('click', () => {
             const targetId: string | null = button.getAttribute('data-target');
             if (!targetId) return;
-
-            // Remove 'active' from all buttons and panels
-            sidebarButtons.forEach((btn: HTMLButtonElement) => btn.classList.remove('active'));
-            settingsPanels.forEach((panel: HTMLElement) => panel.classList.remove('active'));
-
-            // Add 'active' to the clicked button and target panel
+            sidebarButtons.forEach((btn) => btn.classList.remove('active'));
+            settingsPanels.forEach((panel) => panel.classList.remove('active'));
             button.classList.add('active');
-            const targetPanel: HTMLElement | null = document.getElementById(targetId);
-            if (targetPanel) {
-                targetPanel.classList.add('active');
-            }
+            const targetPanel = document.getElementById(targetId);
+            if (targetPanel) targetPanel.classList.add('active');
         });
     });
 
     function updateDrawButtonState() {
         const btnText = clearBtn.querySelector('.btn-text')!;
-
         switch (drawingState) {
             case 'idle':
                 clearBtn.setAttribute('data-state', 'ready');
@@ -158,193 +133,219 @@ window.addEventListener('load', () => {
         }
     }
 
-    /** Reads the laser's *current state* from the button's class or data attribute */
     function getLocalLaserState(): boolean {
         return laserBtn.classList.contains('active');
     }
 
-    /**
-     * Single function for updating the UI based on backend state.
-     * Called by the WebSocket handler whenever state updates arrive.
-     */
     function syncUiToState(state: Partial<WebSocketMessage>) {
-        // Update laser button and status (only if laser state is present)
         if (state.isLaserOn !== undefined) {
-            //Clear timeout if you get a response from the robot
             if (laserConfirmationTimeout) {
                 clearTimeout(laserConfirmationTimeout);
                 laserConfirmationTimeout = null;
             }
-
             const newLaserState = !!state.isLaserOn;
-            // Update button text and class
-            laserBtn.classList.toggle('active', newLaserState)
-            // Update status display
-            // Re-enable button after state sync
+            laserBtn.classList.toggle('active', newLaserState);
             laserBtn.style.pointerEvents = 'auto';
         }
-
-        // Update robot status if present
-        // (You can add robot state handling here later if needed)
     }
 
-    // --- WebSocket Setup ---
+    // --- 4. WebSocket & Video Loop ---
 
-    // Assign the callback *before* connecting.
-    // This function will run every time the backend broadcasts a new state.
     wsHandler.onStateUpdate = (newState: WebSocketMessage) => {
-        console.log('State update received:', newState);
+        // console.log('State update:', newState); // Uncomment for debugging
         syncUiToState(newState);
     };
-
     wsHandler.connect();
-    //(window as any).wsHandler = wsHandler;
 
-    //Update canvas with video frame
+    // Canvas Update Loop
     const updateCanvas = (now: DOMHighResTimeStamp, metadata: VideoFrameCallbackMetadata) => {
+        // 1. Draw Video Frame
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // Draw the drawing overlay on top
-        if (drawingTracker) {
+        // 2. Real-Time Mode: Draw Visual Red Line directly
+        // (We draw this manually here because we aren't using DrawingTracker for RT)
+        if (processingModeSwitch && processingModeSwitch.checked && isRealTimeDrawing && realTimePath.length > 1) {
+            ctx.beginPath();
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.moveTo(realTimePath[0].x, realTimePath[0].y);
+            for (let i = 1; i < realTimePath.length; i++) {
+                ctx.lineTo(realTimePath[i].x, realTimePath[i].y);
+            }
+            ctx.stroke();
+        }
+
+        // 3. Batch Mode: Delegate to DrawingTracker
+        if (processingModeSwitch && !processingModeSwitch.checked && drawingTracker) {
             drawingTracker.drawOnMainCanvas();
         }
 
         video.requestVideoFrameCallback(updateCanvas);
     };
 
-    // Function to set a message on the canvas
     const setMessage = (str: string) => {
         ctx.fillText(str, 10, 50);
     };
 
-    // Setup video and canvas
     video.muted = true;
     video.autoplay = true;
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     setMessage("Loading stream");
 
-    //Render with MediaMTX WebRTC Reader
     reader = new window.MediaMTXWebRTCReader({
         url: new URL(`http://${window.location.hostname}:8889/mystream/whep`),
-        onError: (err: string) => {
-            setMessage(err);
-        },
+        onError: (err: string) => setMessage(err),
         onTrack: (evt: RTCTrackEvent) => {
             video.srcObject = evt.streams[0];
             video.requestVideoFrameCallback(updateCanvas);
 
-            // Initialize drawing tracker after video is ready
+            // Initialize Batch Tracker
             drawingTracker = new DrawingTracker(canvas, video, `http://${window.location.hostname}:443`);
 
-            // Setup Real-Time callbacks
-            drawingTracker.setRealTimeCallbacks({
-                onStart: () => {
-                    console.log("RT: Path Start");
-                    // FUTURE: Check laser state here if strict safety is needed
-                    wsHandler.updateState({ pathEvent: 'start' });
-                },
-                onMove: (x, y) => {
-                    wsHandler.updateState({ x, y });
-                },
-                onEnd: () => {
-                    console.log("RT: Path End");
-                    wsHandler.updateState({ pathEvent: 'end' });
-                }
-            });
-
-            // Initially disable buttons
             executeBtn.disabled = true;
             prepareBtn.disabled = true;
             clearBtn.disabled = true;
         },
     });
 
-    // --- Event Listeners ---
+    // --- 5. Real-Time Event Listeners (Direct on Canvas) ---
 
-    // Handler for laser button - request a *toggle*
-    laserBtn.addEventListener('click', () => {
-        // 1. Disable button immediately to prevent multiple clicks
-        laserBtn.style.pointerEvents = 'none';
+    const handleRealTimeStart = (e: PointerEvent) => {
+        // Only allow if in Real-Time mode AND Pen is selected
+        if (!processingModeSwitch.checked || selectedShape !== 'freehand') return;
 
-        //Clear old timeouts
-        if (laserConfirmationTimeout) {
-            clearTimeout(laserConfirmationTimeout);
+        e.preventDefault();
+        canvas.setPointerCapture(e.pointerId);
+        
+        isRealTimeDrawing = true;
+        realTimePath = [{ x: e.clientX, y: e.clientY }];
+
+        // Signal Start
+        wsHandler.updateState({ pathEvent: 'start' });
+
+        // Send Initial Point
+        const vidX = (e.clientX / canvas.width) * video.videoWidth;
+        const vidY = (e.clientY / canvas.height) * video.videoHeight;
+        wsHandler.updateState({ x: vidX, y: vidY });
+    };
+
+    const handleRealTimeMove = (e: PointerEvent) => {
+        if (!isRealTimeDrawing) return;
+        e.preventDefault();
+
+        // Update Visuals
+        realTimePath.push({ x: e.clientX, y: e.clientY });
+
+        // Stream Coordinates
+        const vidX = (e.clientX / canvas.width) * video.videoWidth;
+        const vidY = (e.clientY / canvas.height) * video.videoHeight;
+        wsHandler.updateState({ x: vidX, y: vidY });
+    };
+
+    const handleRealTimeEnd = (e: PointerEvent) => {
+        if (!isRealTimeDrawing) return;
+        e.preventDefault();
+        
+        canvas.releasePointerCapture(e.pointerId);
+        isRealTimeDrawing = false;
+        realTimePath = []; // Clear visual line
+
+        // Signal End
+        wsHandler.updateState({ pathEvent: 'end' });
+    };
+
+    // Attach RT Listeners
+    canvas.addEventListener('pointerdown', handleRealTimeStart);
+    canvas.addEventListener('pointermove', handleRealTimeMove);
+    canvas.addEventListener('pointerup', handleRealTimeEnd);
+    canvas.addEventListener('pointercancel', handleRealTimeEnd);
+
+
+    // --- 6. Controls & Logic ---
+
+    // Toggle Mode
+    const toggleMode = () => {
+        const isRealTime = processingModeSwitch.checked;
+
+        if (isRealTime) {
+            // REAL-TIME MODE
+            batchUiElements.forEach(el => el.classList.add('hidden-mode'));
+            if (statusControlValue) {
+                statusControlValue.textContent = "REAL-TIME";
+                statusControlValue.style.color = "#00ff00";
+            }
+            
+            // Clean up Batch State
+            drawingTracker?.disableDrawing();
+            
+            // Clean up UI
+            toggleButtons.forEach(btn => btn.classList.remove('selected'));
+            selectedShape = null;
+
+        } else {
+            // BATCH MODE
+            batchUiElements.forEach(el => el.classList.remove('hidden-mode'));
+            if (statusControlValue) {
+                statusControlValue.textContent = "BATCH";
+                statusControlValue.style.color = "";
+            }
+
+            // Clean up RT State
+            isRealTimeDrawing = false;
+            realTimePath = [];
+
+            // Clean up UI
+            toggleButtons.forEach(btn => btn.classList.remove('selected'));
+            selectedShape = null;
+            drawingTracker?.disableDrawing();
         }
+    };
 
-        // 2. Read the *current* state from the UI
-        const isCurrentlyOn = getLocalLaserState();
+    if (processingModeSwitch) {
+        processingModeSwitch.addEventListener('change', toggleMode);
+    }
 
-        // 3. Request the *opposite* state
-        const desiredNewState = !isCurrentlyOn;
-
-        // 4. Send only the laser state update to backend
-        changeLaserState(desiredNewState);
-        // Note: Button will be re-enabled when we receive the state update from backend
-        // via the onStateUpdate -> syncUiToState flow
+    // Laser Toggle
+    laserBtn.addEventListener('click', () => {
+        laserBtn.style.pointerEvents = 'none';
+        if (laserConfirmationTimeout) clearTimeout(laserConfirmationTimeout);
+        changeLaserState(!getLocalLaserState());
     });
 
     function changeLaserState(newState: boolean) {
         const success = wsHandler.updateState({ isLaserOn: newState });
-
         if (success) {
             laserConfirmationTimeout = setTimeout(() => {
                 console.error("No confirmation from robot. Resetting UI.");
-                laserBtn.style.pointerEvents = 'auto'; // Re-enable button on timeout, don't change state
-            }, 2000); // 2-second timeout
-        }
-
-        if (!success) {
-            // If send failed, re-enable the button
+                laserBtn.style.pointerEvents = 'auto';
+            }, 2000);
+        } else {
             laserBtn.style.pointerEvents = 'auto';
             console.error('Failed to send laser state update');
         }
     }
 
-    // Handler for the clear button (formerly draw button)
-    clearBtn.addEventListener('click', () => {
-        console.log('Clear button clicked');
-        if (!drawingTracker) return;
-
-        if (drawingState === 'complete') {
-            // Clear the drawing
-            drawingTracker.clearDrawing();
-            drawingState = 'idle';
-            updateDrawButtonState();
-        }
-    });
-
-    // Handler for the execute button
+    // Execute (Batch Only)
     executeBtn.addEventListener('click', async () => {
         if (!drawingTracker) return;
-
         executeBtn.disabled = true;
         prepareBtn.disabled = true;
 
         try {
             console.log('Sending coordinates to robot...');
             const result = await drawingTracker.sendCoordinates();
+            if (result) console.log("Response:", result);
 
-            if (result) {
-                console.log("Response from robot:", result);
-                console.log(`Sent ${result.pixel_count} pixels successfully.`);
-            } else {
-                console.warn("No pixels were found to send.");
-            }
-
-            // Clear the drawing after successful send
             drawingTracker.clearDrawing();
             drawingState = 'idle';
             updateDrawButtonState();
             closePrepareMenu();
-
-            // Deselect all shape buttons
             toggleButtons.forEach(btn => btn.classList.remove('selected'));
             selectedShape = null;
-        }
-        catch (e) {
+        } catch (e) {
             console.error('Error sending coordinates:', e);
-            // Re-enable button on error
             if (drawingState === 'complete') {
                 executeBtn.disabled = false;
                 prepareBtn.disabled = false;
@@ -352,95 +353,51 @@ window.addEventListener('load', () => {
         }
     });
 
-    // --- Mode Switching Logic ---
-
-    const toggleMode = () => {
-        const isRealTime = processingModeSwitch.checked; // Checked = Real-Time
-
-        // Update Tracker Mode
-        drawingTracker?.setMode(isRealTime ? 'realtime' : 'batch');
-
-        if (isRealTime) {
-            // 1. Hide Batch UI
-            batchUiElements.forEach(el => el.classList.add('hidden-mode'));
-            
-            // 2. Update Status Panel
-            if (statusControlValue) {
-                statusControlValue.textContent = "REAL-TIME";
-                statusControlValue.style.color = "#00ff00";
-            }
-
-            // 3. Reset Selection (Start fresh)
-            toggleButtons.forEach(btn => btn.classList.remove('selected'));
-            selectedShape = null;
-            drawingTracker?.disableDrawing();
-
-        } else {
-            // 1. Show Batch UI
-            batchUiElements.forEach(el => el.classList.remove('hidden-mode'));
-            
-            // 2. Update Status Panel
-            if (statusControlValue) {
-                statusControlValue.textContent = "BATCH";
-                statusControlValue.style.color = ""; // Reset color
-            }
-
-            // 3. Reset Selection
-            toggleButtons.forEach(btn => btn.classList.remove('selected'));
-            selectedShape = null;
-            drawingTracker?.disableDrawing();
+    // Clear Button (Batch Only)
+    clearBtn.addEventListener('click', () => {
+        if (drawingState === 'complete' && drawingTracker) {
+            drawingTracker.clearDrawing();
+            drawingState = 'idle';
+            updateDrawButtonState();
         }
-    };
+    });
 
-    // Listen for Toggle Changes
-    if (processingModeSwitch) {
-        processingModeSwitch.addEventListener('change', toggleMode);
-    }
-
-    // --- Modified Shape Button Handler ---
-
+    // Shape Selection
     function handleShapeSelection(button: HTMLButtonElement, shape: ShapeType) {
         const isRealTime = processingModeSwitch.checked;
 
-        // Real-Time Mode Safety Check: Only Pen is allowed
+        // Safety: Only Freehand allowed in RT
         if (isRealTime && shape !== 'freehand') {
             console.log("Only Freehand/Pen is available in Real-Time mode");
             return;
         }
 
-        // Check if the clicked button is already selected
         const isAlreadySelected = button.classList.contains('selected');
-
-        // Remove 'selected' from all buttons
         toggleButtons.forEach(btn => btn.classList.remove('selected'));
 
         if (isAlreadySelected) {
             // Deselect
             selectedShape = null;
-            if (drawingTracker) {
-                drawingTracker.disableDrawing();
-            }
+            drawingTracker?.disableDrawing();
         } else {
-            // Select new shape
+            // Select
             button.classList.add('selected');
             selectedShape = shape;
 
-            if (drawingTracker) {
-                // Clear any existing drawing when selecting a new shape
-                drawingTracker.clearDrawing();
-                drawingState = 'idle';
-                updateDrawButtonState(); // Only affects batch buttons
+            if (isRealTime) {
+                // In RT, we don't enable the tracker. The event listeners handle it
+                // as long as selectedShape === 'freehand'.
+                // Just clear any old batch drawings to be clean.
+                drawingTracker?.clearDrawing();
+            } else {
+                // Batch Mode: Enable tracker
+                if (drawingTracker) {
+                    drawingTracker.clearDrawing();
+                    drawingState = 'idle';
+                    updateDrawButtonState();
 
-                // Enable drawing based on mode
-                if (isRealTime) {
-                     // Real-Time: Enable immediately without "complete" callback
-                     drawingTracker.setShapeType('freehand'); 
-                     drawingTracker.enableDrawing(); 
-                } else {
-                    // Batch: Enable with completion callback
                     drawingTracker.setShapeType(shape);
                     drawingTracker.enableDrawing(() => {
-                        // Callback when shape is complete
                         drawingState = 'complete';
                         updateDrawButtonState();
                     });
@@ -455,43 +412,25 @@ window.addEventListener('load', () => {
     triangleBtn.addEventListener('click', () => handleShapeSelection(triangleBtn, 'triangle'));
     lineBtn.addEventListener('click', () => handleShapeSelection(lineBtn, 'line'));
 
-    // Window event handlers
+    // --- 7. Window Events ---
+
     window.addEventListener('beforeunload', () => {
-        if (reader !== null) {
-            reader.close();
-        }
+        if (reader !== null) reader.close();
     });
 
-    //Window resize logic
     window.addEventListener('resize', () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
-        console.log(canvas.width);
-        console.log(canvas.height);
-
-        // Update drawing canvas size
-        if (drawingTracker) {
-            drawingTracker.updateCanvasSize(canvas.width, canvas.height);
-        }
+        if (drawingTracker) drawingTracker.updateCanvasSize(canvas.width, canvas.height);
     });
 
+    // Click-to-move (Only active when NOT drawing)
     canvas.addEventListener('click', function (event) {
-        // Prevent click-to-move if we are actively drawing
-        if (drawingTracker?.isDrawingEnabled()) {
-            return;
-        }
-
-        console.log(event.clientX / canvas.width * video.videoWidth);
-        console.log(event.clientY / canvas.height * video.videoHeight);
+        if (drawingTracker?.isDrawingEnabled() || isRealTimeDrawing) return;
 
         let x = event.clientX / canvas.width * video.videoWidth;
         let y = event.clientY / canvas.height * video.videoHeight;
-
-        const data = {
-            x: x,
-            y: y
-        };
-        wsHandler.updateState(data);
+        wsHandler.updateState({ x, y });
     });
 
     robotBtn.addEventListener('click', () => {
