@@ -1,6 +1,8 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 import os
+import base64
+from robot import RobotSchema
 from manager import ConnectionManager
 
 app = FastAPI()
@@ -34,12 +36,29 @@ async def submit_path(request: dict):
         raise HTTPException(status_code=400, detail="No pixels provided")
     
     print(f"Received path with {len(pixels)} pixels")
+    manager.desired_state.path = pixels
+    await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
     
     return {
         "status": "success",
         "pixel_count": len(pixels),
-        "message": f"Path with {len(pixels)} pixels received and processed"
+        "message": f"Path with {len(pixels)} pixels dispatched to robot"
     }
+
+@app.post("/api/raster_mask")   
+async def submit_raster_mask(file: UploadFile):
+    extension = file.filename.split('.')[-1]
+    if(file.filename.split('.')[-1] != "png"):
+        raise HTTPException(status_code = 400, detail=f"Incompatible file extension: {extension}")
+    
+    bytes = file.file.read()
+    encoded_b64 = base64.b64encode(bytes) # png is base 64 encoded
+    encoded_utf8 = encoded_b64.decode('utf-8') # re-encode to utf-8 to send over websocket
+    
+    manager.desired_state.raster_mask = encoded_utf8
+    print("Sending raster")
+    await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
+    return file.filename
 
 manager = ConnectionManager()
 
