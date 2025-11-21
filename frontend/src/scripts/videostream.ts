@@ -29,12 +29,10 @@ window.addEventListener('load', () => {
     const clearBtn = document.getElementById('clearBtn') as HTMLButtonElement;
     const prepareBtn = document.getElementById('prepareBtn') as HTMLButtonElement;
 
-    // Toggle Switch & Batch UI
     const processingModeSwitch = document.getElementById('processing-mode') as HTMLInputElement;
     const batchUiElements = document.querySelectorAll('.batch-ui');
     const statusControlValue = document.querySelector('.status-value.status-batch') as HTMLElement;
 
-    // Shape buttons
     const penBtn = document.getElementById('penBtn') as HTMLButtonElement;
     const squareBtn = document.getElementById('squareBtn') as HTMLButtonElement;
     const circleBtn = document.getElementById('circleBtn') as HTMLButtonElement;
@@ -68,7 +66,7 @@ window.addEventListener('load', () => {
             updateDrawButtonState();
         }
         [clearBtn, prepareBtn, robotBtn, laserBtn].forEach(btn => btn.disabled = true);
-        changeLaserState(false); // Safety: force laser off in settings
+        changeLaserState(false);
         settingsPopup.classList.add('active');
         overlay.classList.add('active');
     };
@@ -149,21 +147,31 @@ window.addEventListener('load', () => {
         }
     }
 
-    // --- 4. WebSocket & Video Loop ---
+    // --- 4. Helper: Coordinate Calculation ---
+    // This fixes the offset issue by subtracting canvas position
+    const getCanvasCoordinates = (e: PointerEvent) => {
+        const rect = canvas.getBoundingClientRect();
+        // Calculate scale in case canvas display size differs from buffer size
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        return {
+            x: (e.clientX - rect.left) * scaleX,
+            y: (e.clientY - rect.top) * scaleY
+        };
+    };
+
+    // --- 5. WebSocket & Video Loop ---
 
     wsHandler.onStateUpdate = (newState: WebSocketMessage) => {
-        // console.log('State update:', newState); // Uncomment for debugging
         syncUiToState(newState);
     };
     wsHandler.connect();
 
-    // Canvas Update Loop
     const updateCanvas = (now: DOMHighResTimeStamp, metadata: VideoFrameCallbackMetadata) => {
-        // 1. Draw Video Frame
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // 2. Real-Time Mode: Draw Visual Red Line directly
-        // (We draw this manually here because we aren't using DrawingTracker for RT)
+        // Draw Visual Red Line (Real-Time)
         if (processingModeSwitch && processingModeSwitch.checked && isRealTimeDrawing && realTimePath.length > 1) {
             ctx.beginPath();
             ctx.strokeStyle = 'red';
@@ -176,7 +184,7 @@ window.addEventListener('load', () => {
             ctx.stroke();
         }
 
-        // 3. Batch Mode: Delegate to DrawingTracker
+        // Draw Batch Tracker Overlay
         if (processingModeSwitch && !processingModeSwitch.checked && drawingTracker) {
             drawingTracker.drawOnMainCanvas();
         }
@@ -201,7 +209,6 @@ window.addEventListener('load', () => {
             video.srcObject = evt.streams[0];
             video.requestVideoFrameCallback(updateCanvas);
 
-            // Initialize Batch Tracker
             drawingTracker = new DrawingTracker(canvas, video, `http://${window.location.hostname}:443`);
 
             executeBtn.disabled = true;
@@ -210,24 +217,25 @@ window.addEventListener('load', () => {
         },
     });
 
-    // --- 5. Real-Time Event Listeners (Direct on Canvas) ---
+    // --- 6. Real-Time Event Listeners ---
 
     const handleRealTimeStart = (e: PointerEvent) => {
-        // Only allow if in Real-Time mode AND Pen is selected
         if (!processingModeSwitch.checked || selectedShape !== 'freehand') return;
 
         e.preventDefault();
         canvas.setPointerCapture(e.pointerId);
         
+        // Use corrected coordinates
+        const pos = getCanvasCoordinates(e);
+        
         isRealTimeDrawing = true;
-        realTimePath = [{ x: e.clientX, y: e.clientY }];
+        realTimePath = [{ x: pos.x, y: pos.y }];
 
-        // Signal Start
         wsHandler.updateState({ pathEvent: 'start' });
 
-        // Send Initial Point
-        const vidX = (e.clientX / canvas.width) * video.videoWidth;
-        const vidY = (e.clientY / canvas.height) * video.videoHeight;
+        // Send Video-Relative Coordinates
+        const vidX = (pos.x / canvas.width) * video.videoWidth;
+        const vidY = (pos.y / canvas.height) * video.videoHeight;
         wsHandler.updateState({ x: vidX, y: vidY });
     };
 
@@ -235,12 +243,15 @@ window.addEventListener('load', () => {
         if (!isRealTimeDrawing) return;
         e.preventDefault();
 
-        // Update Visuals
-        realTimePath.push({ x: e.clientX, y: e.clientY });
+        // Use corrected coordinates
+        const pos = getCanvasCoordinates(e);
 
-        // Stream Coordinates
-        const vidX = (e.clientX / canvas.width) * video.videoWidth;
-        const vidY = (e.clientY / canvas.height) * video.videoHeight;
+        // Update Visuals
+        realTimePath.push({ x: pos.x, y: pos.y });
+
+        // Send Coordinates
+        const vidX = (pos.x / canvas.width) * video.videoWidth;
+        const vidY = (pos.y / canvas.height) * video.videoHeight;
         wsHandler.updateState({ x: vidX, y: vidY });
     };
 
@@ -250,53 +261,40 @@ window.addEventListener('load', () => {
         
         canvas.releasePointerCapture(e.pointerId);
         isRealTimeDrawing = false;
-        realTimePath = []; // Clear visual line
+        realTimePath = []; 
 
-        // Signal End
         wsHandler.updateState({ pathEvent: 'end' });
     };
 
-    // Attach RT Listeners
     canvas.addEventListener('pointerdown', handleRealTimeStart);
     canvas.addEventListener('pointermove', handleRealTimeMove);
     canvas.addEventListener('pointerup', handleRealTimeEnd);
     canvas.addEventListener('pointercancel', handleRealTimeEnd);
 
+    // --- 7. Controls & Logic ---
 
-    // --- 6. Controls & Logic ---
-
-    // Toggle Mode
     const toggleMode = () => {
         const isRealTime = processingModeSwitch.checked;
 
         if (isRealTime) {
-            // REAL-TIME MODE
+            // REAL-TIME
             batchUiElements.forEach(el => el.classList.add('hidden-mode'));
             if (statusControlValue) {
                 statusControlValue.textContent = "REAL-TIME";
                 statusControlValue.style.color = "#00ff00";
             }
-            
-            // Clean up Batch State
             drawingTracker?.disableDrawing();
-            
-            // Clean up UI
             toggleButtons.forEach(btn => btn.classList.remove('selected'));
             selectedShape = null;
-
         } else {
-            // BATCH MODE
+            // BATCH
             batchUiElements.forEach(el => el.classList.remove('hidden-mode'));
             if (statusControlValue) {
                 statusControlValue.textContent = "BATCH";
                 statusControlValue.style.color = "";
             }
-
-            // Clean up RT State
             isRealTimeDrawing = false;
             realTimePath = [];
-
-            // Clean up UI
             toggleButtons.forEach(btn => btn.classList.remove('selected'));
             selectedShape = null;
             drawingTracker?.disableDrawing();
@@ -307,7 +305,6 @@ window.addEventListener('load', () => {
         processingModeSwitch.addEventListener('change', toggleMode);
     }
 
-    // Laser Toggle
     laserBtn.addEventListener('click', () => {
         laserBtn.style.pointerEvents = 'none';
         if (laserConfirmationTimeout) clearTimeout(laserConfirmationTimeout);
@@ -327,7 +324,6 @@ window.addEventListener('load', () => {
         }
     }
 
-    // Execute (Batch Only)
     executeBtn.addEventListener('click', async () => {
         if (!drawingTracker) return;
         executeBtn.disabled = true;
@@ -353,7 +349,6 @@ window.addEventListener('load', () => {
         }
     });
 
-    // Clear Button (Batch Only)
     clearBtn.addEventListener('click', () => {
         if (drawingState === 'complete' && drawingTracker) {
             drawingTracker.clearDrawing();
@@ -362,11 +357,9 @@ window.addEventListener('load', () => {
         }
     });
 
-    // Shape Selection
     function handleShapeSelection(button: HTMLButtonElement, shape: ShapeType) {
         const isRealTime = processingModeSwitch.checked;
 
-        // Safety: Only Freehand allowed in RT
         if (isRealTime && shape !== 'freehand') {
             console.log("Only Freehand/Pen is available in Real-Time mode");
             return;
@@ -376,21 +369,15 @@ window.addEventListener('load', () => {
         toggleButtons.forEach(btn => btn.classList.remove('selected'));
 
         if (isAlreadySelected) {
-            // Deselect
             selectedShape = null;
             drawingTracker?.disableDrawing();
         } else {
-            // Select
             button.classList.add('selected');
             selectedShape = shape;
 
             if (isRealTime) {
-                // In RT, we don't enable the tracker. The event listeners handle it
-                // as long as selectedShape === 'freehand'.
-                // Just clear any old batch drawings to be clean.
                 drawingTracker?.clearDrawing();
             } else {
-                // Batch Mode: Enable tracker
                 if (drawingTracker) {
                     drawingTracker.clearDrawing();
                     drawingState = 'idle';
@@ -412,8 +399,6 @@ window.addEventListener('load', () => {
     triangleBtn.addEventListener('click', () => handleShapeSelection(triangleBtn, 'triangle'));
     lineBtn.addEventListener('click', () => handleShapeSelection(lineBtn, 'line'));
 
-    // --- 7. Window Events ---
-
     window.addEventListener('beforeunload', () => {
         if (reader !== null) reader.close();
     });
@@ -424,9 +409,10 @@ window.addEventListener('load', () => {
         if (drawingTracker) drawingTracker.updateCanvasSize(canvas.width, canvas.height);
     });
 
-    // Click-to-move (Only active when NOT drawing)
+    // Click-to-move (Guarded against Real-Time mode)
     canvas.addEventListener('click', function (event) {
-        if (drawingTracker?.isDrawingEnabled() || isRealTimeDrawing) return;
+        if (processingModeSwitch.checked) return;
+        if (drawingTracker?.isDrawingEnabled()) return;
 
         let x = event.clientX / canvas.width * video.videoWidth;
         let y = event.clientY / canvas.height * video.videoHeight;
