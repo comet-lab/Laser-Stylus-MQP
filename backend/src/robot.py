@@ -13,6 +13,7 @@ class RobotSchema:
     laserY: float = None
     beamWaist: float = None
     isLaserOn: bool = None
+    pathEvent: str = None
 
     def to_str(self) -> str:
         data = {k: v for k, v in asdict(self).items() if v is not None}

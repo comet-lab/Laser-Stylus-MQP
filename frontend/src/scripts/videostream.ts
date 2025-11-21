@@ -29,6 +29,12 @@ window.addEventListener('load', () => {
     const clearBtn = document.getElementById('clearBtn') as HTMLButtonElement;
     const prepareBtn = document.getElementById('prepareBtn') as HTMLButtonElement;
 
+    // Processing Mode Toggle
+    const processingModeSwitch = document.getElementById('processing-mode') as HTMLInputElement;
+    // Elements that should hide in Real-Time mode (Make sure to add class="batch-ui" to these in HTML)
+    const batchUiElements = document.querySelectorAll('.batch-ui'); 
+    const statusControlValue = document.querySelector('.status-value.status-batch') as HTMLElement;
+
     // Shape buttons
     const penBtn = document.getElementById('penBtn') as HTMLButtonElement;
     const squareBtn = document.getElementById('squareBtn') as HTMLButtonElement;
@@ -112,8 +118,6 @@ window.addEventListener('load', () => {
             closePrepareMenu();
         }
     });
-
-
 
     sidebarButtons.forEach((button: HTMLButtonElement) => {
         button.addEventListener('click', () => {
@@ -233,6 +237,22 @@ window.addEventListener('load', () => {
             // Initialize drawing tracker after video is ready
             drawingTracker = new DrawingTracker(canvas, video, `http://${window.location.hostname}:443`);
 
+            // Setup Real-Time callbacks
+            drawingTracker.setRealTimeCallbacks({
+                onStart: () => {
+                    console.log("RT: Path Start");
+                    // FUTURE: Check laser state here if strict safety is needed
+                    wsHandler.updateState({ pathEvent: 'start' });
+                },
+                onMove: (x, y) => {
+                    wsHandler.updateState({ x, y });
+                },
+                onEnd: () => {
+                    console.log("RT: Path End");
+                    wsHandler.updateState({ pathEvent: 'end' });
+                }
+            });
+
             // Initially disable buttons
             executeBtn.disabled = true;
             prepareBtn.disabled = true;
@@ -306,7 +326,7 @@ window.addEventListener('load', () => {
             const result = await drawingTracker.sendCoordinates();
 
             if (result) {
-                console.log("Response from robot:", result); // <--- Restore the log you were missing
+                console.log("Response from robot:", result);
                 console.log(`Sent ${result.pixel_count} pixels successfully.`);
             } else {
                 console.warn("No pixels were found to send.");
@@ -332,8 +352,62 @@ window.addEventListener('load', () => {
         }
     });
 
-    // Shape button handlers
+    // --- Mode Switching Logic ---
+
+    const toggleMode = () => {
+        const isRealTime = processingModeSwitch.checked; // Checked = Real-Time
+
+        // Update Tracker Mode
+        drawingTracker?.setMode(isRealTime ? 'realtime' : 'batch');
+
+        if (isRealTime) {
+            // 1. Hide Batch UI
+            batchUiElements.forEach(el => el.classList.add('hidden-mode'));
+            
+            // 2. Update Status Panel
+            if (statusControlValue) {
+                statusControlValue.textContent = "REAL-TIME";
+                statusControlValue.style.color = "#00ff00";
+            }
+
+            // 3. Reset Selection (Start fresh)
+            toggleButtons.forEach(btn => btn.classList.remove('selected'));
+            selectedShape = null;
+            drawingTracker?.disableDrawing();
+
+        } else {
+            // 1. Show Batch UI
+            batchUiElements.forEach(el => el.classList.remove('hidden-mode'));
+            
+            // 2. Update Status Panel
+            if (statusControlValue) {
+                statusControlValue.textContent = "BATCH";
+                statusControlValue.style.color = ""; // Reset color
+            }
+
+            // 3. Reset Selection
+            toggleButtons.forEach(btn => btn.classList.remove('selected'));
+            selectedShape = null;
+            drawingTracker?.disableDrawing();
+        }
+    };
+
+    // Listen for Toggle Changes
+    if (processingModeSwitch) {
+        processingModeSwitch.addEventListener('change', toggleMode);
+    }
+
+    // --- Modified Shape Button Handler ---
+
     function handleShapeSelection(button: HTMLButtonElement, shape: ShapeType) {
+        const isRealTime = processingModeSwitch.checked;
+
+        // Real-Time Mode Safety Check: Only Pen is allowed
+        if (isRealTime && shape !== 'freehand') {
+            console.log("Only Freehand/Pen is available in Real-Time mode");
+            return;
+        }
+
         // Check if the clicked button is already selected
         const isAlreadySelected = button.classList.contains('selected');
 
@@ -355,15 +429,22 @@ window.addEventListener('load', () => {
                 // Clear any existing drawing when selecting a new shape
                 drawingTracker.clearDrawing();
                 drawingState = 'idle';
-                updateDrawButtonState();
+                updateDrawButtonState(); // Only affects batch buttons
 
-                // Enable drawing with the selected shape
-                drawingTracker.setShapeType(shape);
-                drawingTracker.enableDrawing(() => {
-                    // Callback when shape is complete
-                    drawingState = 'complete';
-                    updateDrawButtonState();
-                });
+                // Enable drawing based on mode
+                if (isRealTime) {
+                     // Real-Time: Enable immediately without "complete" callback
+                     drawingTracker.setShapeType('freehand'); 
+                     drawingTracker.enableDrawing(); 
+                } else {
+                    // Batch: Enable with completion callback
+                    drawingTracker.setShapeType(shape);
+                    drawingTracker.enableDrawing(() => {
+                        // Callback when shape is complete
+                        drawingState = 'complete';
+                        updateDrawButtonState();
+                    });
+                }
             }
         }
     }
@@ -395,6 +476,7 @@ window.addEventListener('load', () => {
     });
 
     canvas.addEventListener('click', function (event) {
+        // Prevent click-to-move if we are actively drawing
         if (drawingTracker?.isDrawingEnabled()) {
             return;
         }
