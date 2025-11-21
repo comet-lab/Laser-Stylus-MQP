@@ -1,6 +1,7 @@
 import asyncio
 import websockets
 import os
+from websockets.exceptions import ConnectionClosedError
 
 class BackendConnection():
     def __init__(self, send_fn, recv_fn, mocking, refresh_ms = 50):
@@ -25,10 +26,19 @@ class BackendConnection():
         port = "8080" if self.mocking else "443"
         ws_robot_name = os.getenv("ROBOT_WEBSOCKET_NAME", "robot")
         uri = f"ws://{host}:{port}/ws/{ws_robot_name}"
-        async with websockets.connect(uri) as websocket:
-            # Connection is now open
-            print(f"Connected to WebSocket server at {uri}")
+        while True:
+            try:
+                async with websockets.connect(uri) as websocket:
+                # Connection is now open
+                    print(f"Connect to WebSocket server at {uri}")
+                    await asyncio.gather(self._send_loop(websocket), self._recieve_loop(websocket))
+            except ConnectionClosedError:
+                # TODO shutdown sequence if this occurs
+                print("Connection closed. Reconnecting...")
+            except ConnectionRefusedError:
+                print("Connection refused. Retrying...")
+            await asyncio.sleep(5)
 
-            await asyncio.gather(self._send_loop(websocket), self._recieve_loop(websocket))
+
 
     
