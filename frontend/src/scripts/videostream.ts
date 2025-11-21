@@ -52,7 +52,7 @@ window.addEventListener('load', () => {
     
     // Real-Time State
     let isRealTimeDrawing = false;
-    let realTimePath: { x: number, y: number }[] = [];
+    // REMOVED: realTimePath array (No longer needed since we aren't drawing)
 
     // Initialize WebSocket
     const wsHandler = new WebSocketHandler(null);
@@ -148,16 +148,14 @@ window.addEventListener('load', () => {
     }
 
     // --- 4. Helper: Coordinate Calculation ---
-    // This fixes the offset issue by subtracting canvas position
-    const getCanvasCoordinates = (e: PointerEvent) => {
+    const getCanvasCoordinates = (clientX: number, clientY: number) => {
         const rect = canvas.getBoundingClientRect();
-        // Calculate scale in case canvas display size differs from buffer size
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
 
         return {
-            x: (e.clientX - rect.left) * scaleX,
-            y: (e.clientY - rect.top) * scaleY
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
         };
     };
 
@@ -169,22 +167,13 @@ window.addEventListener('load', () => {
     wsHandler.connect();
 
     const updateCanvas = (now: DOMHighResTimeStamp, metadata: VideoFrameCallbackMetadata) => {
+        // 1. Draw Video Frame
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // Draw Visual Red Line (Real-Time)
-        if (processingModeSwitch && processingModeSwitch.checked && isRealTimeDrawing && realTimePath.length > 1) {
-            ctx.beginPath();
-            ctx.strokeStyle = 'red';
-            ctx.lineWidth = 5;
-            ctx.lineCap = 'round';
-            ctx.moveTo(realTimePath[0].x, realTimePath[0].y);
-            for (let i = 1; i < realTimePath.length; i++) {
-                ctx.lineTo(realTimePath[i].x, realTimePath[i].y);
-            }
-            ctx.stroke();
-        }
+        // REMOVED: Real-Time Red Line Drawing (Performance Optimization)
+        // We now only send coordinates, we do not visualize the path locally.
 
-        // Draw Batch Tracker Overlay
+        // 2. Draw Batch Tracker Overlay (Only in Batch Mode)
         if (processingModeSwitch && !processingModeSwitch.checked && drawingTracker) {
             drawingTracker.drawOnMainCanvas();
         }
@@ -225,15 +214,13 @@ window.addEventListener('load', () => {
         e.preventDefault();
         canvas.setPointerCapture(e.pointerId);
         
-        // Use corrected coordinates
-        const pos = getCanvasCoordinates(e);
-        
         isRealTimeDrawing = true;
-        realTimePath = [{ x: pos.x, y: pos.y }];
-
+        
+        // 1. Start Signal
         wsHandler.updateState({ pathEvent: 'start' });
 
-        // Send Video-Relative Coordinates
+        // 2. Send First Coordinate
+        const pos = getCanvasCoordinates(e.clientX, e.clientY);
         const vidX = (pos.x / canvas.width) * video.videoWidth;
         const vidY = (pos.y / canvas.height) * video.videoHeight;
         wsHandler.updateState({ x: vidX, y: vidY });
@@ -243,13 +230,9 @@ window.addEventListener('load', () => {
         if (!isRealTimeDrawing) return;
         e.preventDefault();
 
-        // Use corrected coordinates
-        const pos = getCanvasCoordinates(e);
+        const pos = getCanvasCoordinates(e.clientX, e.clientY);
 
-        // Update Visuals
-        realTimePath.push({ x: pos.x, y: pos.y });
-
-        // Send Coordinates
+        // Stream Coordinates
         const vidX = (pos.x / canvas.width) * video.videoWidth;
         const vidY = (pos.y / canvas.height) * video.videoHeight;
         wsHandler.updateState({ x: vidX, y: vidY });
@@ -261,8 +244,8 @@ window.addEventListener('load', () => {
         
         canvas.releasePointerCapture(e.pointerId);
         isRealTimeDrawing = false;
-        realTimePath = []; 
-
+        
+        // End Signal
         wsHandler.updateState({ pathEvent: 'end' });
     };
 
@@ -277,7 +260,6 @@ window.addEventListener('load', () => {
         const isRealTime = processingModeSwitch.checked;
 
         if (isRealTime) {
-            // REAL-TIME
             batchUiElements.forEach(el => el.classList.add('hidden-mode'));
             if (statusControlValue) {
                 statusControlValue.textContent = "REAL-TIME";
@@ -287,14 +269,12 @@ window.addEventListener('load', () => {
             toggleButtons.forEach(btn => btn.classList.remove('selected'));
             selectedShape = null;
         } else {
-            // BATCH
             batchUiElements.forEach(el => el.classList.remove('hidden-mode'));
             if (statusControlValue) {
                 statusControlValue.textContent = "BATCH";
                 statusControlValue.style.color = "";
             }
             isRealTimeDrawing = false;
-            realTimePath = [];
             toggleButtons.forEach(btn => btn.classList.remove('selected'));
             selectedShape = null;
             drawingTracker?.disableDrawing();
@@ -414,9 +394,12 @@ window.addEventListener('load', () => {
         if (processingModeSwitch.checked) return;
         if (drawingTracker?.isDrawingEnabled()) return;
 
-        let x = event.clientX / canvas.width * video.videoWidth;
-        let y = event.clientY / canvas.height * video.videoHeight;
-        wsHandler.updateState({ x, y });
+        const pos = getCanvasCoordinates(event.clientX, event.clientY);
+
+        const vidX = (pos.x / canvas.width) * video.videoWidth;
+        const vidY = (pos.y / canvas.height) * video.videoHeight;
+        
+        wsHandler.updateState({ x: vidX, y: vidY });
     });
 
     robotBtn.addEventListener('click', () => {
