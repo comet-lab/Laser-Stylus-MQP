@@ -29,3 +29,11 @@ export interface DragOffsets {
     start: Position;
     end: Position;
 }
+
+export type DrawingMode = 'batch' | 'realtime';
+
+export interface RealTimeCallbacks {
+    onStart: () => void;
+    onMove: (x: number, y: number) => void;
+    onEnd: () => void;
+}

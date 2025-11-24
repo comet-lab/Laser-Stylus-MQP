@@ -11,6 +11,7 @@ export interface WebSocketMessage {
     beamWaist: number;
     speed: number;
     isLaserOn: boolean;
+    pathEvent: string | null;
 }
 
 // Type for partial updates, any subset of WebSocketMessage
