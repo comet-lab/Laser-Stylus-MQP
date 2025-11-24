@@ -2,3 +2,8 @@ __pycache__/
 *.pyc
 static/
 frontend/node_modules/
+venvs/
+*.o
+.vscode/
+surgical_system/cpp_src/main
+surgical_system/cpp_src/CalibrateRobot
