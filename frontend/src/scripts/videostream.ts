@@ -81,12 +81,10 @@ window.addEventListener('load', () => {
     settingsCloseBtn.addEventListener('click', closeSettings);
 
     const openPrepareMenu = (): void => {
-        overlay.classList.add('active');
         preparePopup.classList.add('active');
     };
 
     const closePrepareMenu = (): void => {
-        overlay.classList.remove('active');
         preparePopup.classList.remove('active');
     };
 
@@ -387,6 +385,11 @@ window.addEventListener('load', () => {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         if (drawingTracker) drawingTracker.updateCanvasSize(canvas.width, canvas.height);
+        if (drawingTracker?.isDrawingEnabled()) {
+            drawingTracker.clearDrawing();
+            drawingState = 'idle';
+            updateDrawButtonState();
+        }
     });
 
     // Click-to-move (Guarded against Real-Time mode)
