@@ -37,6 +37,13 @@ class Camera_Registration(System_Calibration):
         self.therm_cam.start_stream()
         self.rgbd_cam.start_stream()
         
+        while not self.therm_cam.get_latest() or not self.rgbd_cam.get_latest():
+            print("Waiting for camera response...")
+            time.sleep(0.5)
+            
+        self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder)
+        self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder)
+        
     def run(self): 
         debug = True
         self.home_pose = self.robot_controller.load_edit_pose()
@@ -64,8 +71,8 @@ class Camera_Registration(System_Calibration):
         self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder, debug = debug)
         self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder, debug = debug)
         
-        self.reprojection_test('color', self.rgb_M, gridShape = np.array([2, 2]), laserDuration = .15, \
-                        debug=debug, height=0)
+        # self.reprojection_test('color', self.rgb_M, gridShape = np.array([2, 2]), laserDuration = .15, \
+        #                 debug=debug, height=0)
         
         self.reprojection_test('thermal', self.therm_M, gridShape = np.array([2, 2]), laserDuration = .15, \
                         debug=debug, height=0)
@@ -174,6 +181,88 @@ class Camera_Registration(System_Calibration):
         # np.save    (save_dir / "laser_spots.npy",       therm_image_set)
         return combinedImg, therm_img_points, rgb_img_points, obj_Points
 
+    def live_control_view(self, cam_type, max_vel = 0.05, window_name="Camera", frame_key="color"):
+        """
+        Show a live view from cam_obj and allow the user to click to get pixel locations.
+        """
+        input("Press Enter to continue to live control")
+        self.robot_controller.go_to_pose(self.home_pose)
+        last_point = None   # np.array([x, y]) of the current/last selection
+        dragging = False    # True while left mouse button is held
+
+        def on_mouse(event, x, y, flags, param):
+            nonlocal last_point, dragging
+
+            if event == cv2.EVENT_LBUTTONDOWN:
+                dragging = True
+                last_point = np.array([x, y])
+                # print(f"Pressed at pixel: (x={x}, y={y})")
+
+            elif event == cv2.EVENT_MOUSEMOVE:
+                if dragging and (flags & cv2.EVENT_FLAG_LBUTTON):
+                    last_point = np.array([x, y])
+                    # print(f"Dragging over pixel: (x={x}, y={y})")
+
+            elif event == cv2.EVENT_LBUTTONUP:
+                dragging = False
+                last_point = np.array([x, y])
+                # print(f"Released at pixel: (x={x}, y={y})")
+
+        cv2.namedWindow(window_name)
+        cv2.setMouseCallback(window_name, on_mouse)
+        
+        try:
+            while True:
+                frame_data = self.get_cam_latest(cam_type)
+
+                # Handle either dict or raw image
+                if isinstance(frame_data, dict):
+                    frame = frame_data.get(frame_key, None)
+                else:
+                    frame = frame_data
+
+                if frame is None:
+                    continue
+
+                disp = frame.copy()
+
+                if last_point is not None:
+                    cv2.circle(disp, last_point, 5, (0, 255, 0), 2)
+                    
+                    if cam_type == "thermal" or cam_type == "color":
+                        target_position = self.pixel_to_world(last_point, cam_type)
+                    else:
+                        raise(f"Wrong camera type: {cam_type}")
+                
+                if dragging and last_point is not None:
+                    target_pose = np.eye(4)
+                    target_pose[:3, -1] = target_position
+                    target_vel = self.robot_controller.live_control(target_pose, max_vel)
+                    self.robot_controller.set_velocity(target_vel, np.zeros(3))
+                    self.laser_controller.set_output(1)
+                else:
+                    current_pose, current_vel = self.robot_controller.get_current_state()
+                    self.laser_controller.set_output(0)
+                    # print(np.linalg.norm(current_vel[:3]))
+                    if np.linalg.norm(current_vel[:3]) > 6e-5:
+                        self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
+                    else:
+                        robot_controller.go_to_pose(current_pose, blocking=False)
+                    # print("stop")
+
+                
+                cv2.imshow(window_name, disp)
+
+                # Press 'q' or ESC to quit
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q') or key == 27:
+                    break
+
+        finally:
+            cv2.destroyWindow(window_name)
+            self.laser_controller.set_output(0)
+    
+    
 
 
 if __name__ == '__main__':
@@ -221,6 +310,7 @@ if __name__ == '__main__':
     laser_controller.set_output(laser_on)
     
     camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_controller)
-    camera_reg.run()
+    # camera_reg.run()
+    camera_reg.live_control_view("color")
     # print("here")
 

@@ -39,24 +39,26 @@ public:
         int n;
         socklen_t len;
         len = sizeof(cliaddr);
-
+        // std::cout << "messageLength = " << messageLength << std::endl;
+        
         // Receive data from a client
         ssize_t receivedBytes = recvfrom(sockfd, (char *)receiveBuffer, MAXLINE, 0,
-                                             (struct sockaddr*)&cliaddr, &len);
+        (struct sockaddr*)&cliaddr, &len);
         if (receivedBytes < 0) {
             std::cerr << "Failed to receive data from client." << std::endl;
         }
-       
+        
         ssize_t bytes_sent = sendto(sockfd, (double *)message, messageLength,
-                                     MSG_CONFIRM, (const struct sockaddr *) &cliaddr, 
-                                    len);
+        MSG_CONFIRM, (const struct sockaddr *) &cliaddr, 
+        len);
         if (bytes_sent == -1) {
             throw std::runtime_error("Failed to send message");
         } 
         // else{
-        //     std::cout << "Sending Message to Server" << std::endl;
-        // }
-
+            //     std::cout << "Sending Message to Server" << std::endl;
+            // }
+            
+        // std::cout << "bytes_sent    = " << bytes_sent    << std::endl;
         // receiveBuffer[MAXLINE-1] = '\0'; //This is useful to terminate strings for printing
         // std::cout<<"Server : "<< receiveBuffer[0] <<std::endl; //verifying data received from server
         // std::cout<<"Server : "<< receiveBuffer[1] <<std::endl;

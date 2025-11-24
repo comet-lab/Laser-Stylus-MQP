@@ -18,6 +18,7 @@ class Robot_Controller():
         time.sleep(3)
         print("Robot Online")
         self.home_pose = self.load_home_pose()
+        self.home_pose_inv = self.HT_Inv(self.home_pose)
 
     def load_home_pose(self, home_pose_path = "surgical_system/py_src/robot/home_pose.csv"):
         if(os.path.exists(home_pose_path)):
@@ -65,7 +66,7 @@ class Robot_Controller():
             
             # Convert to scipy Rotations
             rot_matrix = Rotation.from_matrix(pose[:3, :3])
-            rot_quat = Rotation.from_quat(currPose[3:])  # expects [x, y, z, w]
+            rot_quat = Rotation.from_quat(currPose[3:7])  # expects [x, y, z, w]
 
             # Compute relative rotation: R_rel = R_quat^-1 * R_matrix
             R_rel = rot_quat.inv() * rot_matrix
@@ -130,13 +131,14 @@ class Robot_Controller():
     def close_robot(self):
         self.franka_client.close()
 
-    def get_current_pose(self):
+    def get_current_state(self):
         pose = self.franka_client.request_pose()
-        position, quat = pose[:3], pose[3:]
+        position, quat = pose[:3], pose[3:7]
         Rmat = Rotation.from_quat(quat).as_matrix()
         new_pose = np.eye(4)
         new_pose[0:3, -1], new_pose[:3, :3] = position, Rmat
-        return pose
+        current_vel = pose[7:]
+        return new_pose, current_vel
 
     def quat_to_Mat(self, pose):
         #raw robot pose [x, y, z, qx, qy, qz, w]
@@ -144,6 +146,16 @@ class Robot_Controller():
         pose_M[:3, :3] = Rotation.from_quat(pose[3:]).as_matrix()
         pose_M[:3, -1] = pose[:3]
         return pose_M
+
+    def HT_Inv(self, homogeneousPose):
+        """
+        Computes the inverse of a homogeneous transformation matrix
+        """
+        R = homogeneousPose[0:3, 0:3]
+        t = homogeneousPose[0:3, 3]
+        R_inv = R.T
+        t_inv = -R_inv @ t
+        return np.concatenate((np.concatenate((R_inv, t_inv.reshape(3, 1)), axis=1), [[0, 0, 0, 1]]), axis=0)
 
     def create_trajectory(self, path_info):
         if not isinstance(path_info['Positions'], np.ndarray):
@@ -214,6 +226,21 @@ class Robot_Controller():
         plt.show()
         # np.savetxt("actualVel.npy", actual_vel_list)
         # np.savetxt("targetVel.npy", actual_vel_list)
+    
+    def live_control(self, target_pose_home, max_vel):
+        current_pose, _ = self.get_current_state()
+        current_pose = current_pose[:3, -1] - self.home_pose[:3, -1]
+        position_error = target_pose_home[:3, -1] - current_pose
+        KP = 5.0
+        target_vel = position_error * KP
+        mag = np.linalg.norm(target_vel)
+        
+        if mag == 0:
+            target_vel = np.zeros(3) 
+        elif mag > max_vel:
+            target_vel = target_vel * (max_vel / mag)
+        return target_vel
+            
     
     
 if __name__=='__main__':

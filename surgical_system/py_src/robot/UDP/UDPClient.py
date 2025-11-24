@@ -17,7 +17,7 @@ class UDPClient:
     def send(self, message):
         self.sock.sendto(message, (self.serverIP, self.serverPort))
 
-    def requestMessage(self, message, buffer_size=1024):
+    def requestMessage(self, message, buffer_size=2024):
         self.send(message)  # send return information
         returnMessage = self.sock.recvfrom(buffer_size)
         # print(returnMessage[0])
@@ -38,7 +38,7 @@ def testStateSwap(my_socket):
             message = my_socket.requestMessage(pose,mode)
             time.sleep(1)
             count = count + 1
-            currState = struct.unpack('ddddddd',message[0])
+            currState = struct.unpack('ddddddddddddd',message[0])
             print(currState)
 
 

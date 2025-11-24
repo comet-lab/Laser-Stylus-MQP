@@ -1,6 +1,6 @@
 #include "PandaController.h" 
 
-PandaController::PandaController(std::string ipAddress,char mode, double *posTargetPtr, double orienTargetPtr[][3], double currState[7]){
+PandaController::PandaController(std::string ipAddress,char mode, double *posTargetPtr, double orienTargetPtr[][3], double currState[13]){
   this->ipAddress = ipAddress;
   this->posTargetPtr = posTargetPtr;
   this->orienTargetPtr = orienTargetPtr;
@@ -14,7 +14,7 @@ PandaController::PandaController(std::string ipAddress,char mode, double *posTar
     0.00001, 0.0,     0.0,
     0.0,     0.00001, 0.0,
     0.0,     0.0,     0.00001}; // guess               
-  robot->setLoad(mass, com, inertia);
+  robot->setLoad(mass, com, inertia); //
 }
 
 void PandaController::setBehavior(){
@@ -119,6 +119,13 @@ void PandaController::runController(double maxTime /*=10*/){
         // set current cartesian linear and angular acceleration based on desired joint velocities
         linVel(0) = cartVel_d(0); linVel(1) = cartVel_d(1); linVel(2) = cartVel_d(2); 
         angVel(0) = cartVel_d(3); angVel(1) = cartVel_d(4); angVel(2) = cartVel_d(5);
+
+        this->currState[7] = cartVel_d(0);
+        this->currState[8] = cartVel_d(1);
+        this->currState[9] = cartVel_d(2);
+        this->currState[10] = cartVel_d(3);
+        this->currState[11] = cartVel_d(4);
+        this->currState[12] = cartVel_d(5);
         
         // calculate necessary change in position (aka velocity vector)
         changeInPos = posTarget - currentPos;
@@ -238,13 +245,14 @@ void PandaController::velocityMode(double maxTime){
     currentCartVel(0) = cartVel_d(0); currentCartVel(1) = cartVel_d(1); currentCartVel(2) = cartVel_d(2); 
     currentOmegaVel(0) = cartVel_d(3); currentOmegaVel(1) = cartVel_d(4); currentOmegaVel(2) = cartVel_d(5);
 
-    this->currState[0] = cartVel_d(0);
-    this->currState[1] = cartVel_d(1);
-    this->currState[2] = cartVel_d(2);
-    this->currState[3] = cartVel_d(3);
-    this->currState[4] = cartVel_d(4);
-    this->currState[5] = cartVel_d(5);
-    this->currState[5] = -1.0;
+    this->convertPose(robotState.O_T_EE.data(), this->currState);
+
+    this->currState[7] = cartVel_d(0);
+    this->currState[8] = cartVel_d(1);
+    this->currState[9] = cartVel_d(2);
+    this->currState[10] = cartVel_d(3);
+    this->currState[11] = cartVel_d(4);
+    this->currState[12] = cartVel_d(5);
     
     Eigen::Vector3d linVelOutput = Eigen::Vector3d::Zero();
     Eigen::Vector3d omegaVelOutput  = Eigen::Vector3d::Zero();
@@ -280,9 +288,6 @@ void PandaController::velocityMode(double maxTime){
     double printFrequency = 100; //[Hz]
     if (abs(round(time * printFrequency) - time*printFrequency) < 0.0005){     // only print every second   
       // std::cout << "\nC++ Debug at time: " << time  << " seconds" << std::endl;
-      // std::cout << "Current Joint Velocities: " << jointVel.transpose() << std::endl;
-      // std::cout << "Desired Joint Velocities: " << jointVel_d.transpose() << std::endl;
-      // std::cout << "Commanded Joint Velocities: " << jointVel_c.transpose() << std::endl;
       // std::cout << "Current Cartesian Velocity: " << currentCartVel.transpose() << std::endl;
       // std::cout << "Current target Velocity: " << linVelOutput.transpose() << std::endl;
       // std::cout << "Desired Cartesian Velocities: " << linVelTarget.transpose() << std::endl << std::endl;
@@ -325,7 +330,7 @@ void PandaController::getPose(){
   this->convertPose(T,this->currState);
 }
 
-void PandaController::convertPose(const double T[16], double currState[7]){
+void PandaController::convertPose(const double T[16], double currState[13]){
   currState[0] = T[12]; currState[1] = T[13]; currState[2] = T[14];
   // for (int j = 0; j < 4; j++){
   //   std::cout << "[";

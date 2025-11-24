@@ -31,6 +31,9 @@ class System_Calibration():
         
         self.rgbd_cali = CameraCalibration()
         self.therm_cali = CameraCalibration()
+        
+        self.rgb_M = None
+        self.therm_M = None
 
         self.home_pose = robot_controller.get_home_pose()
     
@@ -49,18 +52,16 @@ class System_Calibration():
                             [0,0,1,roi_height],
                             [0,0,0,1]])
         self.robot_controller.go_to_pose(roi_pose @ self.home_pose)
-        rowROI, colROI = self.select_ROI(cam_type = cam_type)
+        rowROI, colROI = self.select_ROI(cam_type)
         
         xPoints = (np.linspace(colROI[0], colROI[1], gridShape[0]))
         yPoints = (np.linspace(rowROI[0], rowROI[1], gridShape[1]))
         xValues, yValues = np.meshgrid(xPoints, yPoints)
         
         cam_obj = self.get_cam_obj(cam_type)
-        cam_cali = self.get_cam_cali(cam_type)
         pix_Per_M = cam_obj.pix_Per_M
         
-        startImage = cam_obj.get_latest()
-        startImage = startImage['thermal'] if cam_type == "thermal" else startImage["color"]
+        startImage = self.get_cam_latest(cam_type)
         
         imgCount = gridShape[0] * gridShape[1]
         laserPixelPoints = np.empty((2, imgCount))
@@ -125,35 +126,42 @@ class System_Calibration():
 
             time.sleep(1)  
 
-    def select_ROI(self, cam_type = "color"):
+    def pixel_to_world(self, img_points, cam_type, z = 0):
+        M = self.get_cam_M(cam_type)
+        cam_obj = self.get_cam_obj(cam_type)
+        pix_Per_M = cam_obj.pix_Per_M
+        world_point = np.zeros(3)
+        world_point[-1] = z
+        world_point[:2] = cv2.perspectiveTransform(img_points.reshape(-1,1,2).astype(np.float32), M).reshape(-1,2) / pix_Per_M
+        return world_point
+    
+    def select_ROI(self, cam_type):
         print("\nSelecting Region of Interest")
         
-        cam_obj = self.get_cam_obj(cam_type)
-        
-        # print("Firing Laser in 2 seconds")
-        # self.robot_controller.goToPose(targetPose@self.home_pose,1)
-        # time.sleep(2)
-        # print("Laser On")
-        # laser_controller.set_output(1)
-        # time.sleep(0.5)
-        # laser_controller.set_output(0)
-        # print("Laser Off")
-        
         image = self.get_cam_latest(cam_type)
-        # im = (image_list[4] - image_list[4].min())
-        # im = np.array(im*255.0/im.max(),dtype=np.uint8)
+        if(cam_type == "thermal"):
+            image = np.array(image*255.0/image.max(),dtype=np.uint8)
         bbox = cv2.selectROI('select', image)
         rowROI = [bbox[1], bbox[1]+bbox[3]]
         colROI = [bbox[0], bbox[0]+bbox[2]]
         cv2.destroyWindow('select')
         return rowROI, colROI
     
+    def get_cam_M(self, cam_type):
+        if cam_type == "color":
+            return self.rgb_M
+        elif cam_type == "thermal":
+            return self.therm_M
+        else:
+            print("Incorrect camera type: ", cam_type)
+            return None
+    
     def get_cam_latest(self, cam_type):
         cam_obj = self.get_cam_obj(cam_type)
         return cam_obj.get_latest()[cam_type]
         
-    def get_cam_obj(self, cam_type = "color"):
-        if cam_type == "color" or "depth":
+    def get_cam_obj(self, cam_type):
+        if cam_type == "color" or cam_type =="depth":
             return self.rgbd_cam
         elif cam_type == "thermal":
             return self.therm_cam
@@ -199,8 +207,7 @@ class System_Calibration():
         
         return center
     
-    
-    
+
     
 if __name__=='__main__':
     pass

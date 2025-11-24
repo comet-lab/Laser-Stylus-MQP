@@ -1,5 +1,7 @@
 CC = g++
+RM = rm -f
 
+.PHONY: all clean
 all: main CalibrateRobot
 
 
@@ -32,3 +34,6 @@ CameraAcquisition: CameraAcquisition.o
 
 CameraAcquisition.o: CameraAcquisition.cpp
 	$(CC) -c CameraAcquisition.cpp -I /opt/spinnaker/include/ -I /opt/spinnaker/include/SpinGenApi/
+	
+clean:
+	$(RM) main CalibrateRobot CameraAcquisition *.o
