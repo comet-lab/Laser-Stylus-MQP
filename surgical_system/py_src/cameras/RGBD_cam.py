@@ -57,6 +57,12 @@ class RGBD_Cam(Camera):
                 self._lock.release()
         finally:
             self.pipeline.stop()
+    
+    def set_default_setting(self):
+        if self.sensor.supports(rs.option.enable_auto_exposure):
+            self.sensor.set_option(rs.option.enable_auto_exposure, 1)
+        if self.sensor.supports(rs.option.enable_auto_white_balance):
+            self.sensor.set_option(rs.option.enable_auto_white_balance, 1)
             
     def set_color_manual(self, exposure_us=2000, gain=16, white_balance_k=4500):
         # Turn OFF auto exposure & auto white balance first

@@ -65,6 +65,7 @@ async def main():
     if(not mock_robot):
         therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frame_rate="Rate50Hz",focal_distance=0.2)
         rgbd_cam = RGBD_Cam() #Runs a thread internally
+        # rgbd_cam.set_default_setting() # Auto-exposure
     else:
         therm_cam = MockCamera()
 
@@ -121,6 +122,13 @@ async def main():
     def recv_fn(msg: str):
         data = json.loads(msg)
         desired_state.update(data)
+        # if(desired_state.isLaserOn is not None):
+        #     laser_obj.set_output(desired_state.isLaserOn)
+        #     print("Laser on? ",desired_state.isLaserOn)
+        # else:
+        #     laser_obj.set_output(False)
+        #     print("No laser status, turning off")
+        
         if(desired_state.raster_mask is not None):
             # Do raster 
             image_bytes = desired_state.raster_mask.encode('utf-8')
@@ -183,12 +191,17 @@ async def main():
                 robot_controller.set_velocity(np.zeros(3), np.zeros(3))
             else:
                 robot_controller.go_to_pose(current_pose, blocking=False)
+                
+            laser_obj.set_output(False)
         else:
             target_world_point = camera_reg.pixel_to_world(np.array([desired_state.x, desired_state.y]), cam_type=cam_type, z=start_pose[2,3])
             target_pose = np.eye(4)
             target_pose[:3, -1] = target_world_point
             target_vel = robot_controller.live_control(target_pose, 0.05)
             robot_controller.set_velocity(target_vel, np.zeros(3))
+            
+            laser_obj.set_output(True)
+            
             
         # Camera frame publishing
         latest = camera_reg.get_cam_latest(cam_type=cam_type)

@@ -17,7 +17,7 @@ class Broadcast:
             '-y',  # Overwrite output files without asking
             '-f', 'image2pipe',  # Input format is raw video
             '-vcodec', 'mjpeg',
-            '-framerate', '30',
+            '-framerate', '60',
             '-i', '-',  # Read input from stdin pipe
             '-c:v', 'libx264',  # Video codec H.264
             '-preset', 'ultrafast',
