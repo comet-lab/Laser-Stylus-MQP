@@ -3,6 +3,7 @@ webrtcIpsFromInterfacesList:
   - wlp3s0
 webrtcAdditionalHosts:
   - 130.215.124.84
+  - localhost
 pathDefaults:
   source: publisher
   rtspTransport: udp
