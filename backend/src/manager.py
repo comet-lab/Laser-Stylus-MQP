@@ -56,6 +56,8 @@ class ConnectionManager:
 
                     # Update the robot's state
                     state.update(message)
+                    if(forwarding_group == self.robot_connections):
+                        print(message)
                     await self.broadcast_to_group(forwarding_group, state)
                     
                     # RESET EVENT: 

@@ -56,7 +56,7 @@ class Robot_Controller():
         error, angleError = 10000, 10000
         currPose = self.franka_client.send_pose(pose, 1)
         iterations = 0
-        print("Moving to Pose ...")
+        # print("Moving to Pose ...")
         errorFlag1 = True
         errorFlag2 = True
         while (errorFlag1 or errorFlag2) and iterations < maxIterations and blocking:
@@ -82,14 +82,14 @@ class Robot_Controller():
             errorFlag1 = (np.linalg.norm(error) > (linTol/1000) or np.linalg.norm(angleError) > np.deg2rad(rotTol))
 
             iterations += 1
-            sys.stdout.write(f"\r{(iterations*0.5):.1f} sec                \n")
-            sys.stdout.write(f"Robot Position Error [mm]: [{1000*error[0]:.3f}, {1000*error[1]:.3f}, {1000*error[2]:.3f}]                  \n")
-            sys.stdout.write(f"Robot Rotation Error [deg]: {np.rad2deg(angleError):.4f}         \033[F\033[F")
-            sys.stdout.flush()
+        #     sys.stdout.write(f"\r{(iterations*0.5):.1f} sec                \n")
+        #     sys.stdout.write(f"Robot Position Error [mm]: [{1000*error[0]:.3f}, {1000*error[1]:.3f}, {1000*error[2]:.3f}]                  \n")
+        #     sys.stdout.write(f"Robot Rotation Error [deg]: {np.rad2deg(angleError):.4f}         \033[F\033[F")
+        #     sys.stdout.flush()
 
-        sys.stdout.write("\033[E\033[E\n...Done\n")
-        sys.stdout.flush()    
-        print("Error Flag 2 value: ", errorFlag2)
+        # sys.stdout.write("\033[E\033[E\n...Done\n")
+        # sys.stdout.flush()    
+        # print("Error Flag 2 value: ", errorFlag2)
         # time.sleep(5)
         return currPose
     

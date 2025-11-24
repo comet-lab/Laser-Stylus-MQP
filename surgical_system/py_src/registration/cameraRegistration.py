@@ -12,18 +12,14 @@ if __name__=='__main__':
         if (candidate / "robot").is_dir() and (candidate / "cameras").is_dir() and (candidate / "laser_control").is_dir():
             sys.path.insert(0, str(candidate))
             break
-    from robot.robot_controller import Robot_Controller
-    from cameras.thermal_cam import ThermalCam
-    from cameras.RGBD_cam import RGBD_Cam
-    from cameras.cam_calibration import CameraCalibration
-    from laser_control.laser_arduino import Laser_Arduino
     from system_calibration import System_Calibration
 else:
-    from ..robot.robot_controller import Robot_Controller
-    from ..cameras.thermal_cam import ThermalCam
-    from ..cameras.RGBD_cam import RGBD_Cam
-    from ..cameras.cam_calibration import CameraCalibration
-    from ..laser_control.laser_arduino import Laser_Arduino
+    from registration.system_calibration import System_Calibration
+from robot.robot_controller import Robot_Controller
+from cameras.thermal_cam import ThermalCam
+from cameras.RGBD_cam import RGBD_Cam
+from cameras.cam_calibration import CameraCalibration
+from laser_control.laser_arduino import Laser_Arduino
 
 
 # from Utilities_functions import SelectROI, loadAndEditPose, go_to_pose
@@ -41,13 +37,13 @@ class Camera_Registration(System_Calibration):
             print("Waiting for camera response...")
             time.sleep(0.5)
         
-        self.home_pose = self.robot_controller.load_edit_pose()
-        start_pos = np.array([0,0,0.05]) # [m,m,m]
-        target_pose = np.array([[1.0, 0, 0, start_pos[0]],
-                                [0,1,0,start_pos[1]],
-                                [0,0,1,start_pos[2]],
-                                [0,0,0,1]])
-        self.robot_controller.go_to_pose(target_pose@home_pose,1)
+        # self.home_pose = self.robot_controller.load_home_pose()
+        # start_pos = np.array([0,0,0.05]) # [m,m,m]
+        # target_pose = np.array([[1.0, 0, 0, start_pos[0]],
+        #                         [0,1,0,start_pos[1]],
+        #                         [0,0,1,start_pos[2]],
+        #                         [0,0,0,1]])
+        # self.robot_controller.go_to_pose(target_pose@self.home_pose,1)
             
         self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder)
         self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder)

@@ -126,7 +126,7 @@ class System_Calibration():
 
             time.sleep(1)  
 
-    def pixel_to_world(self, img_points, cam_type, z = 0):
+    def pixel_to_world(self, img_points, cam_type, z = 0.0):
         M = self.get_cam_M(cam_type)
         cam_obj = self.get_cam_obj(cam_type)
         pix_Per_M = cam_obj.pix_Per_M

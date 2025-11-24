@@ -10,8 +10,8 @@ class MockRobotController():
         print(pose)
         self.pose = pose
     
-    def get_current_pose(self):
-        return self.pose
+    def get_current_state(self):
+        return self.pose, None
     
     def load_home_pose(self):
         rot = Rotation.from_euler('ZYX',[0,np.pi/4,np.pi/2])

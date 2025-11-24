@@ -6,6 +6,7 @@ import numpy as np
 import asyncio
 import websockets
 import time
+from datetime import datetime as dt
 from scipy.spatial.transform import Rotation
 from robot.robot import RobotSchema
 from dataclasses import dataclass, asdict
@@ -18,6 +19,7 @@ if(not mock_robot):
     from cameras.thermal_cam import ThermalCam
     from cameras.RGBD_cam import RGBD_Cam
     from laser_control.laser_arduino import Laser_Arduino
+    from registration.cameraRegistration import Camera_Registration
 else:
     from robot.mock_franka_client import MockRobotController
     from cameras.mock_camera import MockCamera
@@ -38,16 +40,16 @@ async def main():
     robot_controller = Robot_Controller() if not mock_robot else MockRobotController()
     home_pose = robot_controller.load_home_pose()
     start_pos = np.array([0,0,0.35]) # [m,m,m]
-    target_pose = np.array([[1.0, 0, 0, start_pos[0]],
+    start_pose = np.array([[1.0, 0, 0, start_pos[0]],
                             [0,1,0,start_pos[1]],
                             [0,0,1,start_pos[2]],
                             [0,0,0,1]])
-    robot_controller.go_to_pose(target_pose@home_pose,1) # Send robot to start position
+    robot_controller.go_to_pose(start_pose@home_pose,1) # Send robot to start position
     desired_state = RobotSchema()
     await asyncio.sleep(2)
     
     ##################################################################################
-    #--------------------------- Thermal Cam Config ---------------------------------#
+    #----------------------------------- Cam Config ---------------------------------#
     ##################################################################################
     # Set up camera object
     window_scale = 1
@@ -57,36 +59,64 @@ async def main():
     # and the focal distance to 0.204 m. This seems to be at the right location to maximize the focal point around the 
     # free beam laser spot.
     therm_cam = None
+    rgbd_cam = None
+    cam_type = "color"
+    
     if(not mock_robot):
         therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frame_rate="Rate50Hz",focal_distance=0.2)
+        rgbd_cam = RGBD_Cam() #Runs a thread internally
     else:
         therm_cam = MockCamera()
-    
-    ##################################################################################
-    #------------------------------ RGBD Cam Config ---------------------------------#
-    ##################################################################################
-    # rgbd_cam = RGBD_Cam() #Runs a thread internally
 
     
     ##################################################################################
     #-------------------------------- Laser Config ----------------------------------#
     ##################################################################################
     
-    # laser_obj = None
+    laser_obj = None
     if(not mock_robot):
         laser_obj = Laser_Arduino()  # controls whether laser is on or off
         laser_on = False
         laser_obj.set_output(laser_on)
+        
+    # TODO mock camera registration object
+    camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_obj)
+    print("Starting Streams ")
+    b = Broadcast(mocking=mock_robot)
+    print(f"Broadcast connection status: {b.connect()}")
+    
+    # def camera_broadcast_fn():
+    #     while True:
+    #         latest = camera_reg.get_cam_latest(cam_type=cam_type)
+    #         if(type(camera_broadcast_fn.old_frame) != type(None)):
+    #             if(np.sum(cv2.absdiff(latest, camera_broadcast_fn.old_frame)) == 0):
+    #                 # Same frame
+    #                 continue
+    #         if isinstance(latest, dict):
+    #             latest = latest.get(cam_type, None)
+    #         if(type(latest) == type(None)):
+    #             # No new frame
+    #             continue
+    #         if(b.connected):
+    #             b.publish_frame(latest)
+    #         else:
+    #             b.connect()
+    #             print('connecting...')
+    #             time.sleep(2)
+    # camera_broadcast_fn.old_frame = None
+    # asyncio.create_task(camera_broadcast_fn())
+    
 
+    print("Cameras are ready")
     
     ##################################################################################
     #----------------------------- Backend Connection -------------------------------#
     ##################################################################################
 
     def send_fn() -> str:
-        current_state = robot_controller.get_current_pose()
+        current_pose, _ = robot_controller.get_current_state()
         # TODO send other status (laser on, current path, etc)
-        return RobotSchema.from_pose(current_state@np.linalg.inv(home_pose)).to_str()
+        return RobotSchema.from_pose(current_pose@np.linalg.inv(home_pose)).to_str()
     
     def recv_fn(msg: str):
         data = json.loads(msg)
@@ -99,18 +129,24 @@ async def main():
             print("recieved raster png")
         elif(desired_state.path is not None and len(desired_state.path) > 1):
             # Do path
-            target = desired_state.path.pop(0)
-            desired_state.z = 0
-            desired_state.update(data=target)
+            robot_waypoints = camera_reg.pixel_to_world(desired_state.path.values(), cam_type=cam_type)
+            print(robot_waypoints[0])
+            # traj = robot_controller.create_trajectory(gains)
 
         # TODO keep looping
-        desired_state.go_to_pose(home_t=home_pose, robot_controller=robot_controller)
+        # desired_state.go_to_pose(home_t=home_pose, robot_controller=robot_controller)
+        recv_fn.last_update = time.time()       
         
         # TODO enable/disable laser
         # laser_obj.set_output(desired_pose.isLaserOn)
+        
+    
+        
+    recv_fn.last_update = None
 
     # TODO this is a hotfix, overload update to accept a robot schema
-    desired_state.update(asdict(RobotSchema.from_pose(robot_controller.get_current_pose()@np.linalg.inv(home_pose))))
+    initial_pose, _ = robot_controller.get_current_state()
+    desired_state.update(asdict(RobotSchema.from_pose(initial_pose@np.linalg.inv(home_pose))))
 
     backend_connection = BackendConnection(
         send_fn=send_fn,
@@ -126,32 +162,42 @@ async def main():
     if camera_calibration:
         pass
 
-    # await asyncio.Future()
     
-    print("Cameras are ready")
-    therm_cam.start_stream() # Start camera stream
-    # rgbd_cam.start_stream()
-    print("Starting Streams ")
-    b = Broadcast(mock_robot)
-    print(f"Broadcast connection status: {b.connect()}")
+    start_pose[2,3] = 0.0
+    robot_controller.go_to_pose(start_pose@home_pose,1) # Send robot to start position
     
     while (True):
-        # rgbd_cam.display_all_streams() #Test Streaming
-        latest = therm_cam.get_latest()
-        await asyncio.sleep(0.01)
-        img = None
-        if latest is not None:
-            if('themal') in latest.keys():
-                img = latest['thermal']
-                max = np.max(img)
-                img = img / max
-                img = img * 254
-            elif('image') in latest.keys():
-                img = latest['image']
+        # Backend pose update
+        await asyncio.sleep(0.0001)
+        
+        # Robot velocity controller        
+        current_time = time.time()
+        diff = 1
+        if(recv_fn.last_update is not None):
+            diff = current_time - recv_fn.last_update
+        # If no new message in 200ms, stop
+        if(diff > .12):
+            current_pose, current_vel = robot_controller.get_current_state()
+            # Stop robot, no drift
+            if np.linalg.norm(current_vel[:3]) > 2e-5:
+                robot_controller.set_velocity(np.zeros(3), np.zeros(3))
             else:
-                continue
+                robot_controller.go_to_pose(current_pose, blocking=False)
+        else:
+            target_world_point = camera_reg.pixel_to_world(np.array([desired_state.x, desired_state.y]), cam_type=cam_type, z=start_pose[2,3])
+            target_pose = np.eye(4)
+            target_pose[:3, -1] = target_world_point
+            target_vel = robot_controller.live_control(target_pose, 0.05)
+            robot_controller.set_velocity(target_vel, np.zeros(3))
+            
+        # Camera frame publishing
+        latest = camera_reg.get_cam_latest(cam_type=cam_type)
+        if isinstance(latest, dict):
+            latest = latest.get(cam_type, None)
+        if(type(latest) == type(None)):
+            continue
         if(b.connected):
-            b.publish_frame(img)
+            b.publish_frame(latest)
         else:
             b.connect()
             print('connecting...')

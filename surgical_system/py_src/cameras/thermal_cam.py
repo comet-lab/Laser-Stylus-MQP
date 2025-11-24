@@ -43,8 +43,9 @@ class ThermalCam(Camera):
         t = time.time()
         print("Starting Thermal Camera Thread...")
         try:
-            if not self._ready:
-                return 
+            while(not self._ready):     
+                print("Thermal cam not ready. Waiting...")
+                time.sleep(1)
             while(True):
                 self.thread_ready.wait()
                 images = self.start_recording(1)  # returns a list of images
@@ -435,6 +436,10 @@ class ThermalCam(Camera):
     # def __setattr__(self, attr, value):
     #     """ Delegate access to implementation """
     #     return setattr(self.__instance, attr, value)
+    
+    def __del__(self):
+        self.deinitialize_cam()
+        
 
 
 def record_temp_over_area():
