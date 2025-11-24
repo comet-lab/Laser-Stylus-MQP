@@ -1,6 +1,7 @@
 import json
 import numpy as np
 from dataclasses import dataclass, asdict
+from typing import List, Dict
 
 @dataclass
 class RobotSchema:
@@ -14,6 +15,8 @@ class RobotSchema:
     laserY: float = None
     beamWaist: float = None
     isLaserOn: bool = None
+    raster_mask: bytes = None
+    path: List[Dict[str, float]] = None
 
     @staticmethod
     def from_pose(pose: np.ndarray):
@@ -22,12 +25,17 @@ class RobotSchema:
         z = pose[2,3]
         return RobotSchema(x=x, y=y, z=z)
     
-    def to_mat(self):
+    def _to_mat(self):
         mat = np.identity(4)
         mat[0,3] = self.x
         mat[1,3] = self.y
         mat[2,3] = self.z
         return mat
+    
+    def go_to_pose(self, home_t: np.ndarray, robot_controller):
+        desired_task_pose = self._to_mat()
+        desired_robot_pose = desired_task_pose@home_t
+        return robot_controller.go_to_pose(desired_robot_pose)
 
     def to_str(self) -> str:
         data = {k: v for k, v in asdict(self).items() if v is not None}
