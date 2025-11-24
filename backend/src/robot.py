@@ -13,14 +13,15 @@ class RobotSchema:
     laserY: float = None
     beamWaist: float = None
     isLaserOn: bool = None
+    pathEvent: str = None
     raster_mask: str = None
     path: list[dict[str, float]] = None
 
     def flush(self):
-        payload = self.to_str()
-        self.raster_mask = None
-        self.path = None
-        return payload
+            payload = self.to_str()
+            self.raster_mask = None
+            self.path = None
+            return payload
 
     def to_str(self) -> str:
         data = {k: v for k, v in asdict(self).items() if v is not None}

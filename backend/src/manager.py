@@ -57,6 +57,12 @@ class ConnectionManager:
                     # Update the robot's state
                     state.update(message)
                     await self.broadcast_to_group(forwarding_group, state)
+                    
+                    # RESET EVENT: 
+                    # If we just broadcasted a pathEvent (start/end), reset it to None 
+                    # so it doesn't persist in future coordinate updates.
+                    if state.pathEvent is not None:
+                        state.pathEvent = None
 
                 except json.JSONDecodeError:
                     print("Error: Invalid JSON format")
