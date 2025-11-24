@@ -40,12 +40,7 @@ class Camera_Registration(System_Calibration):
         while not self.therm_cam.get_latest() or not self.rgbd_cam.get_latest():
             print("Waiting for camera response...")
             time.sleep(0.5)
-            
-        self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder)
-        self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder)
         
-    def run(self): 
-        debug = True
         self.home_pose = self.robot_controller.load_edit_pose()
         start_pos = np.array([0,0,0.05]) # [m,m,m]
         target_pose = np.array([[1.0, 0, 0, start_pos[0]],
@@ -53,6 +48,13 @@ class Camera_Registration(System_Calibration):
                                 [0,0,1,start_pos[2]],
                                 [0,0,0,1]])
         self.robot_controller.go_to_pose(target_pose@home_pose,1)
+            
+        self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder)
+        self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder)
+        
+    def run(self): 
+        debug = True
+       
         self.therm_cam.start_stream()
         self.rgbd_cam.start_stream()
         
@@ -63,21 +65,21 @@ class Camera_Registration(System_Calibration):
         # pathToCWD = os.getcwd()        
         
         # Create checkerboard
-        # self.create_checkerboard(gridShape = np.array([9, 8]), \
-        #                          saveLocation=self.calibration_folder, debug=debug)
+        self.create_checkerboard(gridShape = np.array([9, 8]), \
+                                 saveLocation=self.calibration_folder, debug=debug)
         
         self.laser_controller.set_output(False)
         
         self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder, debug = debug)
         self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder, debug = debug)
         
-        # self.reprojection_test('color', self.rgb_M, gridShape = np.array([2, 2]), laserDuration = .15, \
-        #                 debug=debug, height=0)
+        self.reprojection_test('color', self.rgb_M, gridShape = np.array([2, 2]), laserDuration = .15, \
+                        debug=debug, height=0)
         
         self.reprojection_test('thermal', self.therm_M, gridShape = np.array([2, 2]), laserDuration = .15, \
                         debug=debug, height=0)
         
-        self.therm_cam.deinitialize_cam()
+        # self.therm_cam.deinitialize_cam()
         # pass
     
     def create_checkerboard(self, gridShape = np.array([2, 6]), squareSize = 0.005, laserDuration = .15, debug=False, \
@@ -244,7 +246,7 @@ class Camera_Registration(System_Calibration):
                     current_pose, current_vel = self.robot_controller.get_current_state()
                     self.laser_controller.set_output(0)
                     # print(np.linalg.norm(current_vel[:3]))
-                    if np.linalg.norm(current_vel[:3]) > 6e-5:
+                    if np.linalg.norm(current_vel[:3]) > 2e-5:
                         self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
                     else:
                         robot_controller.go_to_pose(current_pose, blocking=False)

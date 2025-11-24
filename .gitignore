@@ -10,4 +10,4 @@ surgical_system/cpp_src/FrankaSubscriber.o
 surgical_system/cpp_src/main
 surgical_system/cpp_src/main.o
 surgical_system/cpp_src/PandaController.o
-*.csv
+
