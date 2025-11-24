@@ -1,7 +1,24 @@
+/* ============================================
+   FONTS & IMPORTS
+   ============================================ */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;700&display=swap');
+@import url('./buttons.css');
+@import url('./settingsPage.css');
+@import url('./preparePage.css');
+
+/* ============================================
+   GLOBAL STYLES
+   ============================================ */
 body {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 400;
   padding: 1.5rem;
-  color: #111;
+  background-color: #000000;
+}
+
+body, html {
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 #app {
@@ -25,9 +42,196 @@ pre {
   white-space: pre-wrap;
 }
 
-.laser-on {
-  background-color: red; /* Green */
-  color: black;
-  border-radius: 8px;
-  border-width: 2px;
+/* ============================================
+   TOP PANEL
+   ============================================ */
+#top-panel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 7%;
+  background-color: #0f1419;
+  gap: 10px;
+}
+
+/* --- Status Panels --- */
+.status-message {
+  display: flex;
+  height: 100%;
+  background-color: #151b21;
+  color: #e0f2e0;
+  border-radius: 16px;
+}
+
+#status-panel-left {
+  justify-content: flex-start;
+  align-items: center;
+  padding-left: 5px;
+  padding-right: 5px;
+  flex-grow: 1;
+  gap: 12px;
+}
+
+/* ============================================
+   LEFT PANEL & CONTROLS
+   ============================================ */
+#left-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 65.5px;
+  flex-shrink: 0;
+  height: 93%;
+  background-color: #0f1419;
+}
+
+#top-icon-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 0.2vw;
+}
+
+#main-section-wrapper {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+#middle-icon-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: auto;
+  margin-bottom: auto;
+}
+
+/* --- Helper class for your new icon buttons --- */
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 90%; /* Example size */
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  border: none;
+  background-color: #2c343b;
+  color: #e0f2e0;
+  border: 3px solid transparent;
+  transition: all 0.15s ease-out;
+}
+.icon-btn:hover {
+  filter: brightness(110%);
+}
+.icon-btn.selected,
+.icon-btn:active {
+  background-color: #455256;
+  border-color: #e0f2e0;
+  box-shadow: inset 2px 2px 8px rgba(0, 0, 0, 0.5);
+}
+.icon-btn-stroke {
+  stroke: #e0f2e0;
+}
+.icon-btn-fill {
+  fill: #e0f2e0;
+}
+
+/* ============================================
+   STATUS PANEL
+   ============================================ */
+#status-panel-right {
+  display: grid;
+  grid-template-columns: auto auto auto auto;
+  grid-template-rows: auto auto;
+  align-content: center;
+  justify-content: end;
+  column-gap: 8px;
+  row-gap: 6px;
+  padding-right: 30px;
+  font-weight: bold;
+  font-size: 18px;
+  color: #f5eff7;
+}
+
+.status-label:nth-child(5),
+.status-label:nth-child(7) {
+  padding-left: 30px; /* Adds extra space before column 3 */
+}
+
+#status-panel-right p {
+  font-weight: bold;
+  font-size: 18px;
+  color: #f5eff7;
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 0 8px;
+}
+
+.status-label {
+  text-align: right;
+}
+
+.status-label:nth-child(odd) {
+  text-align: right;
+}
+
+.status-value {
+  text-align: left;
+}
+
+.status-laser-on {
+  color: #cb0e00;
+}
+.status-robot-on {
+  color: #fa8500;
+}
+.status-off {
+  color: #70ff57;
+}
+.status-batch {
+  color: #70ff57;
+}
+.status-real-time {
+  color: #fa8500;
+}
+.status-camera-connected {
+  color: #70ff57;
+}
+.status-camera-off {
+  color: #cb0e00;
+}
+
+/* ============================================
+   CANVAS & VIDEO
+   ============================================ */
+#canvas {
+  position: absolute;
+  bottom: 0;
+  left: 65.5px;
+  right: 0;
+  width: calc(100% - 65.5px);
+  height: 93%;
+}
+
+#video {
+  position: absolute; 
+  bottom: 0; 
+  right: 0; 
+  opacity: 100; 
+  z-index: -1;
+}
+
+/* for the different tools on the left side */
+.activeTool {
+  outline: 3px solid #6df06d;
+  border-radius: 6px;
+}
+
+/* Code to allow for drawing on the tablet */
+html, body {
+  touch-action: none;
 }

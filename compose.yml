@@ -32,12 +32,17 @@ services:
       - "8554:8554"
       - "8889:8889"
       - "8189:8189/udp"
+      - "8000:8000/udp"
+      - "8001:8001/udp"
   surgical_system:
     build: ./surgical_system
     environment:
-      - MOCK_ROBOT=true
+      - MOCK_ROBOT=1
       - PYTHONUNBUFFERED=1
       - ROBOT_WEBSOCKET_NAME=${ROBOT_WEBSOCKET_NAME}
     depends_on:
       - backend
       - frontend
+      - media
+    profiles:
+      - "mock_robot"

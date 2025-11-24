@@ -1,0 +1,91 @@
+#preparePopup {
+    position: absolute;
+    z-index: 101;
+    right: 2%;
+    top: 10%;
+    width: 30vw;
+    height: 40vh;
+    display: none;
+    background-color: #0f1419;
+    border-radius: 16px;
+    border: 2px solid #2c343b;
+    color: #e0f2e0;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    opacity: 85%;
+}
+
+/* Active state for popup */
+#preparePopup.active {
+    display: flex;
+}
+
+.prepare-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 2px solid #2c343b;
+    flex-shrink: 0;
+}
+
+.prepare-header h2 {
+    margin: 0;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 700;
+    font-size: 24px;
+}
+
+
+#prepareCloseBtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background-color: #2c343b;
+    color: #e0f2e0;
+    border: 3px solid transparent;
+    transition: all 0.15s ease-out;
+}
+
+/* --- Added hover/active states to match .icon-btn --- */
+#prepareCloseBtn:hover {
+    filter: brightness(110%);
+}
+
+#prepareCloseBtn:active {
+    background-color: #455256;
+    border-color: #e0f2e0;
+    box-shadow: inset 2px 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+#prepareCloseBtn svg {
+    fill: #e0f2e0;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+.prepare-body {
+    display: flex;
+    flex-grow: 1;
+    /* height: 100%; */ /* Removed this line */
+    width: 100%;
+    /* New styles for button positioning */
+    flex-direction: row;
+    justify-content: center; /* "middle" */
+    align-items: flex-end;   /* "bottom" */
+    padding: 1.5rem 2rem;    /* Padding from the bottom/sides */
+    gap: 1rem;               /* Space between buttons */
+    box-sizing: border-box;  /* Ensure padding is included */
+}
+
+#bottomButtons {
+    display: flex;
+    flex-direction: row;
+    gap: 40px;
+    height: 70px;
+}

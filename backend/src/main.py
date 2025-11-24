@@ -1,8 +1,9 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, HTTPException, WebSocket, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-import json
 import os
+import base64
+from robot import RobotSchema
+from manager import ConnectionManager
 
 app = FastAPI()
 
@@ -17,6 +18,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+manager = ConnectionManager()
+
 @app.get("/media/{stream_name}")
 def read_item(stream_name: str):
     return {"stream_url": "http://localhost:8889/mystream"}
@@ -25,133 +28,67 @@ def read_item(stream_name: str):
 def health():
     return None
 
-# this code is from the FastAPI websockets documentation
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: list[WebSocket] = []
+@app.post("/api/path")
+async def submit_path(request: dict):
+    pixels = request.get("pixels", [])
+    
+    if len(pixels) == 0:
+        raise HTTPException(status_code=400, detail="No pixels provided")
+    
+    print(f"Received path with {len(pixels)} pixels")
+    manager.desired_state.path = pixels
+    await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
+    
+    return {
+        "status": "success",
+        "pixel_count": len(pixels),
+        "message": f"Path with {len(pixels)} pixels dispatched to robot"
+    }
 
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-
-    async def send_personal_message(self, message: str, websocket: WebSocket):
-        await websocket.send_text(message)
-
-    async def broadcast(self, message: str):
-        for connection in self.active_connections:
-            await connection.send_text(message)
+@app.post("/api/raster_mask")   
+async def submit_raster_mask(file: UploadFile):
+    extension = file.filename.split('.')[-1]
+    if(file.filename.split('.')[-1] != "png"):
+        raise HTTPException(status_code = 400, detail=f"Incompatible file extension: {extension}")
+    
+    bytes = file.file.read()
+    encoded_b64 = base64.b64encode(bytes) # png is base 64 encoded
+    encoded_utf8 = encoded_b64.decode('utf-8') # re-encode to utf-8 to send over websocket
+    
+    manager.desired_state.raster_mask = encoded_utf8
+    print("Sending raster")
+    await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
+    return file.filename
 
 manager = ConnectionManager()
 
-# the first three are for position and the second three are for orientation
-example_data = {
-    "x": 0,
-    "y": 0,
-    "z": 0,
-    "rx": 0,
-    "ry": 0,
-    "rz":0,
-    "laserX": 0,
-    "laserY": 0,
-    "beamWaist": 0,
-    "speed": 0,
-    "isLaserOn": False
-}
-
-ws_ui_name = os.getenv("UI_WEBSOCKET_NAME")
-
 # this is the websocket to pass the 6 varaibles from frontend to backend
+ws_ui_name = os.getenv("UI_WEBSOCKET_NAME", "ui")
 @app.websocket(f"/ws/{ws_ui_name}")
 async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket) 
+    await manager.manage(
+        websocket=websocket,
+        state=manager.desired_state,
+        connection_group=manager.frontend_connections,
+        forwarding_group=manager.robot_connections
+    )
 
-    try:
-        while True:
-            data = await websocket.receive_text()
-            try:
-                coords = json.loads(data)
-                valid_keys = example_data.keys()
-
-                # makes sure that the corerct keys are present
-                if not all(key in valid_keys for key in coords):
-                    await websocket.send_text("Error: Unknown keys")
-                    continue
-             
-                # have to introduce an if statement because there is now a bool being sent
-                for key in coords:
-                    value = coords[key]
-                    if isinstance(value, bool):
-                        example_data[key] = bool(value)
-                    else:
-                        example_data[key] = float(value)
-
-
-                # broadcasts the data as a json string
-                await manager.broadcast(json.dumps(example_data))
-                # print for debugging testing
-                print(f"Updated coordinates: {example_data}")
-            except json.JSONDecodeError:
-                await websocket.send_text("Error: Invalid JSON format.")
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-        print("Client disconnected.")
-
-ws_robot_name = os.getenv("ROBOT_WEBSOCKET_NAME")
-
+ws_robot_name = os.getenv("ROBOT_WEBSOCKET_NAME", "robot")
 @app.websocket(f"/ws/{ws_robot_name}")
 async def websocket_endpoint(websocket: WebSocket):
-    await manager.connect(websocket) 
-
-    try:
-        while True:
-            data = await websocket.receive_text()
-            print(data)
-            await websocket.send_text("Got ur data")
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-        print("Client disconnected.")
+    await manager.manage(
+        websocket=websocket,
+        state=manager.current_state,
+        connection_group=manager.robot_connections,
+        forwarding_group=manager.frontend_connections
+    )
 
 # HTTP endpoint to get the current coordiantes
 @app.get("/current-coordinates")
 def get_current_coordinates():
-    return example_data
+    return manager.current_state.to_str()
 
 # start with variables: position (like x and y coordinates) z, orientation: 
 # have the socket accept websocket 
 # make HTTP endpoints
 # make an websockets 
-
-# TODO deprecate
-
-# #Laser control websocket
-# @app.websocket("/ws/laser")
-# async def websocket_laser(websocket: WebSocket):
-#     await manager.connect(websocket)
-#     try:
-#         while True:
-#             data = await websocket.receive_text()
-            
-#             try:
-#                 state = json.loads(data)
-
-#                 if 'isLaserOn' not in state:
-#                     await websocket.send_text("Error: Missing 'isLaserOn' key.")
-#                     continue
-                
-#                 received_bool = state['isLaserOn']
-
-#                 if not isinstance(received_bool, bool):
-#                     await websocket.send_text("Error: 'isLaserOn' must be a boolean.")
-#                     continue
-                
-#                 await manager.broadcast(json.dumps(state))
-
-#             except json.JSONDecodeError:
-#                 await websocket.send_text("Error: Please send 'true' or 'false'.")
-    
-#     except WebSocketDisconnect:
-#         manager.disconnect(websocket)
-#         print("Client disconnected.")

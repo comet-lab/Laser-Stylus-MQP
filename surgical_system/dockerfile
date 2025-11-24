@@ -1,7 +1,7 @@
 FROM python:3.8-bookworm
 
 RUN apt-get update && \
-    apt-get install -y make
+    apt-get install -y make libgl1 libglib2.0-0 ffmpeg
 
 WORKDIR /app
 

@@ -2,7 +2,6 @@ CC = g++
 
 all: main CalibrateRobot
 
-
 main: main.o PandaController.o FrankaSubscriber.o
 	$(CC) -o main main.o PandaController.o FrankaSubscriber.o -L /home/nepacheco/libfranka/build/ \
 	-lfranka -L /home/nepacheco/libfranka/build/examples -lexamples_common -L/opt/ros/noetic/lib \
