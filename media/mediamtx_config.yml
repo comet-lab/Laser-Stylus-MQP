@@ -1,0 +1,12 @@
+webrtcIpsFromInterfaces: yes
+webrtcIpsFromInterfacesList:
+  - wlp3s0
+webrtcAdditionalHosts:
+  - 130.215.124.84
+pathDefaults:
+  source: publisher
+  rtspTransport: udp
+paths:
+  mystream:
+    source: publisher
+    rtspTransport: udp
