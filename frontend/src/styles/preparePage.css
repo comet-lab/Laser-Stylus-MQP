@@ -1,11 +1,10 @@
 #preparePopup {
-    position: fixed;
+    position: absolute;
     z-index: 101;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    width: 60vw;
-    height: 70vh;
+    right: 2%;
+    top: 10%;
+    width: 30vw;
+    height: 40vh;
     display: none;
     background-color: #0f1419;
     border-radius: 16px;
@@ -14,6 +13,7 @@
     flex-direction: column;
     overflow: hidden;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    opacity: 85%;
 }
 
 /* Active state for popup */
@@ -74,7 +74,6 @@
     flex-grow: 1;
     /* height: 100%; */ /* Removed this line */
     width: 100%;
-
     /* New styles for button positioning */
     flex-direction: row;
     justify-content: center; /* "middle" */
