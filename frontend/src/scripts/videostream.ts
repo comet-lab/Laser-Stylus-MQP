@@ -49,10 +49,10 @@ window.addEventListener('load', () => {
     let selectedShape: ShapeType | null = null;
     let reader: any = null;
     let drawingTracker: DrawingTracker | null = null;
-    
+
     // Real-Time State
     let isRealTimeDrawing = false;
-    // REMOVED: realTimePath array (No longer needed since we aren't drawing)
+    let latestRealTimePos: { x: number, y: number } | null = null;
 
     // Initialize WebSocket
     const wsHandler = new WebSocketHandler(null);
@@ -208,43 +208,58 @@ window.addEventListener('load', () => {
 
     // --- 6. Real-Time Event Listeners ---
 
+    const runRealTimeLoop = () => {
+        // 1. Safety Check: If drawing stopped, kill the loop entirely.
+        if (!isRealTimeDrawing) return;
+
+        // 2. Capture the current position
+        const currentPos = latestRealTimePos;
+
+        // 3. Data Check: Only send if we actually have a position
+        if (currentPos) {
+            const vidX = (currentPos.x / canvas.width) * video.videoWidth;
+            const vidY = (currentPos.y / canvas.height) * video.videoHeight;
+
+            wsHandler.updateState({ x: vidX, y: vidY });
+        }
+
+        // 4. Loop Logic: Request the next frame regardless of whether we sent data this time
+        requestAnimationFrame(runRealTimeLoop);
+    }
+
     const handleRealTimeStart = (e: PointerEvent) => {
         if (!processingModeSwitch.checked || selectedShape !== 'freehand') return;
 
         e.preventDefault();
         canvas.setPointerCapture(e.pointerId);
-        
+
         isRealTimeDrawing = true;
-        
-        // 1. Start Signal
+
+
+        latestRealTimePos = getCanvasCoordinates(e.clientX, e.clientY);
+
+        // 1. Send start signal
         wsHandler.updateState({ pathEvent: 'start' });
 
-        // 2. Send First Coordinate
-        const pos = getCanvasCoordinates(e.clientX, e.clientY);
-        const vidX = (pos.x / canvas.width) * video.videoWidth;
-        const vidY = (pos.y / canvas.height) * video.videoHeight;
-        wsHandler.updateState({ x: vidX, y: vidY });
+        // 2. Start Loop
+        runRealTimeLoop();
     };
 
     const handleRealTimeMove = (e: PointerEvent) => {
         if (!isRealTimeDrawing) return;
         e.preventDefault();
 
-        const pos = getCanvasCoordinates(e.clientX, e.clientY);
-
-        // Stream Coordinates
-        const vidX = (pos.x / canvas.width) * video.videoWidth;
-        const vidY = (pos.y / canvas.height) * video.videoHeight;
-        wsHandler.updateState({ x: vidX, y: vidY });
+        latestRealTimePos = getCanvasCoordinates(e.clientX, e.clientY);
     };
 
     const handleRealTimeEnd = (e: PointerEvent) => {
         if (!isRealTimeDrawing) return;
         e.preventDefault();
-        
+
         canvas.releasePointerCapture(e.pointerId);
         isRealTimeDrawing = false;
-        
+        latestRealTimePos = null;
+
         // End Signal
         wsHandler.updateState({ pathEvent: 'end' });
     };
@@ -398,7 +413,7 @@ window.addEventListener('load', () => {
 
         const vidX = (pos.x / canvas.width) * video.videoWidth;
         const vidY = (pos.y / canvas.height) * video.videoHeight;
-        
+
         wsHandler.updateState({ x: vidX, y: vidY });
     });
 
