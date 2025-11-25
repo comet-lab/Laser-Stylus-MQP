@@ -80,7 +80,8 @@ pre {
   position: relative;
   display: flex;
   flex-direction: column;
-  width: 4%;
+  width: 65.5px;
+  flex-shrink: 0;
   height: 93%;
   background-color: #0f1419;
 }
@@ -210,8 +211,9 @@ pre {
 #canvas {
   position: absolute;
   bottom: 0;
+  left: 65.5px;
   right: 0;
-  width: 96%;
+  width: calc(100% - 65.5px);
   height: 93%;
 }
 

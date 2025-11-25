@@ -81,12 +81,10 @@ window.addEventListener('load', () => {
     settingsCloseBtn.addEventListener('click', closeSettings);
 
     const openPrepareMenu = (): void => {
-        overlay.classList.add('active');
         preparePopup.classList.add('active');
     };
 
     const closePrepareMenu = (): void => {
-        overlay.classList.remove('active');
         preparePopup.classList.remove('active');
     };
 
@@ -398,11 +396,27 @@ window.addEventListener('load', () => {
         if (reader !== null) reader.close();
     });
 
-    window.addEventListener('resize', () => {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        if (drawingTracker) drawingTracker.updateCanvasSize(canvas.width, canvas.height);
-    });
+    const handleResize = () => {
+        // CRITICAL FIX: Use offsetWidth/Height instead of window.inner...
+        // This accounts for the 65.5px sidebar so 1 drawing pixel = 1 screen pixel
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+
+        if (drawingTracker) {
+            drawingTracker.updateCanvasSize(canvas.width, canvas.height);
+        }
+        
+        // Clear drawing on resize to prevent skewed paths
+        if (drawingTracker?.isDrawingEnabled()) {
+            drawingTracker.clearDrawing();
+            drawingState = 'idle';
+            updateDrawButtonState();
+        }
+    };
+
+    // Add the listener
+    window.addEventListener('resize', handleResize);
+    handleResize();
 
     // Click-to-move (Guarded against Real-Time mode)
     canvas.addEventListener('click', function (event) {

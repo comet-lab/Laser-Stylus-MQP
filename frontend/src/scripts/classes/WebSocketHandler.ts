@@ -52,6 +52,13 @@ export class WebSocketHandler {
         
         //this.ws.onopen = () => this.log("Connected to WebSocket");
         this.ws.onmessage = (event) => {
+            /*
+            if (this.outputElement) {
+                this.outputElement.textContent = "Last update:\n" + event.data;
+            } else {
+                //console.log(event.data);
+            }
+            */            
             //this.log(`Received: ${event.data}`);
             try {
                 const newState = JSON.parse(event.data) as WebSocketMessage;

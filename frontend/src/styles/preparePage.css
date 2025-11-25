@@ -1,10 +1,9 @@
 #preparePopup {
-    position: fixed;
+    position: absolute;
     z-index: 101;
-    left: 50%;
-    top: 50%;
-    transform: translate(135%, -100%);
-    width: 20vw;
+    right: 2%;
+    top: 10%;
+    width: 30vw;
     height: 40vh;
     display: none;
     background-color: #0f1419;
@@ -14,7 +13,7 @@
     flex-direction: column;
     overflow: hidden;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    opacity: 70%;
+    opacity: 85%;
 }
 
 /* Active state for popup */

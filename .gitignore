@@ -3,10 +3,12 @@ __pycache__/
 static/
 frontend/node_modules/
 venvs/
+*.o
 .vscode/
 surgical_system/cpp_src/CalibrateRobot
 surgical_system/cpp_src/CalibrateRobot.o
 surgical_system/cpp_src/FrankaSubscriber.o
+*.csv
 surgical_system/cpp_src/main
 surgical_system/cpp_src/main.o
 surgical_system/cpp_src/PandaController.o
