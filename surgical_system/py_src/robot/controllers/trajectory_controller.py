@@ -1,8 +1,10 @@
 import numpy as np
+import matplotlib.pyplot as plt
 # from laser_controller import LaserController
 
 from .trajectory_helpers.quintic_trajectory import QuinticTrajectory
 from .trajectory_helpers.path_generation import Path_Gen
+import math
 
 class TrajectoryController():
     
@@ -17,7 +19,7 @@ class TrajectoryController():
         
         # self.laser_info = controller_msg.laser_info
         
-        if self.positions.shape[0]-1 != len(self.durations):
+        if self.positions.shape[0]-1 != len(self.durations) and not self.pattern == "Circle":
             raise Exception("Durations and Postions dims do not match")
         self.positions, self.durations = self.generatePath() # Generates new points depending on pattern
         self.generateTrajectories(self.positions, self.durations, self.max_velocity, self.max_acceleration)
@@ -50,14 +52,18 @@ class TrajectoryController():
             
         elif(self.pattern == "Line"):
             points = self.positions.copy()
-            durations = self.durations.copy()
+            durations = np.cumsum(self.durations)
             return points, durations
+        elif(self.pattern == "Circle"):
+            points = Path_Gen.generate_circle(self.positions[0, :2], self.radius)
+            
         else:
             print("Pattern: ", self.pattern)
             raise ValueError("Trajectory Controller can not handle pattern above")
         
         distances = np.linalg.norm(points[1:] - points[:-1], axis=1)
         durations = (distances / np.sum(distances)) * self.durations[0]
+        self.total_distance = np.sum(distances)
         cumulative_durations = np.cumsum(durations)
         points = np.hstack((points, np.full((points.shape[0], 1), self.positions[0, -1])))
         
@@ -72,26 +78,61 @@ class TrajectoryController():
         self.MAX_VELOCITY = np.full(self.n_dims, maxVelocity) # shape:(x) !!!!!! FIND UNITS [m/s]
         self.MAX_ACCELERATION = np.full(self.n_dims, maxAcceleration) #!!!!!! FIND UNITS [m/s^2]
 
-        self.trajectories = np.empty((self.n_points - 1, self.n_dims), dtype=object) # shape:(n,x)
+        durations = np.insert(durations, 0, 0) 
+        v_way = np.zeros_like(position)          # (N, D)
+
+        # endpoints
+        v_way[0]  = 0.0
+        v_way[-1] = 0.0
+        for i in range(1, self.n_points-1):
+            dt = durations[i] - durations[i-1]
+            if dt <= 0:
+                raise ValueError("durations must be strictly increasing")
+            v_way[i] = (position[i] - position[i-1]) / dt
         
+        a_way = np.zeros_like(position)
+        self.trajectories = np.empty((self.n_points - 1, self.n_dims), dtype=object)
         for i in range(self.n_points - 1):
-            t0 = 0 if i == 0 else durations[i-1] # Initial time 
-            tf = durations[i] # Final time
+            t0 = durations[i]
+            tf = durations[i + 1]
+
+            p0 = position[i]
+            pf = position[i + 1]
+
+            v0 = v_way[i]
+            vf = v_way[i + 1]
+
+            a0 = a_way[i]
+            af = a_way[i + 1]
+
+            for d in range(self.n_dims):
+                self.trajectories[i, d] = QuinticTrajectory(
+                    t0=t0, tf=tf,
+                    p0=p0[d], pf=pf[d],
+                    v0=v0[d], vf=vf[d],
+                    a0=a0[d], af=af[d]
+                )
+        
+        time_step = 0.05
+        data_num = int(math.ceil(durations[-1]/time_step)) 
+        actual_vel_list = np.empty((data_num, 3))
+        times = np.linspace(0, durations[-1], data_num)
+        for i in range(data_num):
+            movement = self.update(times[i])
+            target_vel = (movement['velocity'])
+            actual_vel_list[i] = target_vel
             
-            p0 = position[i] # Initial Position
-            pf = position[i+1] # Final Position
-            
-            v0 = np.zeros(self.n_dims) if i == 0 else self.MAX_VELOCITY # Initial Velocity
-            vf = np.zeros(self.n_dims) if i == self.n_points - 2 else self.MAX_VELOCITY  # Final Velocity
-            
-            a0 = np.zeros(self.n_dims) # Initial Acceleration
-            af = np.zeros(self.n_dims) # Final Accerlation
-            
-            for dim in range(self.n_dims):
-                self.trajectories[i, dim] = QuinticTrajectory(t0 = t0, tf = tf,
-                                                              p0 = p0[dim], pf = pf[dim],
-                                                              v0 = v0[dim], vf = vf[dim],
-                                                              a0 = a0[dim], af = af[dim])
+        plt.figure(figsize=(6,4))
+        plt.plot(times, actual_vel_list[:, 0], label="actual x")
+        plt.plot(times, actual_vel_list[:, 1], label="actual y")
+        plt.xlabel("Time [s]")
+        plt.ylabel("velcity [m]")
+        plt.title("Time vs Position (Guess)")
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+        plt.close(3)
 
     def update(self, time):
         self.t = time
@@ -119,8 +160,8 @@ class TrajectoryController():
         if self.debug:
             # print("Spot Temperature: ", np.amax(controller_msg.current_temp))
             # print("Irradiance: ", self._irradiance)
-            print("Laser Position: ", self.laser_pos)
-            print("Laser Velocity: ", self.laser_pos_vel)
+            print("Laser Position [m]: ", self.laser_pos)
+            print("Laser Velocity [m/s]: ", self.laser_pos_vel)
             print("Current Path: ", self.positions[pathIdx+1])
             print("Time: ", self.t)
             print("")
@@ -135,3 +176,4 @@ class TrajectoryController():
         self.num_passes: int = path_info["Passes"]
         self.max_acceleration = path_info["MaxAcceleration"]
         self.max_velocity = path_info["MaxVelocity"]
+        self.radius = path_info["Radius"]

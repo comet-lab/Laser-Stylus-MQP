@@ -27,9 +27,7 @@ class FrankaClient:
             # The data is rotation matrix first row, second row, third row, translation column
             # The last character is a 0 for no control, 1 for pose control.
             # The return message should be, translation vector [x,y,z], quaternion of orientation [x,y,z,w]. (7 doubles)
-            return_message = self.client.requestMessage(message)  # send return information
-            self.last_received = struct.unpack_from('@ddddddd', return_message[0])
-            return self.last_received
+            return self.request_pose()
         
         def send_velocity(self, lin_vel, ang_vel):
             if np.shape(lin_vel) != (3,):
@@ -46,21 +44,20 @@ class FrankaClient:
             # The data is rotation matrix first row, second row, third row, translation column
             # The last character is a 0 for no control, 1 for pose control.
             # The return message should be, translation vector [x,y,z], quaternion of orientation [x,y,z,w]. (7 doubles)
-            return_message = self.client.requestMessage(message)  # send return information
-            self.last_received = struct.unpack_from('@ddddddd', return_message[0])
-            return self.last_received
+            return self.request_pose()
         
         def request_pose(self):
             # The return message should be, translation vector [x,y,z], quaternion of orientation [x,y,z,w]. (7 doubles)
-            return_message = self.client.requestMessage(self.last_sent)  # send return information
-            self.last_received = struct.unpack_from('@ddddddd', return_message[0])
+            return self.request_state(self.last_sent)
+        
+        def request_state(self, message):
+            return_message = self.client.requestMessage(message)  # send return information
+            self.last_received = struct.unpack_from('@ddddddddddddd', return_message[0])
             return self.last_received
         
         def stop_control(self):
             message = struct.pack('@ddddddddddddb',1,0,0,0,1,0,0,0,1,0.3,0,0.4,0)
-            return_message = self.client.requestMessage(message)
-            self.last_received = struct.unpack_from('@ddddddd', return_message[0])
-            return self.last_received
+            return self.request_pose()
         
         def close(self):
             self.stop_control()
@@ -111,15 +108,17 @@ if __name__=='__main__':
     y = 0
     target_pose = np.array([[1,0,0,x],[0,1,0,y],[0,0,1,height],[0,0,0,1]])
     
-    target_lin_vel = np.array([0, 0, 0.0])
-    target_ang_vel = np.array([0, 0.00, 0.])
+    target_lin_vel = np.array([0.05, 0.0, 0.0])
+    target_ang_vel = np.array([0.0, 0.00, 0.0])
     
     time.sleep(2)
     returnedPose = franka_client.send_pose(target_pose@home_pose,mode)
+    time.sleep(3)
     # returnedPose = franka_client.send_velocity(target_lin_vel, target_ang_vel)
     # time.sleep(1)
+    # print("stop")
     # returnedPose = franka_client.send_velocity(np.array([0, 0, 0]), target_ang_vel)
-    time.sleep(4)
+    time.sleep(2)
     message = franka_client.request_pose()    
     print("Robot Message: ", message)
     franka_client.close()

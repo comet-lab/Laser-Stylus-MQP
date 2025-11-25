@@ -27,11 +27,11 @@ private:
 
 public:
     PandaController();
-    PandaController(std::string ipAddress, char mode, double *posTargetPtr, double orienTargetPtr[][3], double currState[7]);
+    PandaController(std::string ipAddress, char mode, double *posTargetPtr, double orienTargetPtr[][3], double currState[13]);
     void setBehavior();
     void runController(double = 10);
     void getPose();
-    void convertPose(const double T[16], double currState[7]);
+    void convertPose(const double T[16], double currState[13]);
     static void geomIkin(double*, double*);
     double getRotationVelocity(const franka::RobotState& robotState, const Eigen::Matrix<double,3,3> &finalRotationMat, Eigen::Vector3d &omega);
     void moveToStart(double, double, double);

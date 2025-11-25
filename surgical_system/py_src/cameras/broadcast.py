@@ -17,7 +17,7 @@ class Broadcast:
             '-y',  # Overwrite output files without asking
             '-f', 'image2pipe',  # Input format is raw video
             '-vcodec', 'mjpeg',
-            '-framerate', '30',
+            '-framerate', '60',
             '-i', '-',  # Read input from stdin pipe
             '-c:v', 'libx264',  # Video codec H.264
             '-preset', 'ultrafast',
@@ -43,7 +43,7 @@ class Broadcast:
             print("not connected")
             return
         # Write the raw frame bytes to the ffmpeg process's stdin
-        success, img_encoded = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+        success, img_encoded = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
         if(success):
             self.process.stdin.write(img_encoded.tobytes())
         else:

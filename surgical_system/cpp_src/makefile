@@ -1,6 +1,9 @@
 CC = g++
+RM = rm -f
 
+.PHONY: all clean
 all: main CalibrateRobot
+
 
 main: main.o PandaController.o FrankaSubscriber.o
 	$(CC) -o main main.o PandaController.o FrankaSubscriber.o -L /home/nepacheco/libfranka/build/ \
@@ -31,3 +34,6 @@ CameraAcquisition: CameraAcquisition.o
 
 CameraAcquisition.o: CameraAcquisition.cpp
 	$(CC) -c CameraAcquisition.cpp -I /opt/spinnaker/include/ -I /opt/spinnaker/include/SpinGenApi/
+	
+clean:
+	$(RM) main CalibrateRobot CameraAcquisition *.o

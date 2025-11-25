@@ -4,6 +4,7 @@ webrtcIpsFromInterfacesList:
 webrtcAdditionalHosts:
   - 130.215.124.84
   - localhost
+  - media
 pathDefaults:
   source: publisher
   rtspTransport: udp

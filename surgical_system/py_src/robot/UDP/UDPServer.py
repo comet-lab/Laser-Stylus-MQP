@@ -27,9 +27,10 @@ class UDPServer:
             returnData[0,3],returnData[1,3],returnData[2,3],0)
             # The data is rotation matrix first row, second row, third row, translation column
         self.send(returnBuffer,address[0],address[1])  # send return information
-        message = struct.unpack('d'*7, message)
+        message = struct.unpack('d'*13, message)
         currPos = message[0:3]
         currOrien = message[3:]
+        
         return (currPos,currOrien)
 
     def close(self):

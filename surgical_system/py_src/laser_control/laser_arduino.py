@@ -61,7 +61,7 @@ if __name__=='__main__':
     print("Laser Firing in 2 seconds")
     time.sleep(2)
     print("Laser Firing")
-    laser_obj.set_output(1)
+    laser_obj.set_output(0)
     # time.sleep(.15)
     # laser_obj.set_output(0)
     # print("Laser Off")

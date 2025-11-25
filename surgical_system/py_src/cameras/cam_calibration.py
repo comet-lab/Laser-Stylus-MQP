@@ -15,7 +15,7 @@ class CameraCalibration():
                  checkerboard_size=[5,5], debug=False):
         
         self.filepath = os.getcwd()
-        self.directory = "surgical_system/py_src/cameras"
+        self.directory = self.filepath + "/surgical_system/py_src/registration"
         
         if mode not in ('2D', '3D'):
             raise Exception("Mode needs to either 2D or 3D")
@@ -195,7 +195,7 @@ class CameraCalibration():
         self.objpts = objpts.copy()
 
         # Generate the 3D transform.
-        retval, self.rvec, self.tvec = cv2.solvePnP(self.objpts, self.imgpts, self.camera_matrix, self.dist_coeffs)
+        # retval, self.rvec, self.tvec = cv2.solvePnP(self.objpts, self.imgpts, self.camera_matrix, self.dist_coeffs)
         
         # Create the homography matrix for image warping. For visualization, scale obj_points by M_scale so that 
         # we work in two pixel coordinates instead of pixel coordinates for img_points and meters for object_points
@@ -213,6 +213,7 @@ class CameraCalibration():
         # and they don't have to be a quadrilateral. 
 
         self.M,_ = cv2.findHomography(_imgpts,_objpts)
+        return self.M
     
     def world_to_pixel(self, world_coords):
         """
@@ -430,7 +431,7 @@ class CameraCalibration():
         return np.array(points)
 
     def load_homography(self, M_pix_per_m = 7000, \
-                         fileLocation = "/python_src/thermal_cam_control/img_processing/Laser_Alignment_Test", debug = True):
+                         fileLocation = "/calibration_info/rgb/", debug = True):
     
         img_points = CameraCalibration.load_pts(self.directory + fileLocation + "laser_spots.csv")
         obj_points = CameraCalibration.load_pts(self.directory + fileLocation + "laser_world_points.csv")
@@ -439,7 +440,7 @@ class CameraCalibration():
         if obj_points.shape[1] == 2:
             obj_points = np.hstack((obj_points, np.zeros((obj_points.shape[0], 1))))  # Add Z coordinate as 0
         obj_points = obj_points*M_pix_per_m
-        self.generate_transform(img_points,obj_points)
+        M = self.generate_transform(img_points,obj_points)
         
         # project all image points through M
         projected_points = self.pixel_to_world(img_points)
@@ -449,7 +450,7 @@ class CameraCalibration():
 
         print(f"RMS reprojection error = {rmse:.3f} pixels")
         print(f"RMS reprojection error = {rmse/M_pix_per_m*1000:.3f} mm")
-        return rmse
+        return M
 
     def display_2d_projection(self):
 

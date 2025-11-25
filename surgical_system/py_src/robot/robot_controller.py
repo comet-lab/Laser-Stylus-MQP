@@ -1,6 +1,7 @@
-import os, subprocess, time, sys
+import os, subprocess, time, sys, math
 from scipy.spatial.transform import Rotation
 import numpy as np
+import matplotlib.pyplot as plt
 
 if __name__=='__main__':    
     from franka_client import FrankaClient
@@ -17,6 +18,7 @@ class Robot_Controller():
         time.sleep(3)
         print("Robot Online")
         self.home_pose = self.load_home_pose()
+        self.home_pose_inv = self.HT_Inv(self.home_pose)
 
     def load_home_pose(self, home_pose_path = "surgical_system/py_src/robot/home_pose.csv"):
         if(os.path.exists(home_pose_path)):
@@ -30,7 +32,7 @@ class Robot_Controller():
             
             #-75
             # Default robot starting location 
-            homePosition = np.array([[0.5275],[0.0893],[0.1985]])
+            homePosition = np.array([[0.5275],[0.0893],[0.3085]])
             homePose = np.concatenate((rotM,homePosition),axis=1)
             homePose = np.concatenate((homePose,[[0,0,0,1]]),axis=0)
             np.savetxt(home_pose_path, homePose, delimiter=",")
@@ -49,22 +51,22 @@ class Robot_Controller():
     '''
     Code is blocking
     '''
-    def go_to_pose(self, pose, linTol = .05, rotTol = 0.05, maxIterations = 24):
+    def go_to_pose(self, pose, linTol = .05, rotTol = 0.05, maxIterations = 24, blocking = True):
         # tolerances are in mm and degrees 
         error, angleError = 10000, 10000
         currPose = self.franka_client.send_pose(pose, 1)
         iterations = 0
-        print("Moving to Pose ...")
+        # print("Moving to Pose ...")
         errorFlag1 = True
         errorFlag2 = True
-        while (errorFlag1 or errorFlag2) and iterations < maxIterations:
+        while (errorFlag1 or errorFlag2) and iterations < maxIterations and blocking:
             time.sleep(.5)
             currPose = self.franka_client.send_pose(pose, 1)
             error = currPose[:3] - pose[:3, -1]
             
             # Convert to scipy Rotations
             rot_matrix = Rotation.from_matrix(pose[:3, :3])
-            rot_quat = Rotation.from_quat(currPose[3:])  # expects [x, y, z, w]
+            rot_quat = Rotation.from_quat(currPose[3:7])  # expects [x, y, z, w]
 
             # Compute relative rotation: R_rel = R_quat^-1 * R_matrix
             R_rel = rot_quat.inv() * rot_matrix
@@ -80,22 +82,24 @@ class Robot_Controller():
             errorFlag1 = (np.linalg.norm(error) > (linTol/1000) or np.linalg.norm(angleError) > np.deg2rad(rotTol))
 
             iterations += 1
-            sys.stdout.write(f"\r{(iterations*0.5):.1f} sec                \n")
-            sys.stdout.write(f"Robot Position Error [mm]: [{1000*error[0]:.3f}, {1000*error[1]:.3f}, {1000*error[2]:.3f}]                  \n")
-            sys.stdout.write(f"Robot Rotation Error [deg]: {np.rad2deg(angleError):.4f}         \033[F\033[F")
-            sys.stdout.flush()
+        #     sys.stdout.write(f"\r{(iterations*0.5):.1f} sec                \n")
+        #     sys.stdout.write(f"Robot Position Error [mm]: [{1000*error[0]:.3f}, {1000*error[1]:.3f}, {1000*error[2]:.3f}]                  \n")
+        #     sys.stdout.write(f"Robot Rotation Error [deg]: {np.rad2deg(angleError):.4f}         \033[F\033[F")
+        #     sys.stdout.flush()
 
-        sys.stdout.write("\033[E\033[E\n...Done\n")
-        sys.stdout.flush()    
-        print("Error Flag 2 value: ", errorFlag2)
+        # sys.stdout.write("\033[E\033[E\n...Done\n")
+        # sys.stdout.flush()    
+        # print("Error Flag 2 value: ", errorFlag2)
         # time.sleep(5)
-        return error, angleError
+        return currPose
     
     def set_velocity(self, lin_vel, ang_vel):
         return self.franka_client.send_velocity(lin_vel, ang_vel)
     
     def robot_stop(self):
-        return self.franka_client.send_velocity(np.array([0, 0, 0]), np.array([0, 0, 0]))
+        velocity = self.franka_client.send_velocity(np.array([0, 0, 0]), np.array([0, 0, 0]))
+        time.sleep(1)
+        return velocity
     
     def align_robot_input(self):
         newPose = self.home_pose.copy()
@@ -123,20 +127,46 @@ class Robot_Controller():
 
     def get_home_pose(self):
         return self.home_pose
+    
+    def close_robot(self):
+        self.franka_client.close()
 
-    def get_current_pose(self):
+    def get_current_state(self):
         pose = self.franka_client.request_pose()
-        position, quat = pose[:3], pose[3:]
+        position, quat = pose[:3], pose[3:7]
         Rmat = Rotation.from_quat(quat).as_matrix()
-        new_pose = np.zeros((4,4))
-        new_pose[0:3, -1], new_pose[:3, :3], new_pose[-1, -1] = position, Rmat, 1
-        return pose
+        new_pose = np.eye(4)
+        new_pose[0:3, -1], new_pose[:3, :3] = position, Rmat
+        current_vel = pose[7:]
+        return new_pose, current_vel
+
+    def quat_to_Mat(self, pose):
+        #raw robot pose [x, y, z, qx, qy, qz, w]
+        pose_M = np.eye(4)
+        pose_M[:3, :3] = Rotation.from_quat(pose[3:]).as_matrix()
+        pose_M[:3, -1] = pose[:3]
+        return pose_M
+
+    def HT_Inv(self, homogeneousPose):
+        """
+        Computes the inverse of a homogeneous transformation matrix
+        """
+        R = homogeneousPose[0:3, 0:3]
+        t = homogeneousPose[0:3, 3]
+        R_inv = R.T
+        t_inv = -R_inv @ t
+        return np.concatenate((np.concatenate((R_inv, t_inv.reshape(3, 1)), axis=1), [[0, 0, 0, 1]]), axis=0)
 
     def create_trajectory(self, path_info):
-        path_info['Positions'] = path_info['Positions'] / 100.0
+        if not isinstance(path_info['Positions'], np.ndarray):
+            path_info['Positions'] = np.array( path_info['Positions'])
+        path_info['MaxVelocity'] = path_info['MaxVelocity'] / 100.0
+        path_info['MaxAcceleration'] = path_info['MaxAcceleration'] / 100.0
+        path_info['Radius'] = path_info['Radius'] / 100.0
+        path_info['Positions'] = path_info['Positions'] / 100.0 #converts from cm to m
         return TrajectoryController(path_info, debug=True)
     
-    def run_trajectory(self, traj: TrajectoryController, time_step):
+    def run_trajectory(self, traj: TrajectoryController):
         #
         total_time = traj.durations[-1]
         print("Path Duration: ", total_time)
@@ -145,21 +175,72 @@ class Robot_Controller():
         start_pose = np.eye(4)
         start_pose[:3, -1] = start_pos
         print(start_pose)
-        self.go_to_pose(start_pose@self.home_pose)
+        current_pose = np.array(self.go_to_pose(start_pose@self.home_pose))
+        # current_pose = self.quat_to_Mat(current_pose)
         
         time_step = 0.05
         elapsedTime = 0
         t = time.time()
         # TODO ask user to verify they want to continue
         target_vel = np.zeros(3)
+        
+        #record data
+        data_num = int(math.ceil(total_time/time_step)) 
+        actual_vel_list = np.empty((data_num, 3))
+        target_vel_list = np.empty((data_num, 3))
+        i = 0
         while (elapsedTime) < total_time:
             if (time.time() - t) >= time_step:    
                 elapsedTime = elapsedTime + time.time() - t
                 t = time.time()
                 movement = traj.update(elapsedTime)
-                target_vel = self.home_pose[:3, :3].T @ (movement['velocity']/100) # cm to m
+                target_vel = (movement['velocity'])
                 print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel) 
-                # self.set_velocity(target_vel, [0,0,0])
+                velocity = self.set_velocity(target_vel, [0,0,0])
+                # new_pose = np.array(self.franka_client.request_pose())
+                actual_vel_list[i, :] =  velocity[:3] if i != 0 else np.zeros(3)
+                target_vel_list[i, :] = target_vel
+                # current_pose = new_pose
+                i += 1
+        self.robot_stop()
+        
+        plt.figure(figsize=(10,6))
+        time_range = np.arange(0, total_time, time_step)
+        plt.plot(time_range, actual_vel_list[:, 0], label="actual x")
+        plt.plot(time_range, actual_vel_list[:, 1], label="actual y")
+        plt.plot(time_range, actual_vel_list[:, 2], label="actual z")
+        plt.plot(time_range, target_vel_list[:, 0], '--', label="target x")
+        plt.plot(time_range, target_vel_list[:, 1], '--', label="target y")
+        plt.plot(time_range, target_vel_list[:, 2], '--', label="target z")
+        plt.xlabel("Time [s]")
+        plt.ylabel("velcity [m]")
+        title = "Time vs velocity "+ traj.pattern
+        plt.title(title)
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+
+        # Save and also display inline
+        out_path = "time_vs_velocity_" + traj.pattern + ".png"
+        plt.savefig(out_path, dpi=200)
+        plt.show()
+        # np.savetxt("actualVel.npy", actual_vel_list)
+        # np.savetxt("targetVel.npy", actual_vel_list)
+    
+    def live_control(self, target_pose_home, max_vel):
+        current_pose, _ = self.get_current_state()
+        current_pose = current_pose[:3, -1] - self.home_pose[:3, -1]
+        position_error = target_pose_home[:3, -1] - current_pose
+        KP = 5.0
+        target_vel = position_error * KP
+        mag = np.linalg.norm(target_vel)
+        
+        if mag == 0:
+            target_vel = np.zeros(3) 
+        elif mag > max_vel:
+            target_vel = target_vel * (max_vel / mag)
+        return target_vel
+            
     
     
 if __name__=='__main__':

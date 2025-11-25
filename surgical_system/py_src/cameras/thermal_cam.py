@@ -10,7 +10,7 @@ else:
 
 class ThermalCam(Camera):    
     def __init__(self, IRFormat="TemperatureLinear10mK", height=480, frame_rate="Rate50Hz",focal_distance=0.2, pix_Per_M = 7000):
-        super().__init__(100,height, pix_Per_M)
+        super().__init__("Thermal Camera", 100,height, pix_Per_M)
         self.focal_distance = focal_distance
         self.IRFormat = IRFormat
         self.frame_rate = frame_rate
@@ -24,7 +24,9 @@ class ThermalCam(Camera):
             self.change_IRFormat(self.IRFormat)
             self.change_IRFrameRate(self.frame_rate)
             self.execute_nuc()
-            time.sleep(0.2)
+            time.sleep(2)
+            self.set_acquisition_mode()
+            time.sleep(1)
             self.set_acquisition_mode()
             time.sleep(0.2)
             self.set_acquisition_mode()
@@ -41,8 +43,9 @@ class ThermalCam(Camera):
         t = time.time()
         print("Starting Thermal Camera Thread...")
         try:
-            if not self._ready:
-                return 
+            while(not self._ready):     
+                print("Thermal cam not ready. Waiting...")
+                time.sleep(1)
             while(True):
                 self.thread_ready.wait()
                 images = self.start_recording(1)  # returns a list of images
@@ -433,6 +436,10 @@ class ThermalCam(Camera):
     # def __setattr__(self, attr, value):
     #     """ Delegate access to implementation """
     #     return setattr(self.__instance, attr, value)
+    
+    def __del__(self):
+        self.deinitialize_cam()
+        
 
 
 def record_temp_over_area():

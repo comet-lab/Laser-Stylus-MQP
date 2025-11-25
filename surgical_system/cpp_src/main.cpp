@@ -11,7 +11,7 @@ void parseMessage(char receiveBuffer[12*8 + 1], double * posTarget, double orien
 int main(int argc, char** argv) {
   double posTarget[3] = {0.34, 0.0, 0.6};
   double orienTargetPtr[3][3] = {{1,0,0},{0,-1,0},{0,0,-1}};
-  double currState[] = {0,0,0,0,0,0,0};
+  double currState[] = {0,0,0,0,0,0,0, 0,0,0,0,0,0};
   char mode = 0;
   char receiveBuffer[12*8 + 1];
   double timeDuration = 1000;
@@ -38,6 +38,7 @@ int main(int argc, char** argv) {
   int count = 0;
   while (mode >=0) {
     udpServer.waitForRequest(receiveBuffer,currState,sizeof(currState));
+    
     parseMessage(receiveBuffer,posTarget,orienTargetPtr,&mode);
     controller->setMode(mode);
 
