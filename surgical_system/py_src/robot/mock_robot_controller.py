@@ -1,0 +1,39 @@
+import numpy as np
+import time
+from scipy.spatial.transform import Rotation
+
+class MockRobotController():
+    def __init__(self):
+        self.pose = self.load_home_pose()
+        self.current_velocity = [0, 0, 0]
+        self.last_update_time = time.time()
+        
+    def go_to_pose(self, pose, linTol = .05):
+        self.pose = pose
+    
+    def get_current_state(self):
+        return self.pose, np.eye(4)
+    
+    def load_home_pose(self):
+        rot = Rotation.from_euler('ZYX',[0,np.pi/4,np.pi/2])
+        rotM = rot.as_matrix()
+        
+        homePosition = np.array([[0.5275],[0.0893],[0.1985]])
+        homePose = np.concatenate((rotM,homePosition),axis=1)
+        homePose = np.concatenate((homePose,[[0,0,0,1]]),axis=0)
+        return homePose
+    
+    def set_velocity(self, lin_vel, ang_vel):
+        return
+        current_time = time.time()
+        elapsed_time = current_time - self.last_update_time
+        for i in range(3):
+            self.pose[i, 3] += self.current_velocity[i] * elapsed_time
+        self.current_velocity = lin_vel
+        self.last_update_time = current_time
+
+    def live_control(self, target_pose, max_vel):
+        correction_pose = target_pose - self.pose
+        # correction_vector = correction_pose[0:3, 3]
+        self.go_to_pose(target_pose)
+

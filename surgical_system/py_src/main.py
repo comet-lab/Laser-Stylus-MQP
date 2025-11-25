@@ -21,8 +21,10 @@ if(not mock_robot):
     from laser_control.laser_arduino import Laser_Arduino
     from registration.cameraRegistration import Camera_Registration
 else:
-    from robot.mock_franka_client import MockRobotController
+    from robot.mock_robot_controller import MockRobotController
     from cameras.mock_camera import MockCamera
+    from registration.mock_camera_registration import MockCameraRegistration
+    from laser_control.mock_laser import MockLaser
 
 from cameras.broadcast import Broadcast
 from backend.listener import BackendConnection
@@ -67,7 +69,8 @@ async def main():
         rgbd_cam = RGBD_Cam() #Runs a thread internally
         # rgbd_cam.set_default_setting() # Auto-exposure
     else:
-        therm_cam = MockCamera()
+        therm_cam = MockCamera(cam_type=cam_type)
+        rgbd_cam = MockCamera(cam_type=cam_type)
 
     
     ##################################################################################
@@ -79,9 +82,15 @@ async def main():
         laser_obj = Laser_Arduino()  # controls whether laser is on or off
         laser_on = False
         laser_obj.set_output(laser_on)
+    else:
+        laser_obj = MockLaser()
         
     # TODO mock camera registration object
-    camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_obj)
+    camera_reg = None
+    if(not mock_robot):
+        camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_obj)
+    else:
+        camera_reg = MockCameraRegistration(therm_cam, rgbd_cam, robot_controller, laser_obj)
     print("Starting Streams ")
     b = Broadcast(mocking=mock_robot)
     print(f"Broadcast connection status: {b.connect()}")
@@ -192,15 +201,15 @@ async def main():
             else:
                 robot_controller.go_to_pose(current_pose, blocking=False)
                 
-            laser_obj.set_output(False)
+            # laser_obj.set_output(False)
         else:
             target_world_point = camera_reg.pixel_to_world(np.array([desired_state.x, desired_state.y]), cam_type=cam_type, z=start_pose[2,3])
             target_pose = np.eye(4)
             target_pose[:3, -1] = target_world_point
-            target_vel = robot_controller.live_control(target_pose, 0.05)
+            target_vel = robot_controller.live_control(target_pose, 0.05) # TODO given current and desired pose, set vel
             robot_controller.set_velocity(target_vel, np.zeros(3))
             
-            laser_obj.set_output(True)
+            # laser_obj.set_output(True)
             
             
         # Camera frame publishing
@@ -215,13 +224,7 @@ async def main():
             b.connect()
             print('connecting...')
             time.sleep(2)
-            
-        
-    
-    therm_cam.deinitialize_cam()
-
-    
-    
+  
 
 if __name__ == "__main__":
     asyncio.run(main())
