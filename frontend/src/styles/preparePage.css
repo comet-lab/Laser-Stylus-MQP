@@ -1,19 +1,18 @@
 #preparePopup {
     position: absolute;
     z-index: 101;
-    right: 2%;
     top: 10%;
+    right: 3%;
     width: 30vw;
     height: 40vh;
     display: none;
-    background-color: #0f1419;
+    background-color: #0f1419ba;
     border-radius: 16px;
     border: 2px solid #2c343b;
     color: #e0f2e0;
     flex-direction: column;
     overflow: hidden;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    opacity: 85%;
 }
 
 /* Active state for popup */
@@ -72,15 +71,21 @@
 .prepare-body {
     display: flex;
     flex-grow: 1;
-    /* height: 100%; */ /* Removed this line */
     width: 100%;
-    /* New styles for button positioning */
-    flex-direction: row;
-    justify-content: center; /* "middle" */
-    align-items: flex-end;   /* "bottom" */
-    padding: 1.5rem 2rem;    /* Padding from the bottom/sides */
-    gap: 1rem;               /* Space between buttons */
-    box-sizing: border-box;  /* Ensure padding is included */
+    flex-direction: column;
+    /* Changed to column to stack input and buttons better */
+    justify-content: center;
+    align-items: center;
+    padding: 1.5rem 2rem;
+    gap: 2rem;
+    box-sizing: border-box;
+}
+
+.control-group {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .input-label {
@@ -94,7 +99,7 @@
 
 .input-wrapper {
     position: relative;
-    width: 100%;
+    width: 80%;
 }
 
 .styled-input {
@@ -119,8 +124,8 @@
 
 .styled-input::-webkit-outer-spin-button,
 .styled-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+    -webkit-appearance: none;
+    margin: 0;
 }
 
 #bottomButtons {
