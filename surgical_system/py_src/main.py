@@ -125,18 +125,20 @@ async def main():
 
     def send_fn() -> str:
         current_pose, _ = robot_controller.get_current_state()
-        # TODO send other status (laser on, current path, etc)
-        return RobotSchema.from_pose(current_pose@np.linalg.inv(home_pose)).to_str()
+        status = RobotSchema.from_pose(current_pose@np.linalg.inv(home_pose))
+        laser_state = laser_obj.get_laser_state()
+        status.isLaserOn = laser_state is not None and laser_state == "ON"
+        return status.to_str()
     
     def recv_fn(msg: str):
         data = json.loads(msg)
         desired_state.update(data)
-        # if(desired_state.isLaserOn is not None):
-        #     laser_obj.set_output(desired_state.isLaserOn)
-        #     print("Laser on? ",desired_state.isLaserOn)
-        # else:
-        #     laser_obj.set_output(False)
-        #     print("No laser status, turning off")
+        if(desired_state.isLaserOn is not None):
+            laser_obj.set_output(desired_state.isLaserOn)
+            print("Laser on? ",desired_state.isLaserOn)
+        else:
+            laser_obj.set_output(False)
+            print("No laser status, turning off")
         
         if(desired_state.raster_mask is not None):
             # Do raster 
@@ -153,11 +155,6 @@ async def main():
         # TODO keep looping
         # desired_state.go_to_pose(home_t=home_pose, robot_controller=robot_controller)
         recv_fn.last_update = time.time()       
-        
-        # TODO enable/disable laser
-        # laser_obj.set_output(desired_pose.isLaserOn)
-        
-    
         
     recv_fn.last_update = None
 

@@ -1,7 +1,10 @@
 class MockLaser():
     def __init__(self):
-        pass
+        self.state = None
 
     def set_output(self, output):
-        state = "ON" if output else "OFF"
-        print(f"LASER {state}")
+        self.state = "ON" if output else "OFF"
+        print(f"LASER {self.state}")
+
+    def get_laser_state(self):
+        return self.state
