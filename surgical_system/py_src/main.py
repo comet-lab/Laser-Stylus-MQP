@@ -41,7 +41,7 @@ async def main():
     # Create FrankaNode object for controlling robot
     robot_controller = Robot_Controller() if not mock_robot else MockRobotController()
     home_pose = robot_controller.load_home_pose()
-    start_pos = np.array([0,0,0.35]) # [m,m,m]
+    start_pos = np.array([0,0,0.1]) # [m,m,m]
     start_pose = np.array([[1.0, 0, 0, start_pos[0]],
                             [0,1,0,start_pos[1]],
                             [0,0,1,start_pos[2]],
@@ -128,6 +128,7 @@ async def main():
         status = RobotSchema.from_pose(current_pose@np.linalg.inv(home_pose))
         laser_state = laser_obj.get_laser_state()
         status.isLaserOn = laser_state is not None and laser_state == "ON"
+        print(status.isLaserOn)
         return status.to_str()
     
     def recv_fn(msg: str):

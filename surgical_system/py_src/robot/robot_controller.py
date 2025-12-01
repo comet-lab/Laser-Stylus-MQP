@@ -43,14 +43,12 @@ class Robot_Controller():
         # Default robot starting location 
         self.home_pose = self.load_home_pose(home_pose_path=filePath)
         self.franka_client.send_pose(self.home_pose,1) # Send robot to zero position
-        self.home_pose = self.align_robot_input()
+        self.home_pose = self.align_robot_input(self.home_pose)
         np.savetxt(filePath, self.home_pose, delimiter=",")
         print("Saving new self.home_pose...")
         return self.home_pose
   
-    '''
-    Code is blocking
-    '''
+
     def go_to_pose(self, pose, linTol = .05, rotTol = 0.05, maxIterations = 24, blocking = True):
         # tolerances are in mm and degrees 
         error, angleError = 10000, 10000
@@ -101,9 +99,9 @@ class Robot_Controller():
         time.sleep(1)
         return velocity
     
-    def align_robot_input(self):
-        newPose = self.home_pose.copy()
-        self.go_to_pose(self.home_pose)
+    def align_robot_input(self, new_pose):
+            
+        self.go_to_pose(new_pose)
         while True:
             user_input = input("Enter offset in X Y Z (mm), separated by space (blank to escape): ")
             
@@ -115,15 +113,15 @@ class Robot_Controller():
                 offset_m = np.array([x_mm, y_mm, z_mm]) / 1000.0  # Convert to meters
 
                 # Apply the offset
-                newPose[:3, 3] += offset_m
+                new_pose[:3, 3] += offset_m
                 print(f"Applying offset (m): {offset_m}")
-                print(f"New position (m): {newPose[:3, 3]}")
-                self.go_to_pose(newPose)
+                print(f"New position (m): {new_pose[:3, 3]}")
+                self.go_to_pose(new_pose)
 
             except ValueError:
                 print("Invalid input. Please enter three numeric values separated by space.")
 
-        return newPose
+        return new_pose
 
     def get_home_pose(self):
         return self.home_pose
@@ -250,7 +248,7 @@ if __name__=='__main__':
     home_pose = robot_controller.get_home_pose()
     
     mode = 1
-    height = 0.2 # m
+    height = 0.05 # m
     x = 0
     y = 0
     target_pose = np.array([[1,0,0,x],[0,1,0,y],[0,0,1,height],[0,0,0,1]])

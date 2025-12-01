@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation
 import matplotlib.pyplot as plt
+import warnings
 
 
 import sys, pathlib
@@ -82,9 +83,10 @@ class System_Calibration():
             print(f"\nMoving to position: {targetPose[0:3,3]}")
             self.robot_controller.go_to_pose(targetPose@self.home_pose)
             print("Firing...")
-            self.laser_controller.set_output(True)
-            time.sleep(laserDuration)
-            self.laser_controller.set_output(False)
+            if cam_type == "thermal":
+                self.laser_controller.set_output(True)
+                time.sleep(laserDuration)
+                self.laser_controller.set_output(False)
             img = self.get_cam_latest(cam_type)
             
             if cam_type == "thermal":
@@ -125,6 +127,24 @@ class System_Calibration():
             print("Warped Laser Spot Pixel: ", wLaserPixel, "Target Pixel: ", proj[i, :]*pix_Per_M, "Error: ", wLaserPixel - proj[i,:]*pix_Per_M)
 
             time.sleep(1)  
+
+    def repeat_reprojection_test(self):
+        reprojectionTestHeight = input("Input height for reprojection test or 'q' to quit: ")
+        while reprojectionTestHeight != "q":
+            targetHeight = float(reprojectionTestHeight)
+            if targetHeight > 1: 
+                # We should never have a target height over 1 meter, so pretend it was passed in mm by accident
+                warnings.warn("Height seems to be in mm, dividing by 1000")
+                targetHeight = targetHeight/1000
+                # Raise robot arm in case we want to change the object for the reprojection tests
+
+            targetPose = np.array([[1.0, 0, 0, 0],[0,1.0,0,0],[0,0,1,targetHeight],[0,0,0,1]])
+            self.robot_controller.go_to_pose(targetPose@self.robot_controller.home_pose)
+            laserDuration = targetHeight*7 + 0.15
+            self.reprojection_test("thermal", self.therm_M, gridShape=[2, 2], height = targetHeight, laserDuration=laserDuration)
+            self.reprojection_test("color", self.rgb_M, gridShape=[2, 2], height = 0.05, laserDuration=laserDuration)
+            reprojectionTestHeight = input("Input height [m] for reprojection test or 'q' to quit: ")
+
 
     def pixel_to_world(self, img_points, cam_type, z = 0.0):
         M = self.get_cam_M(cam_type)

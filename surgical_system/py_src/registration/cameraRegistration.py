@@ -36,14 +36,6 @@ class Camera_Registration(System_Calibration):
         while not self.therm_cam.get_latest() or not self.rgbd_cam.get_latest():
             print("Waiting for camera response...")
             time.sleep(0.5)
-        
-        # self.home_pose = self.robot_controller.load_home_pose()
-        # start_pos = np.array([0,0,0.05]) # [m,m,m]
-        # target_pose = np.array([[1.0, 0, 0, start_pos[0]],
-        #                         [0,1,0,start_pos[1]],
-        #                         [0,0,1,start_pos[2]],
-        #                         [0,0,0,1]])
-        # self.robot_controller.go_to_pose(target_pose@self.home_pose,1)
             
         self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder)
         self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder)
@@ -61,22 +53,173 @@ class Camera_Registration(System_Calibration):
         # pathToCWD = os.getcwd()        
         
         # Create checkerboard
-        self.create_checkerboard(gridShape = np.array([9, 8]), \
-                                 saveLocation=self.calibration_folder, debug=debug)
+        # self.robot_controller.load_edit_pose()
         
-        self.laser_controller.set_output(False)
+        # self.create_checkerboard(gridShape = np.array([9, 8]), \
+        #                          saveLocation=self.calibration_folder, debug=debug)
         
-        self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder, debug = debug)
-        self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder, debug = debug)
+        # self.laser_controller.set_output(False)
         
-        self.reprojection_test('color', self.rgb_M, gridShape = np.array([2, 2]), laserDuration = .15, \
-                        debug=debug, height=0)
+        # self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder, debug = debug)
+        # self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder, debug = debug)
         
-        self.reprojection_test('thermal', self.therm_M, gridShape = np.array([2, 2]), laserDuration = .15, \
-                        debug=debug, height=0)
+        # self.reprojection_test('color', self.rgb_M, gridShape = np.array([2, 2]), laserDuration = .15, \
+        #                 debug=debug, height=0)
         
+        # self.reprojection_test('thermal', self.therm_M, gridShape = np.array([2, 2]), laserDuration = .15, \
+        #                 debug=debug, height=0)
+        
+        self.laser_alignment()
         # self.therm_cam.deinitialize_cam()
         # pass
+    
+    
+    def laser_alignment(self):
+        # Create a copy of the original home pose which we will edit in future functions   
+        new_home_pose = self.home_pose.copy()
+        
+        new_home_pose = self.xy_orientation_Correction()
+    
+        new_home_pose, robotError = self.findRobotOffset(new_home_pose)
+        
+        new_home_pose = self.robot_controller.align_robot_input(new_home_pose)
+        self.robot_controller.home_pose = new_home_pose
+        self.home_pose = new_home_pose
+
+        self.repeat_reprojection_test()
+        if input("Enter to save new home pose") == "":
+            saveLocation = "surgical_system/py_src/robot/"
+            save_dir = Path(saveLocation)      
+            save_dir.mkdir(parents=True, exist_ok=True) 
+            file_path = saveLocation + 'home_pose.csv'
+            np.savetxt(file_path, new_home_pose, delimiter=',')
+            print("Saved new home pose")
+            home_pose = self.robot_controller.load_home_pose()
+            self.robot_controller.go_to_pose(home_pose)
+        
+    def xy_orientation_Correction(self):
+        # send to initial pose to allow people to swap object
+        targetPose = np.array([[1.0, 0, 0, 0],[0,1.0,0,0],[0,0,1,0.1],[0,0,0,1]])
+        self.robot_controller.go_to_pose(targetPose@self.home_pose)
+        height = float(input("\nLaser-Robot Alignment: Enter max height [m]... "))
+        imgCount = int(input("\nLaser-Robot Alignment: Enter num pulses... "))
+
+        # [m] heights to test
+        targetHeights = np.linspace(height, 0, imgCount)
+        # initialize error
+        xOrientationOffset, yOrientationOffset = 10, 10
+        # make copy of homePose for edits
+        _homePose = self.home_pose.copy()
+        
+        while input("Press enter to perform an alignment (quit q): ") != "q":
+            laserWorldPoints = np.empty((0, 3))
+            # for each height target -> fire lase and get hot spot
+            for i in range(len(targetHeights)):
+                targetPose[2,3] = targetHeights[i]
+                print("Moving to height: ", targetHeights[i])
+                self.robot_controller.go_to_pose(targetPose@_homePose, linTol=0.025)
+                print("Firing...\n")
+                self.laser_controller.set_output(True)
+                time.sleep(targetHeights[i]* 7 + 0.25) # always sleep for at least 0.15 seconds
+                self.laser_controller.set_output(False)
+                # Acquire image and find laser spot
+                
+                therm_img = self.get_cam_latest("thermal")
+                hottestPixel = self.get_hot_pixel(therm_img, method="Centroid") # pixel in world frame
+                world_pix = self.therm_cali.pixel_to_world(hottestPixel)
+                self.therm_cali.change_image_perspective(therm_img, marker=hottestPixel) # pixel in world frame
+                laser_world = world_pix / self.therm_cam.pix_Per_M 
+                print("Centroid in World: ",  laser_world)
+                laserWorldPoints = np.vstack((laserWorldPoints, laser_world))
+                time.sleep(1) # delay before next point
+
+            # after we have our list of points, we can calculate the alignment
+            alignment = self.estimate_beam_orientation(laserWorldPoints,targetHeights[:i+1])  # convert to [mm]
+            print("Current offset: ", alignment)
+                
+            xOrientationOffset = -alignment["pitch_x_deg"]
+            yOrientationOffset = alignment["pitch_y_deg"]
+            
+            print("Verification offset(x,y): ", xOrientationOffset, yOrientationOffset)
+            print("Norm error: ", np.linalg.norm([xOrientationOffset,yOrientationOffset]))
+            
+            rot = Rotation.from_euler('XYZ', [xOrientationOffset, yOrientationOffset, 0],
+                                    degrees=True)
+            rotM = rot.as_matrix()
+            
+            _homePose[:3, :3] = rotM @ _homePose[:3, :3]
+
+            self.robot_controller.go_to_pose(_homePose,1)
+              
+        return _homePose
+    
+    def estimate_beam_orientation(self, laser_spots, target_z):
+        # Perform least squares for alignment
+        laser_spots = np.array(laser_spots) # [n x 3 array]
+        # The height of the robot for each laser_spot
+        target_z = np.array(target_z) # [ 1 x n array]
+        # 
+        # delta_zs =  target_z - laser_spots[:, 2] # [1 x n array]
+
+        # each row in A represents [m, b] - slope and y-intercept of a line
+        A = np.vstack([target_z, np.ones_like(target_z)]).T # [n x 2 array]
+        
+        # x-angle is defined by offset in y direction
+        theta_x, y0 = np.linalg.lstsq(A, laser_spots[:, 1], rcond=None)[0]
+        # y-angle is defined by offset in x direction
+        theta_y, x0 = np.linalg.lstsq(A, laser_spots[:, 0], rcond=None)[0]
+        
+        # Create direction vector (θx, θy, 1), normalized
+        d = np.array([theta_x, theta_y, 1.0])
+
+        pitch_x = np.degrees(np.arctan2(d[0], d[2]))  # x tilt
+        pitch_y = np.degrees(np.arctan2(d[1], d[2]))  # y tilt
+
+        return {
+            # "x0": x0,
+            # "y0": y0,
+            # "theta_x": theta_x,
+            # "theta_y": theta_y,
+            # "direction_vector": d,
+            "pitch_x_deg": pitch_x, 
+            "pitch_y_deg": pitch_y
+        }
+    
+    def findRobotOffset(self, newHomePose):
+        height = float(input("\nLaser-Robot Alignment: Enter height for shift [m]... "))
+        laserDuration = height* 7 + 0.25 # always sleep for at least 0.15 seconds
+        target_px = np.array([0, 0])
+        
+        error = [1000, 1000]
+        _newHomePose = newHomePose.copy()
+        _newHomePose[2, -1] += height
+        
+        while input("Press enter to perform a shift (quit q): ") != "q":
+            self.robot_controller.go_to_pose(_newHomePose, linTol=0.025)
+            print("Firing laser in 4 seconds...")
+            time.sleep(4)
+            self.fireLaser(duration=laserDuration)
+            
+            therm_img = self.get_cam_latest("thermal")
+            hottestPixel = self.get_hot_pixel(therm_img, method="Centroid") # pixel in world frame
+            worldPoint = self.therm_cali.pixel_to_world(hottestPixel)
+            self.therm_cali.change_image_perspective(therm_img, marker=hottestPixel)
+            
+            
+            offset =  target_px - worldPoint[0,0:2]
+            error = np.append(offset,0) / self.get_cam_obj("thermal").pix_Per_M # px to m
+            _newHomePose[:3, 3] += error
+            print("Offset (mm): ", error*1000, "Norm Error (mm): ", np.linalg.norm(error)*1000)
+            
+        _newHomePose[2, -1] -= height
+        return _newHomePose.copy(), np.linalg.norm(error*1000)
+
+    def fireLaser(self, duration=0.5):
+        print("Firing laser...")
+        self.laser_controller.set_output(True)
+        time.sleep(duration)
+        self.laser_controller.set_output(False)
+        print("Laser fired.")
     
     def create_checkerboard(self, gridShape = np.array([2, 6]), squareSize = 0.005, laserDuration = .15, debug=False, \
                             saveLocation = "calibration_info/"):
@@ -308,7 +451,8 @@ if __name__ == '__main__':
     laser_controller.set_output(laser_on)
     
     camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_controller)
-    # camera_reg.run()
-    camera_reg.live_control_view("color")
+    camera_reg.run()
+    therm_cam.deinitialize_cam()
+    # camera_reg.live_control_view("color")
     # print("here")
 
