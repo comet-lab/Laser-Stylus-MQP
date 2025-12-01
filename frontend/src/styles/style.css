@@ -9,16 +9,26 @@
 /* ============================================
    GLOBAL STYLES
    ============================================ */
-body {
-  font-family: 'IBM Plex Sans', sans-serif;
-  font-weight: 400;
-  padding: 1.5rem;
-  background-color: #000000;
+
+/* Added global reset and explicit height/width.
+   In Standards Mode, percentage heights on children (like #top-panel's 7%)
+   require the parent (body/html) to have an explicit height.
+*/
+* {
+  box-sizing: border-box;
 }
 
 body, html {
   margin: 0 !important;
   padding: 0 !important;
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 400;
+  background-color: #000000;
 }
 
 #app {
