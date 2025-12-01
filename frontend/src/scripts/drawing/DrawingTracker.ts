@@ -1,4 +1,3 @@
-// DrawingTracker.ts
 import { Position, ShapeType, Shape, HandleType, DragOffsets } from './types';
 import * as Utils from './utils';
 
@@ -114,9 +113,8 @@ export class DrawingTracker {
             this.drawingCtx.translate(bbox.centerX, bbox.centerY);
             this.drawingCtx.rotate(rotation);
             this.drawingCtx.beginPath();
-            const rx = bbox.width / 2;
-            const ry = bbox.height / 2;
-            this.drawingCtx.ellipse(0, 0, rx, ry, 0, 0, 2 * Math.PI);
+            const radius = Math.min(bbox.width, bbox.height) / 2;
+            this.drawingCtx.arc(0, 0, radius, 0, 2 * Math.PI); // Draw at 0,0 relative to translate
             this.drawingCtx.stroke();
             this.drawingCtx.restore();
             return;
@@ -215,16 +213,15 @@ export class DrawingTracker {
         
         if (type === 'circle') {
             const bbox = Utils.getLocalBoundingBox(shape);
-            const rx = bbox.width / 2;
-            const ry = bbox.height / 2;
-            const steps = Math.max(120, Math.floor((rx + ry) * 2));
-            let prevX = Math.floor(bbox.centerX + rx);
+            const radius = Math.min(bbox.width, bbox.height) / 2;
+            const steps = Math.max(120, Math.floor(radius * 2));
+            let prevX = Math.floor(bbox.centerX + radius);
             let prevY = Math.floor(bbox.centerY);
             
             for (let i = 1; i <= steps; i++) {
                 const angle = (i / steps) * 2 * Math.PI;
-                const x = Math.floor(bbox.centerX + rx * Math.cos(angle));
-                const y = Math.floor(bbox.centerY + ry * Math.sin(angle));
+                const x = Math.floor(bbox.centerX + radius * Math.cos(angle));
+                const y = Math.floor(bbox.centerY + radius * Math.sin(angle));
                 this.addPixelsToSet(prevX, prevY, x, y);
                 prevX = x;
                 prevY = y;
@@ -325,8 +322,9 @@ export class DrawingTracker {
                 const halfHeight = Math.abs(unrotatedPos.y - center.y);
 
                 if (this.currentShape.type === 'circle') {
-                    this.currentShape.startPos = { x: center.x - halfWidth, y: center.y - halfHeight };
-                    this.currentShape.endPos = { x: center.x + halfWidth, y: center.y + halfHeight };
+                      const radius = Math.max(halfWidth, halfHeight);
+                      this.currentShape.startPos = { x: center.x - radius, y: center.y - radius };
+                      this.currentShape.endPos = { x: center.x + radius, y: center.y + radius };
                 } else {
                     if (['nw', 'ne', 'sw', 'se', 'e', 'w'].includes(this.selectedHandle)) {
                         this.currentShape.startPos.x = center.x - halfWidth;
@@ -454,13 +452,42 @@ export class DrawingTracker {
         return this.drawingEnabled;
     }
 
-    // In DrawingTracker.ts
+    /**
+     * Helper: Creates a Blob of the path (White background, Black line)
+     */
+    private generatePathImageBlob(): Promise<Blob> {
+        return new Promise((resolve, reject) => {
+            // 1. Create temporary canvas
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = this.canvas.width;
+            tempCanvas.height = this.canvas.height;
+            const tCtx = tempCanvas.getContext('2d')!;
 
-    public async sendCoordinates(): Promise<any> {
-        // 1. Safety check: Ensure video dimensions are loaded
+            // 2. Fill Background White
+            tCtx.fillStyle = '#FFFFFF';
+            tCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+            // 3. Draw Pixels as Black
+            tCtx.fillStyle = '#000000';
+            this.drawnPixels.forEach(key => {
+                const [x, y] = key.split(',').map(Number);
+                tCtx.fillRect(x, y, 1, 1);
+            });
+
+            // 4. Convert to Blob
+            tempCanvas.toBlob(blob => {
+                if (blob) resolve(blob);
+                else reject(new Error('Failed to create image blob'));
+            }, 'image/png');
+        });
+    }
+
+    /**
+     * Sends the pixel coordinates and speed to /api/path
+     */
+    private async sendCoordinates(speed: number): Promise<any> {
         if (this.video.videoWidth === 0 || this.video.videoHeight === 0) {
-            console.error("Video dimensions not loaded yet. Cannot calculate coordinates.");
-            return null;
+            throw new Error("Video dimensions missing.");
         }
 
         const pixels = Array.from(this.drawnPixels).map(key => {
@@ -468,33 +495,61 @@ export class DrawingTracker {
             return { x, y };
         });
 
-        // 2. Debug log to see if we actually have data
-        console.log(`Attempting to send ${pixels.length} points...`);
-
         if (pixels.length === 0) {
-            console.warn("No pixels recorded in shape.");
+            console.warn("No pixels to send.");
             return null;
         }
 
+        // Normalize coordinates
         const videoPixels = pixels.map(p => ({
             x: p.x / this.canvas.width * this.video.videoWidth,
             y: p.y / this.canvas.height * this.video.videoHeight
         }));
 
-        try {
-            const response = await fetch(`${this.apiBaseUrl}/api/path`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pixels: videoPixels })
-            });
+        const response = await fetch(`${this.apiBaseUrl}/api/path`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                speed: speed, 
+                pixels: videoPixels 
+            })
+        });
 
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            
-            // 3. Return the JSON so main script can alert the user
-            return await response.json();
-        } catch (error) {
-            console.error('Error sending coordinates:', error);
-            throw error;
-        }
+        if (!response.ok) throw new Error(`JSON path upload failed: ${response.status}`);
+        return await response.json();
+    }
+
+    /**
+     * Sends the generated PNG to /api/raster_mask
+     */
+    private async uploadPathImage(): Promise<any> {
+        if (this.drawnPixels.size === 0) return null;
+
+        const blob = await this.generatePathImageBlob();
+        const formData = new FormData();
+        formData.append('file', blob, 'path.png');
+
+        const response = await fetch(`${this.apiBaseUrl}/api/raster_mask`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) throw new Error(`Image upload failed: ${response.status}`);
+        return await response.json();
+    }
+
+    /**
+     * Orchestrator: Sends both JSON data and Image separately
+     */
+    public async executePath(speed: number): Promise<any> {
+        console.log("Starting parallel upload of Path JSON and Path Image...");
+        
+        // Run both requests in parallel
+        const [jsonResult, imageResult] = await Promise.all([
+            this.sendCoordinates(speed),
+            this.uploadPathImage()
+        ]);
+
+        return { jsonResult, imageResult };
     }
 }

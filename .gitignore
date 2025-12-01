@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 static/
+backend/src/saved_masks/
 frontend/node_modules/
 venvs/
 *.o
