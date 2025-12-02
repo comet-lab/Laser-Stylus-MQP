@@ -44,12 +44,20 @@ window.addEventListener('load', () => {
     const sidebarButtons: NodeListOf<HTMLButtonElement> = document.querySelectorAll('.settings-sidebar .sidebar-btn');
     const settingsPanels: NodeListOf<HTMLElement> = document.querySelectorAll('.settings-main .settings-panel');
 
+    const fillCheckbox = document.getElementById('fillCheckbox') as HTMLInputElement;
+    const rasterPatternContainer = document.getElementById('rasterPatternContainer') as HTMLElement;
+    const rasterBtnA = document.getElementById('rasterA') as HTMLButtonElement;
+    const rasterBtnB = document.getElementById('rasterB') as HTMLButtonElement;
+
+
     // --- 2. State Variables ---
     let laserConfirmationTimeout: number | null = null;
     let drawingState: 'idle' | 'complete' = 'idle';
     let selectedShape: ShapeType | null = null;
     let reader: any = null;
     let drawingTracker: DrawingTracker | null = null;
+    let fillEnabled = false;
+    let selectedRasterPattern: 'rasterA' | 'rasterB' | null = null;
 
     // Real-Time State
     let isRealTimeDrawing = false;
@@ -382,6 +390,37 @@ window.addEventListener('load', () => {
             clearDrawing();
         }
     });
+
+    fillCheckbox.addEventListener('change', () => {
+    fillEnabled = fillCheckbox.checked;
+
+    if (fillEnabled) {
+        rasterPatternContainer.classList.remove('hidden');
+    } else {
+        rasterPatternContainer.classList.add('hidden');
+        selectedRasterPattern = null;
+
+        rasterBtnA.classList.remove('active');
+        rasterBtnB.classList.remove('active');
+    }
+});
+
+function selectRaster(btn: HTMLButtonElement, pattern: 'rasterA' | 'rasterB') {
+    // Reset both buttons visually
+    rasterBtnA.classList.remove('active');
+    rasterBtnB.classList.remove('active');
+
+    // Activate selected
+    btn.classList.add('active');
+    selectedRasterPattern = pattern;
+
+    console.log("Raster pattern selected:", pattern);
+}
+
+rasterBtnA.addEventListener('click', () => selectRaster(rasterBtnA, 'rasterA'));
+rasterBtnB.addEventListener('click', () => selectRaster(rasterBtnB, 'rasterB'));
+
+
 
     function handleShapeSelection(button: HTMLButtonElement, shape: ShapeType) {
         const isRealTime = processingModeSwitch.checked;

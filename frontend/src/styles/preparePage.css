@@ -134,3 +134,18 @@
     gap: 40px;
     height: 70px;
 }
+
+.raster-pattern.hidden {
+    display: none;
+}
+
+.raster-btn {
+    margin-right: 10px;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+
+.raster-btn.active {
+    background-color: #4caf50;
+    color: white;
+}
