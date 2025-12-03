@@ -48,7 +48,7 @@ async def main():
                             [0,0,0,1]])
     robot_controller.go_to_pose(start_pose@home_pose,1) # Send robot to start position
     desired_state = RobotSchema()
-    await asyncio.sleep(2)
+    await asyncio.sleep(2) # ?
     
     ##################################################################################
     #----------------------------------- Cam Config ---------------------------------#
@@ -67,10 +67,11 @@ async def main():
     if(not mock_robot):
         therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frame_rate="Rate50Hz",focal_distance=0.2)
         rgbd_cam = RGBD_Cam() #Runs a thread internally
-        # rgbd_cam.set_default_setting() # Auto-exposure
+        rgbd_cam.set_default_setting() # Auto-exposure
     else:
         therm_cam = MockCamera(cam_type=cam_type)
         rgbd_cam = MockCamera(cam_type=cam_type)
+        
 
     
     ##################################################################################
@@ -80,8 +81,7 @@ async def main():
     laser_obj = None
     if(not mock_robot):
         laser_obj = Laser_Arduino()  # controls whether laser is on or off
-        laser_on = False
-        laser_obj.set_output(laser_on)
+        laser_obj.set_output(False)
     else:
         laser_obj = MockLaser()
         
@@ -126,20 +126,12 @@ async def main():
     def send_fn() -> str:
         current_pose, _ = robot_controller.get_current_state()
         status = RobotSchema.from_pose(current_pose@np.linalg.inv(home_pose))
-        laser_state = laser_obj.get_laser_state()
-        status.isLaserOn = laser_state is not None and laser_state == "ON"
-        print(status.isLaserOn)
+        status.isLaserOn = desired_state.isLaserOn
         return status.to_str()
     
     def recv_fn(msg: str):
         data = json.loads(msg)
         desired_state.update(data)
-        if(desired_state.isLaserOn is not None):
-            laser_obj.set_output(desired_state.isLaserOn)
-            print("Laser on? ",desired_state.isLaserOn)
-        else:
-            laser_obj.set_output(False)
-            print("No laser status, turning off")
         
         if(desired_state.raster_mask is not None):
             # Do raster 
@@ -199,7 +191,7 @@ async def main():
             else:
                 robot_controller.go_to_pose(current_pose, blocking=False)
                 
-            # laser_obj.set_output(False)
+            laser_obj.set_output(False)
         else:
             target_world_point = camera_reg.pixel_to_world(np.array([desired_state.x, desired_state.y]), cam_type=cam_type, z=start_pose[2,3])
             target_pose = np.eye(4)
@@ -207,7 +199,7 @@ async def main():
             target_vel = robot_controller.live_control(target_pose, 0.05) # TODO given current and desired pose, set vel
             robot_controller.set_velocity(target_vel, np.zeros(3))
             
-            # laser_obj.set_output(True)
+            laser_obj.set_output(desired_state.isLaserOn)
             
             
         # Camera frame publishing
