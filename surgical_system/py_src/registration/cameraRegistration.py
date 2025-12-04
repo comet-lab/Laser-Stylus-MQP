@@ -13,8 +13,10 @@ if __name__=='__main__':
             sys.path.insert(0, str(candidate))
             break
     from system_calibration import System_Calibration
+    from roi_selector import ROISelector
 else:
     from registration.system_calibration import System_Calibration
+    
 from robot.robot_controller import Robot_Controller
 from cameras.thermal_cam import ThermalCam
 from cameras.RGBD_cam import RGBD_Cam
@@ -321,6 +323,37 @@ class Camera_Registration(System_Calibration):
         np.savetxt(rgb_saveLocation / "laser_world_points.csv", obj_Points,          delimiter=",")
         # np.save    (save_dir / "laser_spots.npy",       therm_image_set)
         return combinedImg, therm_img_points, rgb_img_points, obj_Points
+    
+    def transformed_view(self, cam_type = "color"):
+        # Size of the top-down (bird's-eye) image (e.g., from calibration)
+        WINDOW_NAME = "w0w"
+        img = self.get_cam_latest(cam_type)
+        H = self.rgb_M.copy()  # your original homography
+
+        H_shifted, (out_w, out_h) = self.make_positive_homography(H, img.shape)
+
+        warped = cv2.warpPerspective(img, H_shifted, (out_w, out_h))
+
+        selector = ROISelector(warped)
+        cv2.namedWindow(WINDOW_NAME)
+        cv2.setMouseCallback(WINDOW_NAME, selector.mouse_callback)
+
+        while True:
+            frame = selector.img.copy()
+            selector.draw(frame)
+
+            cv2.imshow(WINDOW_NAME, frame)
+
+            # Show the ROI in a separate window
+            roi = selector.get_roi()
+            if roi is not None and roi.size > 0:
+                cv2.imshow("wow", roi)
+
+            key = cv2.waitKey(20) & 0xFF
+            if key == 27:  # ESC to quit
+                break
+
+        cv2.destroyAllWindows()
 
     def live_control_view(self, cam_type, max_vel = 0.05, window_name="Camera", frame_key="color"):
         """
@@ -371,7 +404,7 @@ class Camera_Registration(System_Calibration):
                     cv2.circle(disp, last_point, 5, (0, 255, 0), 2)
                     
                     if cam_type == "thermal" or cam_type == "color":
-                        target_position = self.pixel_to_world(last_point, cam_type)
+                        target_position = self.pixel_to_world(last_point, cam_type)[0]
                     else:
                         raise(f"Wrong camera type: {cam_type}")
                 
@@ -402,6 +435,17 @@ class Camera_Registration(System_Calibration):
         finally:
             cv2.destroyWindow(window_name)
             self.laser_controller.set_output(0)
+    
+    def draw_traj(self, cam_type = 'color'):
+        img = self.get_cam_latest(cam_type)
+        pixels = self.draw_img(img)
+        pixels = self.moving_average_smooth(pixels, window=5)
+        robot_path = self.pixel_to_world(pixels, cam_type)
+        plt.plot(robot_path[:, 0], robot_path[:, 1])
+        plt.show()
+        traj = self.robot_controller.create_custom_trajectory(robot_path, 0.005)
+        self.robot_controller.run_trajectory(traj)
+        # print(pixels)
     
     
 
@@ -451,7 +495,10 @@ if __name__ == '__main__':
     laser_controller.set_output(laser_on)
     
     camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_controller)
-    camera_reg.run()
+    # camera_reg.run()
+    rgbd_cam.set_default_setting()
+    # camera_reg.transformed_view()
+    camera_reg.draw_traj()
     therm_cam.deinitialize_cam()
     # camera_reg.live_control_view("color")
     # print("here")

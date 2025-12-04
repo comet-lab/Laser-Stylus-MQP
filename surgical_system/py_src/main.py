@@ -141,14 +141,19 @@ async def main():
             print("recieved raster png")
         elif(desired_state.path is not None and len(desired_state.path) > 1):
             # Do path
-            robot_waypoints = camera_reg.pixel_to_world(desired_state.path.values(), cam_type=cam_type)
-            print(robot_waypoints[0])
+            desired_state.path = np.array([[d["x"], d["y"]] for d in desired_state.path], dtype=float)
+            # print(path)
+            # robot_waypoints = camera_reg.pixel_to_world(path, cam_type=cam_type)
+            # print(robot_waypoints)
             # traj = robot_controller.create_trajectory(gains)
 
         # TODO keep looping
         # desired_state.go_to_pose(home_t=home_pose, robot_controller=robot_controller)
         recv_fn.last_update = time.time()       
         
+    def is_planned_path():
+        return desired_state.path is not None and len(desired_state.path) > 1
+    
     recv_fn.last_update = None
 
     # TODO this is a hotfix, overload update to accept a robot schema
@@ -183,23 +188,27 @@ async def main():
         if(recv_fn.last_update is not None):
             diff = current_time - recv_fn.last_update
         # If no new message in 200ms, stop
-        if(diff > .12):
-            current_pose, current_vel = robot_controller.get_current_state()
-            # Stop robot, no drift
-            if np.linalg.norm(current_vel[:3]) > 2e-5:
-                robot_controller.set_velocity(np.zeros(3), np.zeros(3))
-            else:
-                robot_controller.go_to_pose(current_pose, blocking=False)
-                
-            laser_obj.set_output(False)
+        if is_planned_path():
+            robot_path = camera_reg.pixel_to_world(desired_state.path, cam_type=cam_type)
+            robot_controller.create_custom_trajectory(robot_path, 0.01)
         else:
-            target_world_point = camera_reg.pixel_to_world(np.array([desired_state.x, desired_state.y]), cam_type=cam_type, z=start_pose[2,3])
-            target_pose = np.eye(4)
-            target_pose[:3, -1] = target_world_point
-            target_vel = robot_controller.live_control(target_pose, 0.05) # TODO given current and desired pose, set vel
-            robot_controller.set_velocity(target_vel, np.zeros(3))
-            
-            laser_obj.set_output(desired_state.isLaserOn)
+            if(diff > .12):
+                current_pose, current_vel = robot_controller.get_current_state()
+                # Stop robot, no drift
+                if np.linalg.norm(current_vel[:3]) > 2e-5:
+                    robot_controller.set_velocity(np.zeros(3), np.zeros(3))
+                else:
+                    robot_controller.go_to_pose(current_pose, blocking=False)
+                    
+                laser_obj.set_output(False)
+            else:
+                target_world_point = camera_reg.pixel_to_world(np.array([desired_state.x, desired_state.y]), cam_type=cam_type, z=start_pose[2,3])[0]
+                target_pose = np.eye(4)
+                target_pose[:3, -1] = target_world_point
+                target_vel = robot_controller.live_control(target_pose, 0.05) # TODO given current and desired pose, set vel
+                robot_controller.set_velocity(target_vel, np.zeros(3))
+                
+                laser_obj.set_output(desired_state.isLaserOn)
             
             
         # Camera frame publishing

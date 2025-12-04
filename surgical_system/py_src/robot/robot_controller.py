@@ -155,6 +155,16 @@ class Robot_Controller():
         t_inv = -R_inv @ t
         return np.concatenate((np.concatenate((R_inv, t_inv.reshape(3, 1)), axis=1), [[0, 0, 0, 1]]), axis=0)
 
+    def create_custom_trajectory(self, path, max_velocity):
+        path_info = {"Positions": path, 
+                    "Pattern": "Custom",
+                    "Radius": -1,
+                    "Passes": 1,
+                    "MaxVelocity": max_velocity, # [m/s]
+                    "MaxAcceleration": 0.0,#[m/s/s]
+                    "Durations":[-1]} #time per step
+        return TrajectoryController(path_info, debug=True)
+    
     def create_trajectory(self, path_info):
         if not isinstance(path_info['Positions'], np.ndarray):
             path_info['Positions'] = np.array( path_info['Positions'])
@@ -186,6 +196,8 @@ class Robot_Controller():
         data_num = int(math.ceil(total_time/time_step)) 
         actual_vel_list = np.empty((data_num, 3))
         target_vel_list = np.empty((data_num, 3))
+        actual_pos_list = np.empty((data_num, 3))
+        target_pos_list = np.empty((data_num, 3))
         i = 0
         while (elapsedTime) < total_time:
             if (time.time() - t) >= time_step:    
@@ -193,11 +205,16 @@ class Robot_Controller():
                 t = time.time()
                 movement = traj.update(elapsedTime)
                 target_vel = (movement['velocity'])
-                print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel) 
-                velocity = self.set_velocity(target_vel, [0,0,0])
+                target_pos = (movement['position'])
+                print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel, f" | Target Pos: ", target_pos) 
+                state = self.set_velocity(target_vel, [0,0,0])
+                pos, vel = state[:3], state[7:10]
                 # new_pose = np.array(self.franka_client.request_pose())
-                actual_vel_list[i, :] =  velocity[:3] if i != 0 else np.zeros(3)
+                actual_vel_list[i, :] =  vel[:3] if i != 0 else np.zeros(3)
                 target_vel_list[i, :] = target_vel
+                actual_pos_list[i, :] =  pos[:3] if i != 0 else np.zeros(3)
+                target_pos_list[i, :] = target_pos
+                
                 # current_pose = new_pose
                 i += 1
         self.robot_stop()
@@ -211,7 +228,7 @@ class Robot_Controller():
         plt.plot(time_range, target_vel_list[:, 1], '--', label="target y")
         plt.plot(time_range, target_vel_list[:, 2], '--', label="target z")
         plt.xlabel("Time [s]")
-        plt.ylabel("velcity [m]")
+        plt.ylabel("velcity [m/s]")
         title = "Time vs velocity "+ traj.pattern
         plt.title(title)
         plt.grid(True)
@@ -220,6 +237,27 @@ class Robot_Controller():
 
         # Save and also display inline
         out_path = "time_vs_velocity_" + traj.pattern + ".png"
+        plt.savefig(out_path, dpi=200)
+        plt.show()
+        
+        plt.figure(figsize=(10,6))
+        time_range = np.arange(0, total_time, time_step)
+        plt.plot(time_range, actual_pos_list[:, 0], label="actual x")
+        plt.plot(time_range, actual_pos_list[:, 1], label="actual y")
+        plt.plot(time_range, actual_pos_list[:, 2], label="actual z")
+        plt.plot(time_range, target_pos_list[:, 0], '--', label="target x")
+        plt.plot(time_range, target_pos_list[:, 1], '--', label="target y")
+        plt.plot(time_range, target_pos_list[:, 2], '--', label="target z")
+        plt.xlabel("Time [s]")
+        plt.ylabel("position [m]")
+        title = "Time vs position "+ traj.pattern
+        plt.title(title)
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+
+        # Save and also display inline
+        out_path = "time_vs_position_" + traj.pattern + ".png"
         plt.savefig(out_path, dpi=200)
         plt.show()
         # np.savetxt("actualVel.npy", actual_vel_list)
