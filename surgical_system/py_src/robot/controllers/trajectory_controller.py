@@ -19,7 +19,7 @@ class TrajectoryController():
         
         # self.laser_info = controller_msg.laser_info
         
-        if self.positions.shape[0]-1 != len(self.durations) and not self.pattern == "Circle":
+        if self.positions.shape[0]-1 != len(self.durations) and not self.pattern == "Circle" and not self.pattern == "Custom":
             raise Exception("Durations and Postions dims do not match")
         self.positions, self.durations = self.generatePath() # Generates new points depending on pattern
         self.generateTrajectories(self.positions, self.durations, self.max_velocity, self.max_acceleration)
@@ -48,7 +48,10 @@ class TrajectoryController():
 
         elif(self.pattern == "Polygon"): # edit this to complete polygon
             points = self.positions.copy()
-            durations = self.durations.copy() 
+            durations = self.durations.copy()
+        
+        elif(self.pattern == "Custom"): # Custom Path
+            points = self.positions.copy()
             
         elif(self.pattern == "Line"):
             points = self.positions.copy()
@@ -61,11 +64,30 @@ class TrajectoryController():
             print("Pattern: ", self.pattern)
             raise ValueError("Trajectory Controller can not handle pattern above")
         
+        diffs = points[1:] - points[:-1]
+        dist = np.linalg.norm(diffs, axis=1)
+        
         distances = np.linalg.norm(points[1:] - points[:-1], axis=1)
-        durations = (distances / np.sum(distances)) * self.durations[0]
+        eps = 1e-6  # if the distances are too small, remove
+        mask = distances > eps
+
+        if not np.any(mask):
+            raise ValueError("Path has no non-trivial segments (all points are identical).")
+
+        # rebuild points using only non-zero-length segments
+        points = np.vstack((points[0], points[1:][mask]))
+        distances = dist[mask]
+
+
         self.total_distance = np.sum(distances)
+        if self.durations[0] == -1:
+            self.durations[0] = self.total_distance/float(self.max_velocity)
+            print(self.durations[0])
+            
+        durations = (distances / np.sum(distances)) * self.durations[0]
         cumulative_durations = np.cumsum(durations)
-        points = np.hstack((points, np.full((points.shape[0], 1), self.positions[0, -1])))
+        if points.shape[-1] < 3: # Points are not 3D
+            points = np.hstack((points, np.full((points.shape[0], 1), self.positions[0, -1])))
         
         return points, cumulative_durations
         
@@ -104,6 +126,7 @@ class TrajectoryController():
 
             a0 = a_way[i]
             af = a_way[i + 1]
+
 
             for d in range(self.n_dims):
                 self.trajectories[i, d] = QuinticTrajectory(
@@ -169,9 +192,9 @@ class TrajectoryController():
         return traj
     
     def init_path(self, path_info):
-        self.positions = np.array(path_info["Positions"]) # laser position in [cm] shape:(n,x)
+        self.positions = np.array(path_info["Positions"], dtype=float) # laser position in [cm] shape:(n,x)
         self.start_pos = self.positions[0]
-        self.durations = np.array(path_info["Durations"]) # shape: (x)
+        self.durations = np.array(path_info["Durations"], dtype=float) # shape: (x)
         self.pattern: str = path_info["Pattern"]
         self.num_passes: int = path_info["Passes"]
         self.max_acceleration = path_info["MaxAcceleration"]

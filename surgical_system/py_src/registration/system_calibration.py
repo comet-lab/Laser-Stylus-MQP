@@ -146,13 +146,64 @@ class System_Calibration():
             reprojectionTestHeight = input("Input height [m] for reprojection test or 'q' to quit: ")
 
 
+    def make_positive_homography(self, H, img_shape):
+        """
+        H: 3x3 homography (original -> warped), may produce negative coords
+        img_shape: (h, w, ...) of the original image
+        Returns:
+            H_shifted: homography that maps original -> warped with all coords >= 0
+            out_size: (out_w, out_h) to use with warpPerspective
+        """
+        H = H.astype(np.float32)
+        h, w = img_shape[:2]
+
+        # Original image corners
+        src_corners = np.float32([
+            [0, 0],
+            [w - 1, 0],
+            [w - 1, h - 1],
+            [0, h - 1]
+        ]).reshape(-1, 1, 2)
+        
+
+        # Transform corners with H
+        dst_corners = cv2.perspectiveTransform(src_corners, H).reshape(-1, 2)
+
+        xs = dst_corners[:, 0]
+        ys = dst_corners[:, 1]
+
+        x_min, x_max = xs.min(), xs.max()
+        y_min, y_max = ys.min(), ys.max()
+
+        # Output size is the size of the bounding box in warped space
+        out_w = int(np.ceil(x_max - x_min))
+        out_h = int(np.ceil(y_max - y_min))
+
+        # Translation to shift everything so min coords become 0
+        T = np.array([
+            [1, 0, -x_min],
+            [0, 1, -y_min],
+            [0, 0, 1]
+        ], dtype=np.float32)
+
+        H_shifted = T @ H  
+        
+        #flip vertically 
+        V = [[1,  0, 0], 
+            [0, -1, out_h - 1],
+            [0,  0,1]]
+
+        H_shifted = V @ H_shifted
+        
+        return H_shifted, (out_w, out_h)
+
     def pixel_to_world(self, img_points, cam_type, z = 0.0):
         M = self.get_cam_M(cam_type)
         cam_obj = self.get_cam_obj(cam_type)
         pix_Per_M = cam_obj.pix_Per_M
-        world_point = np.zeros(3)
-        world_point[-1] = z
-        world_point[:2] = cv2.perspectiveTransform(img_points.reshape(-1,1,2).astype(np.float32), M).reshape(-1,2) / pix_Per_M
+        world_point = np.zeros((img_points.shape[0], 3))
+        world_point[:, -1] = z
+        world_point[:, :2] = cv2.perspectiveTransform(img_points.reshape(-1,1,2).astype(np.float32), M).reshape(-1,2) / pix_Per_M
         return world_point
     
     def select_ROI(self, cam_type):
@@ -166,6 +217,102 @@ class System_Calibration():
         colROI = [bbox[0], bbox[0]+bbox[2]]
         cv2.destroyWindow('select')
         return rowROI, colROI
+    
+    def draw_img(self, img, window_name="Paint Region"):
+        """
+        Let the user draw by click-dragging the mouse, recording only the cursor pixel.
+
+        Controls:
+        - Left-click + drag: record cursor positions
+        - 'r': reset/clear
+        - Enter: finish and return Nx2 np.array of (x, y) pixel coords
+        - Esc: cancel, return empty array
+
+        Returns
+        -------
+        coords : np.ndarray of shape (N, 2), dtype=int
+            (x, y) pixel coordinates of all cursor positions while dragging.
+        """
+        drawing = False
+
+        h, w = img.shape[:2]
+        # Mask just for visualization
+        mask = np.zeros((h, w), dtype=np.uint8)
+        # List of recorded cursor positions
+        coords_list = []
+
+        def mouse_callback(event, x, y, flags, param):
+            nonlocal drawing, mask, coords_list
+
+            if event == cv2.EVENT_LBUTTONDOWN:
+                drawing = True
+                coords_list.append((x, y))
+                mask[y, x] = 255
+
+            elif event == cv2.EVENT_MOUSEMOVE and drawing:
+                coords_list.append((x, y))
+                mask[y, x] = 255
+
+            elif event == cv2.EVENT_LBUTTONUP:
+                drawing = False
+                coords_list.append((x, y))
+                mask[y, x] = 255
+
+        cv2.namedWindow(window_name)
+        cv2.setMouseCallback(window_name, mouse_callback)
+
+        while True:
+            disp = img.copy()
+            if np.any(mask):
+                overlay = disp.copy()
+                # Color recorded pixels green
+                overlay[mask == 255] = (0, 255, 0)
+                alpha = 0.4
+                disp = cv2.addWeighted(overlay, alpha, disp, 1 - alpha, 0)
+
+            cv2.putText(disp, "Drag to record pixels | 'r' reset | Enter finish | Esc cancel",
+                        (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (220, 220, 220), 1)
+
+            cv2.imshow(window_name, disp)
+            key = cv2.waitKey(20) & 0xFF
+
+            if key in (13, 10):  # Enter
+                break
+            elif key == 27:  # Esc
+                coords_list = []
+                mask[:] = 0
+                break
+            elif key == ord('r'):
+                coords_list = []
+                mask[:] = 0
+
+        cv2.destroyWindow(window_name)
+
+        if not coords_list:
+            return np.zeros((0, 2), dtype=int)
+
+        # Convert list to array, optionally dedupe if you want unique pixels only
+        coords = np.array(coords_list, dtype=int)
+
+        # If you only want unique pixels:
+        # coords = np.unique(coords, axis=0)
+
+        return coords
+    
+    def moving_average_smooth(self, points, window=5):
+        """Apply a simple moving average to (N,2) points."""
+        if len(points) < 3 or window <= 1:
+            return points
+
+        pad = window // 2
+        # pad endpoints to avoid shrinking the path
+        padded = np.pad(points, ((pad, pad), (0, 0)), mode='edge')
+
+        kernel = np.ones(window) / float(window)
+        x_smooth = np.convolve(padded[:, 0], kernel, mode='valid')
+        y_smooth = np.convolve(padded[:, 1], kernel, mode='valid')
+
+        return np.stack((x_smooth, y_smooth), axis=1)
     
     def get_cam_M(self, cam_type):
         if cam_type == "color":
