@@ -1,11 +1,34 @@
-FROM ubuntu:20.04
+# FROM ubuntu:20.04
+
+# WORKDIR /app
+
+# RUN apt update && apt install -y wget ffmpeg \
+# && wget https://github.com/bluenviron/mediamtx/releases/download/v1.15.3/mediamtx_v1.15.3_linux_amd64.tar.gz \
+# && tar -xzkf mediamtx_v1.15.3_linux_amd64.tar.gz
+
+# COPY mediamtx_config.yml .
+
+# CMD sh -c './mediamtx mediamtx_config.yml '
+
+FROM debian:bookworm
 
 WORKDIR /app
 
+EXPOSE 8554
+EXPOSE 8554/udp
+EXPOSE 8889
+EXPOSE 8189/udp
+EXPOSE 8189/tcp
+EXPOSE 8000/udp
+EXPOSE 8001/udp
+
 RUN apt update && apt install -y wget ffmpeg \
-&& wget https://github.com/bluenviron/mediamtx/releases/download/v1.15.3/mediamtx_v1.15.3_linux_amd64.tar.gz \
-&& tar -xzkf mediamtx_v1.15.3_linux_amd64.tar.gz
+    && wget https://github.com/bluenviron/mediamtx/releases/download/v1.15.3/mediamtx_v1.15.3_linux_amd64.tar.gz \
+    && tar -xzkf mediamtx_v1.15.3_linux_amd64.tar.gz
 
-COPY mediamtx_config.yml .
-
-CMD sh -c './mediamtx mediamtx_config.yml '
+CMD sh -c './mediamtx mediamtx.yml & \
+    ffmpeg -re -f lavfi -i testsrc=size=640x360:rate=30 \
+           -f lavfi -i sine=frequency=1000 \
+           -c:v libx264 -preset ultrafast -tune zerolatency \
+           -c:a aac -b:a 128k -movflags +global_header \
+           -f rtsp rtsp://localhost:8554/mystream'
