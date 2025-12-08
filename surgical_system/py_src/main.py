@@ -144,7 +144,7 @@ async def main():
     robot_controller.go_to_pose(start_pose@home_pose,1) # Send robot to start position
 
     while (True):
-        control_flow_handler.main_loop()            
+        await control_flow_handler.main_loop()            
             
         # Camera frame publishing
         latest = camera_reg.get_cam_latest(cam_type=cam_type)
