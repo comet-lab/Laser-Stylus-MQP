@@ -324,9 +324,8 @@ export class DrawingTracker {
                 const halfHeight = Math.abs(unrotatedPos.y - center.y);
 
                 if (this.currentShape.type === 'circle') {
-                      const radius = Math.max(halfWidth, halfHeight);
-                      this.currentShape.startPos = { x: center.x - radius, y: center.y - radius };
-                      this.currentShape.endPos = { x: center.x + radius, y: center.y + radius };
+                    this.currentShape.startPos = { x: center.x - halfWidth, y: center.y - halfHeight };
+                    this.currentShape.endPos = { x: center.x + halfWidth, y: center.y + halfHeight };
                 } else {
                     if (['nw', 'ne', 'sw', 'se', 'e', 'w'].includes(this.selectedHandle)) {
                         this.currentShape.startPos.x = center.x - halfWidth;
