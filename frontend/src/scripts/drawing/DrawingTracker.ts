@@ -113,8 +113,9 @@ export class DrawingTracker {
             this.drawingCtx.translate(bbox.centerX, bbox.centerY);
             this.drawingCtx.rotate(rotation);
             this.drawingCtx.beginPath();
-            const radius = Math.min(bbox.width, bbox.height) / 2;
-            this.drawingCtx.arc(0, 0, radius, 0, 2 * Math.PI); // Draw at 0,0 relative to translate
+            const rx = bbox.width / 2;
+            const ry = bbox.height / 2;
+            this.drawingCtx.ellipse(0, 0, rx, ry, 0, 0, 2 * Math.PI);
             this.drawingCtx.stroke();
             this.drawingCtx.restore();
             return;
@@ -213,15 +214,16 @@ export class DrawingTracker {
         
         if (type === 'circle') {
             const bbox = Utils.getLocalBoundingBox(shape);
-            const radius = Math.min(bbox.width, bbox.height) / 2;
-            const steps = Math.max(120, Math.floor(radius * 2));
-            let prevX = Math.floor(bbox.centerX + radius);
+            const rx = bbox.width / 2;
+            const ry = bbox.height / 2;
+            const steps = Math.max(120, Math.floor((rx + ry) * 2));
+            let prevX = Math.floor(bbox.centerX + rx);
             let prevY = Math.floor(bbox.centerY);
             
             for (let i = 1; i <= steps; i++) {
                 const angle = (i / steps) * 2 * Math.PI;
-                const x = Math.floor(bbox.centerX + radius * Math.cos(angle));
-                const y = Math.floor(bbox.centerY + radius * Math.sin(angle));
+                const x = Math.floor(bbox.centerX + rx * Math.cos(angle));
+                const y = Math.floor(bbox.centerY + ry * Math.sin(angle));
                 this.addPixelsToSet(prevX, prevY, x, y);
                 prevX = x;
                 prevY = y;
