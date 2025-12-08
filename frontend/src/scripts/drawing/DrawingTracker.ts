@@ -197,7 +197,7 @@ export class DrawingTracker {
     }
 
     private addPixelsToSet(x0: number, y0: number, x1: number, y1: number): void {
-        const pixelGenerator = Utils.generateLinePixels(x0, y0, x1, y1, 1);
+        const pixelGenerator = Utils.generateLinePixels(x0, y0, x1, y1);
         for (const pixel of pixelGenerator) {
             this.drawnPixels.add(`${pixel.x},${pixel.y}`);
         }
