@@ -20,6 +20,7 @@ window.addEventListener('load', () => {
     const prepareCloseBtn = document.getElementById('prepareCloseBtn') as HTMLButtonElement;
     const prepareCancelBtn = document.getElementById('prepareCancelBtn') as HTMLButtonElement;
     const executeBtn = document.getElementById('executeBtn') as HTMLButtonElement;
+    const speedInput = document.getElementById('speedInput') as HTMLInputElement; // NEW
 
     const video = document.getElementById('video') as HTMLVideoElement;
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -43,12 +44,20 @@ window.addEventListener('load', () => {
     const sidebarButtons: NodeListOf<HTMLButtonElement> = document.querySelectorAll('.settings-sidebar .sidebar-btn');
     const settingsPanels: NodeListOf<HTMLElement> = document.querySelectorAll('.settings-main .settings-panel');
 
+    const fillCheckbox = document.getElementById('fillCheckbox') as HTMLInputElement;
+    const rasterPatternContainer = document.getElementById('rasterPatternContainer') as HTMLElement;
+    const rasterBtnA = document.getElementById('rasterA') as HTMLButtonElement;
+    const rasterBtnB = document.getElementById('rasterB') as HTMLButtonElement;
+
+
     // --- 2. State Variables ---
     let laserConfirmationTimeout: number | null = null;
     let drawingState: 'idle' | 'complete' = 'idle';
     let selectedShape: ShapeType | null = null;
     let reader: any = null;
     let drawingTracker: DrawingTracker | null = null;
+    let fillEnabled = false;
+    let selectedRasterPattern: 'rasterA' | 'rasterB' | null = null;
 
     // Real-Time State
     let isRealTimeDrawing = false;
@@ -81,10 +90,12 @@ window.addEventListener('load', () => {
     settingsCloseBtn.addEventListener('click', closeSettings);
 
     const openPrepareMenu = (): void => {
+        overlay.classList.add('active');
         preparePopup.classList.add('active');
     };
 
     const closePrepareMenu = (): void => {
+        overlay.classList.remove('active');
         preparePopup.classList.remove('active');
     };
 
@@ -317,22 +328,54 @@ window.addEventListener('load', () => {
         }
     }
 
+    function clearDrawing() {
+        if (!drawingTracker) { return }
+
+        drawingTracker.clearDrawing();
+        drawingState = 'idle';
+        updateDrawButtonState();
+    }
+
+    function cancelDrawing() {
+        if (!drawingTracker) { return }
+
+        clearDrawing();
+
+        drawingTracker.disableDrawing();
+        selectedShape = null;
+        toggleButtons.forEach(btn => btn.classList.remove('selected'));
+    }
+
     executeBtn.addEventListener('click', async () => {
         if (!drawingTracker) return;
         executeBtn.disabled = true;
         prepareBtn.disabled = true;
 
-        try {
-            console.log('Sending coordinates to robot...');
-            const result = await drawingTracker.sendCoordinates();
-            if (result) console.log("Response:", result);
+        // Parse speed from text input
+        const speed = parseFloat(speedInput.value);
+        
+        // Validate speed
+        if (isNaN(speed) || speed <= 0) {
+            alert("Please enter a valid speed greater than 0 m/s");
+            executeBtn.disabled = false;
+            prepareBtn.disabled = false;
+            return;
+        }
 
-            drawingTracker.clearDrawing();
-            drawingState = 'idle';
-            updateDrawButtonState();
+        try {
+            console.log(`Executing path at speed: ${speed} m/s`);
+            
+            // Execute path (sends JSON coordinates and PNG image in parallel)
+            const result = await drawingTracker.executePath(speed);
+
+            if (result) {
+                console.log("Execution started successfully");
+                console.log("Response:", result);
+            }
+
+            // Clear the drawing after successful send
+            cancelDrawing();
             closePrepareMenu();
-            toggleButtons.forEach(btn => btn.classList.remove('selected'));
-            selectedShape = null;
         } catch (e) {
             console.error('Error sending coordinates:', e);
             if (drawingState === 'complete') {
@@ -344,11 +387,40 @@ window.addEventListener('load', () => {
 
     clearBtn.addEventListener('click', () => {
         if (drawingState === 'complete' && drawingTracker) {
-            drawingTracker.clearDrawing();
-            drawingState = 'idle';
-            updateDrawButtonState();
+            clearDrawing();
         }
     });
+
+    fillCheckbox.addEventListener('change', () => {
+    fillEnabled = fillCheckbox.checked;
+
+    if (fillEnabled) {
+        rasterPatternContainer.classList.remove('hidden');
+    } else {
+        rasterPatternContainer.classList.add('hidden');
+        selectedRasterPattern = null;
+
+        rasterBtnA.classList.remove('active');
+        rasterBtnB.classList.remove('active');
+    }
+});
+
+function selectRaster(btn: HTMLButtonElement, pattern: 'rasterA' | 'rasterB') {
+    // Reset both buttons visually
+    rasterBtnA.classList.remove('active');
+    rasterBtnB.classList.remove('active');
+
+    // Activate selected
+    btn.classList.add('active');
+    selectedRasterPattern = pattern;
+
+    console.log("Raster pattern selected:", pattern);
+}
+
+rasterBtnA.addEventListener('click', () => selectRaster(rasterBtnA, 'rasterA'));
+rasterBtnB.addEventListener('click', () => selectRaster(rasterBtnB, 'rasterB'));
+
+
 
     function handleShapeSelection(button: HTMLButtonElement, shape: ShapeType) {
         const isRealTime = processingModeSwitch.checked;
@@ -372,9 +444,7 @@ window.addEventListener('load', () => {
                 drawingTracker?.clearDrawing();
             } else {
                 if (drawingTracker) {
-                    drawingTracker.clearDrawing();
-                    drawingState = 'idle';
-                    updateDrawButtonState();
+                    clearDrawing();
 
                     drawingTracker.setShapeType(shape);
                     drawingTracker.enableDrawing(() => {
@@ -397,8 +467,6 @@ window.addEventListener('load', () => {
     });
 
     const handleResize = () => {
-        // CRITICAL FIX: Use offsetWidth/Height instead of window.inner...
-        // This accounts for the 65.5px sidebar so 1 drawing pixel = 1 screen pixel
         canvas.width = canvas.offsetWidth;
         canvas.height = canvas.offsetHeight;
 
@@ -408,9 +476,7 @@ window.addEventListener('load', () => {
         
         // Clear drawing on resize to prevent skewed paths
         if (drawingTracker?.isDrawingEnabled()) {
-            drawingTracker.clearDrawing();
-            drawingState = 'idle';
-            updateDrawButtonState();
+            clearDrawing();
         }
     };
 
@@ -419,6 +485,8 @@ window.addEventListener('load', () => {
     handleResize();
 
     // Click-to-move (Guarded against Real-Time mode)
+    //Currently disabled to avoid sending extraneous commands
+    /*
     canvas.addEventListener('click', function (event) {
         if (processingModeSwitch.checked) return;
         if (drawingTracker?.isDrawingEnabled()) return;
@@ -430,6 +498,7 @@ window.addEventListener('load', () => {
 
         wsHandler.updateState({ x: vidX, y: vidY });
     });
+    */
 
     robotBtn.addEventListener('click', () => {
         robotBtn.classList.toggle('active');
