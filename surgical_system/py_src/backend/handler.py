@@ -55,9 +55,9 @@ class Handler:
         print("recieved raster png")
 
     def _do_path(self):
-        robot_waypoints = self.camera_reg.pixel_to_world(self.desired_state.path.values(), cam_type=self.cam_type)
+        robot_waypoints = self.cam_reg.pixel_to_world(self.desired_state.path.values(), cam_type=self.cam_type)
         # TODO determine cam type from desired state
-        robot_waypoints = self.camera_reg.pixel_to_world(self.desired_state.path, cam_type=self.cam_type)
+        robot_waypoints = self.cam_reg.pixel_to_world(self.desired_state.path, cam_type=self.cam_type)
         traj = self.robot_controller.create_custom_trajectory(robot_waypoints, 0.01)
         self.robot_controller.run_trajectory(traj)
 
@@ -73,13 +73,13 @@ class Handler:
                 
             self.laser_obj.set_output(False)
         else:
-            target_world_point = self.camera_reg.pixel_to_world(np.array([self.desired_state.x, self.desired_state.y]), cam_type=self.cam_type, z=self.start_pose[2,3])
+            target_world_point = self.cam_reg.pixel_to_world(np.array([self.desired_state.x, self.desired_state.y]), cam_type=self.cam_type, z=self.start_pose[2,3])
             target_pose = np.eye(4)
             target_pose[:3, -1] = target_world_point
             target_vel = self.robot_controller.live_control(target_pose, 0.05)
             self.robot_controller.set_velocity(target_vel, np.zeros(3))
 
-            self.laser_obj.set_output(self.desired_state.isLaserOn)
+            self.laser_obj.set_output(self.desired_state.isLaserEnabled)
 
     async def main_loop(self):
         # Yield to other threads (video stream, websocket comms)
