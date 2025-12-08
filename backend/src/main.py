@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket, UploadFile, Request
+from fastapi import FastAPI, HTTPException, WebSocket, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import base64
@@ -44,27 +44,6 @@ async def submit_path(request: dict):
         "pixel_count": len(pixels),
         "message": f"Path with {len(pixels)} pixels dispatched to robot"
     }
-
-@app.post("/api/settings")
-async def submit_settings(request: Request):
-    data = await request.json()
-    raster_type = data.get("raster_type")
-    speed = data.get("speed")
-    print(data)
-    
-    manager.desired_state.raster_type = raster_type
-    manager.desired_state.speed = float(speed)
-
-    print(f"Received settings: raster_type={raster_type}, speed={speed}")
-    await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
-    
-    return {
-        "status": "success",
-        "raster_type": raster_type,
-        "speed": speed,
-        "message": "Settings dispatched to robot"
-    }
-
 
 @app.post("/api/raster_mask")   
 async def submit_raster_mask(file: UploadFile):

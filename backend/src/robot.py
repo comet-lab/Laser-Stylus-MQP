@@ -15,8 +15,6 @@ class RobotSchema:
     isLaserOn: bool = None
     pathEvent: str = None
     raster_mask: str = None
-    raster_type: str = None
-    speed: float = None
     path: list[dict[str, float]] = None
 
     def flush(self):
