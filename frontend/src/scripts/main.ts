@@ -39,8 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function syncUiToState(state: Partial<WebSocketMessage>) {
         // Update laser button (only if laser state is present)
-        if (state.isLaserOn !== undefined) {
-            const newLaserState = !!state.isLaserOn;
+        if (state.isLaserEnabled !== undefined) {
+            const newLaserState = !!state.isLaserEnabled;
             laserButton.textContent = newLaserState ? "Turn Off Laser" : "Turn On Laser";
             laserButton.classList.toggle('laser-on', newLaserState);
         }
@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const desiredNewState = !isCurrentlyOn;
         
         // 3. Send only the laser state update (coordinates unchanged on backend)
-        wsHandler.updateState({ isLaserOn: desiredNewState });
+        wsHandler.updateState({ isLaserEnabled: desiredNewState });
     });
 
     // When clicking send button, send the current coordinates and laser state
@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Send a complete update with all current UI values
         wsHandler.updateState({
             ...getCoordinates(),
-            isLaserOn: getLocalLaserState()
+            isLaserEnabled: getLocalLaserState()
         });
     });
 

@@ -28,6 +28,7 @@ else:
 
 from cameras.broadcast import Broadcast
 from backend.listener import BackendConnection
+from backend.handler import Handler
 
 
 async def main():
@@ -123,54 +124,14 @@ async def main():
     #----------------------------- Backend Connection -------------------------------#
     ##################################################################################
 
-    def send_fn() -> str:
-        current_pose, _ = robot_controller.get_current_state()
-        # TODO send other status (laser on, current path, etc)
-        return RobotSchema.from_pose(current_pose@np.linalg.inv(home_pose)).to_str()
-    
-    def recv_fn(msg: str):
-        data = json.loads(msg)
-        desired_state.update(data)
-        # if(desired_state.isLaserOn is not None):
-        #     laser_obj.set_output(desired_state.isLaserOn)
-        #     print("Laser on? ",desired_state.isLaserOn)
-        # else:
-        #     laser_obj.set_output(False)
-        #     print("No laser status, turning off")
-        
-        if(desired_state.raster_mask is not None):
-            # Do raster 
-            image_bytes = desired_state.raster_mask.encode('utf-8')
-            numpy_array = np.frombuffer(image_bytes, np.uint8)
-            cv2.imdecode(numpy_array, cv2.IMREAD_COLOR)
-            print("recieved raster png")
-        elif(desired_state.path is not None and len(desired_state.path) > 1):
-            # Do path
-            robot_waypoints = camera_reg.pixel_to_world(desired_state.path.values(), cam_type=cam_type)
-            print(robot_waypoints[0])
-            # traj = robot_controller.create_trajectory(gains)
-
-        # TODO keep looping
-        # desired_state.go_to_pose(home_t=home_pose, robot_controller=robot_controller)
-        recv_fn.last_update = time.time()       
-        
-        # TODO enable/disable laser
-        # laser_obj.set_output(desired_pose.isLaserOn)
-        
-    
-        
-    recv_fn.last_update = None
-
-    # TODO this is a hotfix, overload update to accept a robot schema
-    initial_pose, _ = robot_controller.get_current_state()
-    desired_state.update(asdict(RobotSchema.from_pose(initial_pose@np.linalg.inv(home_pose))))
-
-    backend_connection = BackendConnection(
-        send_fn=send_fn,
-        recv_fn=recv_fn,
-        mocking=mock_robot
+    control_flow_handler = Handler(
+        desired_state=desired_state,
+        robot_controller=robot_controller,
+        cam_reg=camera_reg,
+        laser_obj=laser_obj,
+        start_pose=start_pose,
+        mock_robot=mock_robot
     )
-    asyncio.create_task(backend_connection.connect_to_websocket())
     
     ##################################################################################
     #----------------------------- Camera Calibration -------------------------------#
@@ -179,38 +140,11 @@ async def main():
     if camera_calibration:
         pass
 
-    
     start_pose[2,3] = 0.0
     robot_controller.go_to_pose(start_pose@home_pose,1) # Send robot to start position
-    
+
     while (True):
-        # Backend pose update
-        await asyncio.sleep(0.0001)
-        
-        # Robot velocity controller        
-        current_time = time.time()
-        diff = 1
-        if(recv_fn.last_update is not None):
-            diff = current_time - recv_fn.last_update
-        # If no new message in 200ms, stop
-        if(diff > .12):
-            current_pose, current_vel = robot_controller.get_current_state()
-            # Stop robot, no drift
-            if np.linalg.norm(current_vel[:3]) > 2e-5:
-                robot_controller.set_velocity(np.zeros(3), np.zeros(3))
-            else:
-                robot_controller.go_to_pose(current_pose, blocking=False)
-                
-            # laser_obj.set_output(False)
-        else:
-            target_world_point = camera_reg.pixel_to_world(np.array([desired_state.x, desired_state.y]), cam_type=cam_type, z=start_pose[2,3])
-            target_pose = np.eye(4)
-            target_pose[:3, -1] = target_world_point
-            target_vel = robot_controller.live_control(target_pose, 0.05) # TODO given current and desired pose, set vel
-            robot_controller.set_velocity(target_vel, np.zeros(3))
-            
-            # laser_obj.set_output(True)
-            
+        control_flow_handler.main_loop()            
             
         # Camera frame publishing
         latest = camera_reg.get_cam_latest(cam_type=cam_type)

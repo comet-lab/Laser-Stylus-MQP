@@ -145,12 +145,12 @@ window.addEventListener('load', () => {
     }
 
     function syncUiToState(state: Partial<WebSocketMessage>) {
-        if (state.isLaserOn !== undefined) {
+        if (state.isLaserEnabled !== undefined) {
             if (laserConfirmationTimeout) {
                 clearTimeout(laserConfirmationTimeout);
                 laserConfirmationTimeout = null;
             }
-            const newLaserState = !!state.isLaserOn;
+            const newLaserState = !!state.isLaserEnabled;
             laserBtn.classList.toggle('active', newLaserState);
             laserBtn.style.pointerEvents = 'auto';
         }
@@ -316,7 +316,7 @@ window.addEventListener('load', () => {
     });
 
     function changeLaserState(newState: boolean) {
-        const success = wsHandler.updateState({ isLaserOn: newState });
+        const success = wsHandler.updateState({ isLaserEnabled: newState });
         if (success) {
             laserConfirmationTimeout = setTimeout(() => {
                 console.error("No confirmation from robot. Resetting UI.");

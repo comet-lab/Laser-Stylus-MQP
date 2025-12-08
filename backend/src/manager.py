@@ -20,7 +20,7 @@ class ConnectionManager:
 
     def disconnect(self, websocket: WebSocket):
         print("Websocket disconnected. Turning laser off")
-        self.desired_state.isLaserOn = False
+        self.desired_state.isLaserEnabled = False
         for group in (self.frontend_connections, self.robot_connections):
             if websocket in group:
                 group.remove(websocket)     
