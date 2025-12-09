@@ -33,6 +33,7 @@ window.addEventListener('load', () => {
     const processingModeSwitch = document.getElementById('processing-mode') as HTMLInputElement;
     const thermalModeSwitch = document.getElementById('thermal-rgb-view') as HTMLInputElement;
     const transformedModeSwitch = document.getElementById('transformed-view-mode') as HTMLInputElement;
+    const saveView = document.getElementById('save-view') as HTMLInputElement;
     const batchUiElements = document.querySelectorAll('.batch-ui');
     const statusControlValue = document.querySelector('.status-value.status-batch') as HTMLElement;
 
@@ -365,7 +366,7 @@ window.addEventListener('load', () => {
         }
 
         try {
-            console.log(`Executing path at speed: ${speed} m/s`);
+            console.log(`Executing path at speed: ${speed/1000} m/s`);
             
             // Execute path (sends JSON coordinates and PNG image in parallel)
             //console.log("Selected Raster Pattern:", selectedRasterPattern);
@@ -386,6 +387,19 @@ window.addEventListener('load', () => {
                 prepareBtn.disabled = false;
             }
         }
+    });
+
+    saveView.addEventListener('click', async () => {
+        if (!drawingTracker) return;
+        const transformedView = transformedModeSwitch.checked;
+        const thermalView = thermalModeSwitch.checked;
+        //console.log(transformedView, thermalView);
+        const result = await drawingTracker.updateViewSettings(transformedView, thermalView);
+
+            if (result) {
+                console.log("Updated the view settings successfully");
+                console.log("Response:", result);
+            }
     });
 
     clearBtn.addEventListener('click', () => {

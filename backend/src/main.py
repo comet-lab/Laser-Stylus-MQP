@@ -65,6 +65,28 @@ async def submit_settings(request: Request):
         "message": "Settings dispatched to robot"
     }
 
+@app.post("/api/view_settings")
+async def submit_settings(request: Request):
+    data = await request.json()
+    isTransformedViewOn = data.get("isTransformedViewOn")
+    isThermalViewOn = data.get("isThermalViewOn")
+    print(data)
+    # isTransformedViewOn: bool = None
+    # isThermalViewOn: bool = None
+    
+    manager.desired_state.isTransformedViewOn = isTransformedViewOn
+    manager.desired_state.isThermalViewOn = isThermalViewOn
+
+    print(f"Received settings: tranformed view on? {isTransformedViewOn}, thermal view on? {isThermalViewOn}")
+    await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
+    
+    return {
+        "status": "success",
+        "isTransformedViewOn": isTransformedViewOn,
+        "isThermalViewOn": isThermalViewOn,
+        "message": "Settings dispatched to robot"
+    }
+
 
 @app.post("/api/raster_mask")   
 async def submit_raster_mask(file: UploadFile):

@@ -123,27 +123,28 @@
         <div id="camera-settings" class="settings-panel">
           <h3>Camera Settings</h3>
           <div class="setting-item">
-            <span class="setting-label">Thermal/RGB</span>
-            <div class="switch-container">
-              <span class="switch-label">Thermal</span>
-              <label class="toggle-switch">
-                <input type="checkbox" id="thermal-rgb-view">
-                <span class="slider round"></span>
-              </label>
-              <span class="switch-label">RGB</span>
-            </div>
-          </div>
-          <div class="setting-item">
             <span class="setting-label">Transformed</span>
             <div class="switch-container">
-              <span class="switch-label">On</span>
+              <span class="switch-label">Off</span>
               <label class="toggle-switch">
                 <input type="checkbox" id="transformed-view-mode">
                 <span class="slider round"></span>
               </label>
-              <span class="switch-label">Off</span>
+              <span class="switch-label">On</span>
             </div>
           </div>
+          <div class="setting-item">
+            <span class="setting-label">Thermal/RGB</span>
+            <div class="switch-container">
+              <span class="switch-label">RGB</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="thermal-rgb-view">
+                <span class="slider round"></span>
+              </label>
+              <span class="switch-label">Thermal</span>
+            </div>
+          </div>
+          <button id="save-view" class="btn-text" data-state="ready">SAVE</button>
         </div>
         <div id="laser-settings" class="settings-panel">
           <h3>Laser Settings</h3>

@@ -562,6 +562,43 @@ export class DrawingTracker {
         return await response.json();
     }
 
+    /**
+     * Sends the view settings to @app.post("/api/view_settings")
+     */
+    private async uploadViewSettings(isTransformedViewOn: Boolean, isThermalViewOn: Boolean): Promise<any> {
+        // different views,different raster
+        // frontend says mm/s and then send m/s to backend 
+        //console.log("Uploading view settings:", isTransformedViewOn, isThermalViewOn);
+        const payload = {
+            isTransformedViewOn,
+            isThermalViewOn
+        }
+
+        const response = await fetch(`${this.apiBaseUrl}/api/view_settings`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+
+        if (!response.ok) throw new Error(`View settings upload failed: ${response.status}`);
+        return await response.json();
+    }
+   
+    /**
+     * Orchestrator: sends the view settings to /api/view_settings
+     */
+    public async updateViewSettings(isTransformedViewOn: Boolean, isThermalViewOn: Boolean): Promise<any> {
+        console.log("Starting upload of view settings");
+        
+        const result = await Promise.all([
+            this.uploadViewSettings(isTransformedViewOn, isThermalViewOn)
+        ]);
+
+        return { result };
+    }
+
 
     /**
      * Orchestrator: Sends both JSON data and Image separately
