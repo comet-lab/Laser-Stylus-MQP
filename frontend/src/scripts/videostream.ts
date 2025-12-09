@@ -31,6 +31,8 @@ window.addEventListener('load', () => {
     const prepareBtn = document.getElementById('prepareBtn') as HTMLButtonElement;
 
     const processingModeSwitch = document.getElementById('processing-mode') as HTMLInputElement;
+    const thermalModeSwitch = document.getElementById('thermal-rgb-view') as HTMLInputElement;
+    const transformedModeSwitch = document.getElementById('transformed-view-mode') as HTMLInputElement;
     const batchUiElements = document.querySelectorAll('.batch-ui');
     const statusControlValue = document.querySelector('.status-value.status-batch') as HTMLElement;
 
