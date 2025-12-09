@@ -59,7 +59,7 @@ window.addEventListener('load', () => {
     let reader: any = null;
     let drawingTracker: DrawingTracker | null = null;
     let fillEnabled = false;
-    let selectedRasterPattern: 'rasterA' | 'rasterB' | null = null;
+    let selectedRasterPattern: 'line_raster' | 'spiral_raster' | null = null;
 
     // Real-Time State
     let isRealTimeDrawing = false;
@@ -368,7 +368,8 @@ window.addEventListener('load', () => {
             console.log(`Executing path at speed: ${speed} m/s`);
             
             // Execute path (sends JSON coordinates and PNG image in parallel)
-            const result = await drawingTracker.executePath(speed);
+            //console.log("Selected Raster Pattern:", selectedRasterPattern);
+            const result = await drawingTracker.executePath(speed, String(selectedRasterPattern));
 
             if (result) {
                 console.log("Execution started successfully");
@@ -407,7 +408,7 @@ window.addEventListener('load', () => {
     }
 });
 
-function selectRaster(btn: HTMLButtonElement, pattern: 'rasterA' | 'rasterB') {
+function selectRaster(btn: HTMLButtonElement, pattern: 'line_raster' | 'spiral_raster') {
     // Reset both buttons visually
     rasterBtnA.classList.remove('active');
     rasterBtnB.classList.remove('active');
@@ -417,10 +418,11 @@ function selectRaster(btn: HTMLButtonElement, pattern: 'rasterA' | 'rasterB') {
     selectedRasterPattern = pattern;
 
     console.log("Raster pattern selected:", pattern);
+    // console.log(selectedRasterPattern);
 }
 
-rasterBtnA.addEventListener('click', () => selectRaster(rasterBtnA, 'rasterA'));
-rasterBtnB.addEventListener('click', () => selectRaster(rasterBtnB, 'rasterB'));
+rasterBtnA.addEventListener('click', () => selectRaster(rasterBtnA, 'line_raster'));
+rasterBtnB.addEventListener('click', () => selectRaster(rasterBtnB, 'spiral_raster'));
 
 
 
