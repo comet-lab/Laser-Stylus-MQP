@@ -24,7 +24,7 @@ class Handler:
         initial_pose, _ = robot_controller.get_current_state()
         desired_state.update(asdict(RobotSchema.from_pose(initial_pose@np.linalg.inv(self.home_tf))))
         desired_state.isLaserOn = False
-        desired_state.isRobotOn = True
+        desired_state.isRobotOn = False
 
         backend_connection = BackendConnection(
             send_fn=self._send_fn,
