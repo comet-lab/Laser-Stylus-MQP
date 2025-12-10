@@ -212,7 +212,7 @@ class Robot_Controller():
                 # new_pose = np.array(self.franka_client.request_pose())
                 actual_vel_list[i, :] =  vel[:3] if i != 0 else np.zeros(3)
                 target_vel_list[i, :] = target_vel
-                actual_pos_list[i, :] =  pos[:3] if i != 0 else np.zeros(3)
+                actual_pos_list[i, :] =  pos[:3] - self.home_pose[:3, -1]
                 target_pos_list[i, :] = target_pos
                 
                 # current_pose = new_pose
