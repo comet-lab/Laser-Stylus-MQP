@@ -156,39 +156,40 @@ window.addEventListener('load', () => {
     // if the incoming message confirms our desired state.
     // If the message is "old" (e.g. says ON when we just clicked OFF), we ignore it.
     function syncUiToState(state: Partial<WebSocketMessage>) {
+        // --- 1. Handle Laser Update ---
         if (state.isLaserOn !== undefined) {
             const incomingState = !!state.isLaserOn;
-            
+            const currentVisualState = getLocalLaserState();
+
             if (laserConfirmationTimeout) {
-                // We are waiting for a change. Only accept if it matches our optimistic UI.
-                const desiredState = getLocalLaserState(); // We set this optimistically in changeLaserState
-                
-                if (incomingState === desiredState) {
+                // We are waiting for a response. 
+                // We only accept the update if the server confirms the CHANGE we asked for.
+                if (incomingState !== currentVisualState) {
                     clearTimeout(laserConfirmationTimeout);
                     laserConfirmationTimeout = null;
-                    laserBtn.style.pointerEvents = 'auto';
-                    laserBtn.classList.toggle('active', incomingState); // Ensure exact sync
+                    laserBtn.classList.toggle('active', incomingState); // Update Visuals
+                    laserBtn.style.pointerEvents = 'auto'; // Unlock
                 }
-                // Else: Incoming state mismatch while waiting. 
-                // It's likely an old packet. Ignore it to prevent flickering.
             } else {
-                // No pending action, trust the server.
+                // Not waiting for a user action (e.g. broadcast from another user)
+                // Just sync purely.
                 laserBtn.classList.toggle('active', incomingState);
                 laserBtn.style.pointerEvents = 'auto';
             }
         }
 
+        // --- 2. Handle Robot Update ---
         if (state.isRobotOn !== undefined) {
             const incomingState = !!state.isRobotOn;
+            const currentVisualState = getLocalRobotState();
 
             if (robotConfirmationTimeout) {
-                const desiredState = getLocalRobotState();
-
-                if (incomingState === desiredState) {
+                // We are waiting for a response.
+                if (incomingState !== currentVisualState) {
                     clearTimeout(robotConfirmationTimeout);
                     robotConfirmationTimeout = null;
-                    robotBtn.style.pointerEvents = 'auto';
-                    robotBtn.classList.toggle('active', incomingState);
+                    robotBtn.classList.toggle('active', incomingState); // Update Visuals
+                    robotBtn.style.pointerEvents = 'auto'; // Unlock
                 }
             } else {
                 robotBtn.classList.toggle('active', incomingState);
@@ -333,39 +334,41 @@ window.addEventListener('load', () => {
     });
 
     function changeLaserState(newState: boolean) {
+        // 1. Lock the UI immediately (Visuals stay same, but unclickable)
+        laserBtn.style.pointerEvents = 'none';
+        
         const updates: any = { isLaserOn: newState };
 
-        // Optimistically update Laser UI
-        laserBtn.classList.toggle('active', newState);
-        
-        // --- MUTUAL SHUTDOWN LOGIC ---
-        // If turning off the laser, we must also turn off the robot
-        if (newState === false) {
+        // 2. Mutual Shutdown Logic
+        // If turning Laser OFF, check if Robot is ON. If so, turn it off too.
+        if (newState === false && getLocalRobotState() === true) {
             updates.isRobotOn = false;
-
-            // Optimistically update Robot UI
-            robotBtn.classList.remove('active');
+            
+            // Lock the Robot button too, so user can't click it while it's shutting down
             robotBtn.style.pointerEvents = 'none';
 
-            // Reset Robot Timeout Logic (since we are changing its state too)
             if (robotConfirmationTimeout) clearTimeout(robotConfirmationTimeout);
             robotConfirmationTimeout = setTimeout(() => {
-                console.error("No confirmation from robot (triggered by laser kill). Resetting UI.");
-                robotBtn.style.pointerEvents = 'auto';
+                console.error("No confirmation from robot (triggered by laser kill). Unlocking Robot.");
+                robotBtn.style.pointerEvents = 'auto'; 
+                // We do NOT revert class, because we never changed it visually.
             }, 2000);
         }
 
+        // 3. Send Message
         const success = wsHandler.updateState(updates);
 
         if (success) {
+            if (laserConfirmationTimeout) clearTimeout(laserConfirmationTimeout);
             laserConfirmationTimeout = setTimeout(() => {
-                console.error("No confirmation from robot (laser). Resetting UI.");
+                console.error("No confirmation from robot (laser). Unlocking Laser.");
                 laserBtn.style.pointerEvents = 'auto';
+                // We do NOT revert class, because we never changed it visually.
             }, 2000);
         } else {
-            // Revert on send failure
+            // Failed to send - unlock immediately
             laserBtn.style.pointerEvents = 'auto';
-            robotBtn.style.pointerEvents = 'auto';
+            if (updates.isRobotOn === false) robotBtn.style.pointerEvents = 'auto';
             console.error('Failed to send laser state update');
         }
     }
@@ -378,39 +381,39 @@ window.addEventListener('load', () => {
     });
 
     function changeRobotState(newState: boolean) {
+        // 1. Lock UI
+        robotBtn.style.pointerEvents = 'none';
+
         const updates: any = { isRobotOn: newState };
 
-        // Optimistically update Robot UI
-        robotBtn.classList.toggle('active', newState);
-
-        // --- MUTUAL SHUTDOWN LOGIC ---
-        // If turning off the robot, we must also turn off the laser
-        if (newState === false) {
+        // 2. Mutual Shutdown Logic
+        // If turning Robot OFF, check if Laser is ON. If so, turn it off too.
+        if (newState === false && getLocalLaserState() === true) {
             updates.isLaserOn = false;
 
-            // Optimistically update Laser UI
-            laserBtn.classList.remove('active');
+            // Lock Laser button
             laserBtn.style.pointerEvents = 'none';
 
-            // Reset Laser Timeout Logic
             if (laserConfirmationTimeout) clearTimeout(laserConfirmationTimeout);
             laserConfirmationTimeout = setTimeout(() => {
-                console.error("No confirmation from robot (triggered by robot kill). Resetting UI.");
+                console.error("No confirmation from robot (triggered by robot kill). Unlocking Laser.");
                 laserBtn.style.pointerEvents = 'auto';
             }, 2000);
         }
 
+        // 3. Send Message
         const success = wsHandler.updateState(updates);
         
         if (success) {
+            if (robotConfirmationTimeout) clearTimeout(robotConfirmationTimeout);
             robotConfirmationTimeout = setTimeout(() => {
-                console.error("No confirmation from robot (robot). Resetting UI.");
+                console.error("No confirmation from robot (robot). Unlocking Robot.");
                 robotBtn.style.pointerEvents = 'auto';
             }, 2000);
         } else {
-            // Revert on send failure
+            // Failed to send
             robotBtn.style.pointerEvents = 'auto';
-            laserBtn.style.pointerEvents = 'auto';
+            if (updates.isLaserOn === false) laserBtn.style.pointerEvents = 'auto';
             console.error('Failed to send robot state update');
         }
     }
