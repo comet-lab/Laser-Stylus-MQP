@@ -63,15 +63,14 @@ async def main():
     # free beam laser spot.
     therm_cam = None
     rgbd_cam = None
-    cam_type = "color"
     
     if(not mock_robot):
         therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frame_rate="Rate50Hz",focal_distance=0.2)
         rgbd_cam = RGBD_Cam() #Runs a thread internally
         rgbd_cam.set_default_setting() # Auto-exposure
     else:
-        therm_cam = MockCamera(cam_type=cam_type)
-        rgbd_cam = MockCamera(cam_type=cam_type)
+        therm_cam = MockCamera(cam_type="thermal")
+        rgbd_cam = MockCamera(cam_type="color")
         
 
     
@@ -147,9 +146,10 @@ async def main():
         await control_flow_handler.main_loop()            
             
         # Camera frame publishing
-        latest = camera_reg.get_cam_latest(cam_type=cam_type)
+        latest = camera_reg.get_cam_latest(cam_type=control_flow_handler.cam_type)
+
         if isinstance(latest, dict):
-            latest = latest.get(cam_type, None)
+            latest = latest.get(control_flow_handler.cam_type, None)
         if(type(latest) == type(None)):
             continue
         if(b.connected):

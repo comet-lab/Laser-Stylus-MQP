@@ -12,5 +12,7 @@ class MockCameraRegistration():
         return np.array([img_points[0], img_points[1], z])
     
     def get_cam_latest(self, cam_type):
-        return self.rgbd_cam.get_latest()
-        
+        if(cam_type == "thermal"):
+            return self.therm_cam.get_latest()
+        else:
+            return self.rgbd_cam.get_latest()

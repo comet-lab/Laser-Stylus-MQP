@@ -47,6 +47,10 @@ class Handler:
         self.last_update_time = time.time()
         data = json.loads(msg)
         self.desired_state.update(data)
+        if(self.desired_state.isThermalViewOn):
+            self.cam_type = "thermal"
+        else:
+            self.cam_type = "color"
 
     def _do_raster(self):
         image_bytes = self.desired_state.raster_mask.encode('utf-8') # TODO have image available on shared disk mount
