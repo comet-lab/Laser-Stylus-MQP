@@ -36,4 +36,12 @@ class MockRobotController():
         correction_pose = target_pose - self.pose
         # correction_vector = correction_pose[0:3, 3]
         self.go_to_pose(target_pose)
+    
+    def create_custom_trajectory(self, robot_waypoints, speed):
+        return (robot_waypoints, speed)
+
+    def run_trajectory(self, traj):
+        print("Waypoint 0:", traj[0][0])
+        print("Waypoint Final:", traj[0][-1])
+        print("Speed", traj[1])
 

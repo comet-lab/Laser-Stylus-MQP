@@ -24,7 +24,7 @@ class Handler:
         initial_pose, _ = robot_controller.get_current_state()
         desired_state.update(asdict(RobotSchema.from_pose(initial_pose@np.linalg.inv(self.home_tf))))
         desired_state.isLaserOn = False
-        desired_state.isRobotOn = False
+        desired_state.isRobotOn = True
 
         backend_connection = BackendConnection(
             send_fn=self._send_fn,
@@ -59,9 +59,10 @@ class Handler:
         print("recieved raster png")
 
     def _do_path(self):
-        robot_waypoints = self.cam_reg.pixel_to_world(self.desired_state.path.values(), cam_type=self.cam_type)
         # TODO determine cam type from desired state
-        robot_waypoints = self.cam_reg.pixel_to_world(self.desired_state.path, cam_type=self.cam_type)
+        # TODO convert path from List
+        path = np.array([[d['x'], d['y']] for d in self.desired_state.path])
+        robot_waypoints = self.cam_reg.pixel_to_world(path, cam_type=self.cam_type)
         traj = self.robot_controller.create_custom_trajectory(robot_waypoints, 0.01)
         self.robot_controller.run_trajectory(traj)
 
