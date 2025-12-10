@@ -10,7 +10,7 @@ export interface WebSocketMessage {
     laserY: number;
     beamWaist: number;
     speed: number;
-    isLaserEnabled: boolean;
+    isLaserOn: boolean;
     pathEvent: string | null;
 }
 

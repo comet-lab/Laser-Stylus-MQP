@@ -14,8 +14,8 @@ class RobotSchema:
     laserX: float = None
     laserY: float = None
     beamWaist: float = None
-    isLaserEnabled: bool = None
-    isRobotEnabled: bool = None
+    isLaserOn: bool = None
+    isRobotOn: bool = None
     raster_mask: bytes = None
     path: List[Dict[str, float]] = None
 

@@ -23,8 +23,8 @@ class Handler:
 
         initial_pose, _ = robot_controller.get_current_state()
         desired_state.update(asdict(RobotSchema.from_pose(initial_pose@np.linalg.inv(self.home_tf))))
-        desired_state.isLaserEnabled = False
-        desired_state.isRobotEnabled = True # TODO send from frontend
+        desired_state.isLaserOn = False
+        desired_state.isRobotOn = False
 
         backend_connection = BackendConnection(
             send_fn=self._send_fn,
@@ -33,14 +33,14 @@ class Handler:
         )
         asyncio.create_task(backend_connection.connect_to_websocket())
 
-    def _input_downtime(self):
+    def _input_downtime(self):  
         return time.time() - self.last_update_time
     
     def _send_fn(self) -> str:
         current_pose, _ = self.robot_controller.get_current_state()
         status = RobotSchema.from_pose(current_pose@np.linalg.inv(self.home_tf))
-        status.isLaserEnabled = self.desired_state.isLaserEnabled # TODO Separate variable for on & enabled? Need read-only portions of schema?
-        status.isRobotEnabled = self.desired_state.isRobotEnabled # TODO get from ???
+        status.isLaserOn = self.desired_state.isLaserOn # TODO Separate variable for on & enabled? Need read-only portions of schema?
+        status.isRobotOn = self.desired_state.isRobotOn # TODO get from ???
         return status.to_str()
     
     def _recv_fn(self, msg: str):
@@ -79,13 +79,13 @@ class Handler:
             target_vel = self.robot_controller.live_control(target_pose, 0.05)
             self.robot_controller.set_velocity(target_vel, np.zeros(3))
 
-            self.laser_obj.set_output(self.desired_state.isLaserEnabled)
+            self.laser_obj.set_output(self.desired_state.isLaserOn)
 
     async def main_loop(self):
         # Yield to other threads (video stream, websocket comms)
         await asyncio.sleep(0.0001)
 
-        if(self.desired_state.isRobotEnabled):
+        if(self.desired_state.isRobotOn):
 
             if(self.desired_state.raster_mask is not None):
                 self._do_raster()
