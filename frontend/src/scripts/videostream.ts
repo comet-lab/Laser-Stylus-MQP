@@ -95,12 +95,10 @@ window.addEventListener('load', () => {
     settingsCloseBtn.addEventListener('click', closeSettings);
 
     const openPrepareMenu = (): void => {
-        overlay.classList.add('active');
         preparePopup.classList.add('active');
     };
 
     const closePrepareMenu = (): void => {
-        overlay.classList.remove('active');
         preparePopup.classList.remove('active');
     };
 
