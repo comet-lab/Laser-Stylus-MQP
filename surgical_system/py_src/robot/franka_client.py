@@ -1,8 +1,7 @@
 import os
-if __name__=='__main__':
-    from UDP.UDPClient import UDPClient
-else:
-    from .UDP.UDPClient import UDPClient
+
+from robot.UDP.UDPClient import UDPClient
+
 import numpy as np
 import struct
 
