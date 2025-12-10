@@ -55,6 +55,7 @@ window.addEventListener('load', () => {
 
     // --- 2. State Variables ---
     let laserConfirmationTimeout: number | null = null;
+    let robotConfirmationTimeout: number | null = null;
     let drawingState: 'idle' | 'complete' = 'idle';
     let selectedShape: ShapeType | null = null;
     let reader: any = null;
@@ -79,6 +80,7 @@ window.addEventListener('load', () => {
         }
         [clearBtn, prepareBtn, robotBtn, laserBtn].forEach(btn => btn.disabled = true);
         changeLaserState(false);
+        changeRobotState(false);
         settingsPopup.classList.add('active');
         overlay.classList.add('active');
     };
@@ -93,12 +95,10 @@ window.addEventListener('load', () => {
     settingsCloseBtn.addEventListener('click', closeSettings);
 
     const openPrepareMenu = (): void => {
-        overlay.classList.add('active');
         preparePopup.classList.add('active');
     };
 
     const closePrepareMenu = (): void => {
-        overlay.classList.remove('active');
         preparePopup.classList.remove('active');
     };
 
@@ -147,6 +147,10 @@ window.addEventListener('load', () => {
         return laserBtn.classList.contains('active');
     }
 
+    function getLocalRobotState(): boolean {
+        return robotBtn.classList.contains('active');
+    }
+
     function syncUiToState(state: Partial<WebSocketMessage>) {
         if (state.isLaserOn !== undefined) {
             if (laserConfirmationTimeout) {
@@ -156,6 +160,16 @@ window.addEventListener('load', () => {
             const newLaserState = !!state.isLaserOn;
             laserBtn.classList.toggle('active', newLaserState);
             laserBtn.style.pointerEvents = 'auto';
+        }
+
+        if (state.isRobotOn !== undefined) {
+            if (robotConfirmationTimeout) {
+                clearTimeout(robotConfirmationTimeout);
+                robotConfirmationTimeout = null;
+            }
+            const newRobotState = !!state.isRobotOn;
+            robotBtn.classList.toggle('active', newRobotState);
+            robotBtn.style.pointerEvents = 'auto';
         }
     }
 
@@ -331,6 +345,25 @@ window.addEventListener('load', () => {
         }
     }
 
+    robotBtn.addEventListener('click', () => {
+        robotBtn.style.pointerEvents = 'none';
+        if (robotConfirmationTimeout) clearTimeout(robotConfirmationTimeout);
+        changeRobotState(!getLocalRobotState());
+    });
+
+    function changeRobotState(newState: boolean) {
+        const success = wsHandler.updateState({ isRobotOn: newState });
+        if (success) {
+            robotConfirmationTimeout = setTimeout(() => {
+                console.error("No confirmation from robot. Resetting UI.");
+                robotBtn.style.pointerEvents = 'auto';
+            }, 2000);
+        } else {
+            robotBtn.style.pointerEvents = 'auto';
+            console.error('Failed to send robot state update');
+        }
+    }
+
     function clearDrawing() {
         if (!drawingTracker) { return }
 
@@ -356,7 +389,7 @@ window.addEventListener('load', () => {
 
         // Parse speed from text input
         const speed = parseFloat(speedInput.value);
-        
+
         // Validate speed
         if (isNaN(speed) || speed <= 0) {
             alert("Please enter a valid speed greater than 0 m/s");
@@ -366,8 +399,8 @@ window.addEventListener('load', () => {
         }
 
         try {
-            console.log(`Executing path at speed: ${speed/1000} m/s`);
-            
+            console.log(`Executing path at speed: ${speed / 1000} m/s`);
+
             // Execute path (sends JSON coordinates and PNG image in parallel)
             //console.log("Selected Raster Pattern:", selectedRasterPattern);
             const result = await drawingTracker.executePath(speed, String(selectedRasterPattern));
@@ -396,10 +429,10 @@ window.addEventListener('load', () => {
         //console.log(transformedView, thermalView);
         const result = await drawingTracker.updateViewSettings(transformedView, thermalView);
 
-            if (result) {
-                console.log("Updated the view settings successfully");
-                console.log("Response:", result);
-            }
+        if (result) {
+            console.log("Updated the view settings successfully");
+            console.log("Response:", result);
+        }
     });
 
     clearBtn.addEventListener('click', () => {
@@ -409,36 +442,34 @@ window.addEventListener('load', () => {
     });
 
     fillCheckbox.addEventListener('change', () => {
-    fillEnabled = fillCheckbox.checked;
+        fillEnabled = fillCheckbox.checked;
 
-    if (fillEnabled) {
-        rasterPatternContainer.classList.remove('hidden');
-    } else {
-        rasterPatternContainer.classList.add('hidden');
-        selectedRasterPattern = null;
+        if (fillEnabled) {
+            rasterPatternContainer.classList.remove('hidden');
+        } else {
+            rasterPatternContainer.classList.add('hidden');
+            selectedRasterPattern = null;
 
+            rasterBtnA.classList.remove('active');
+            rasterBtnB.classList.remove('active');
+        }
+    });
+
+    function selectRaster(btn: HTMLButtonElement, pattern: 'line_raster' | 'spiral_raster') {
+        // Reset both buttons visually
         rasterBtnA.classList.remove('active');
         rasterBtnB.classList.remove('active');
+
+        // Activate selected
+        btn.classList.add('active');
+        selectedRasterPattern = pattern;
+
+        console.log("Raster pattern selected:", pattern);
+        // console.log(selectedRasterPattern);
     }
-});
 
-function selectRaster(btn: HTMLButtonElement, pattern: 'line_raster' | 'spiral_raster') {
-    // Reset both buttons visually
-    rasterBtnA.classList.remove('active');
-    rasterBtnB.classList.remove('active');
-
-    // Activate selected
-    btn.classList.add('active');
-    selectedRasterPattern = pattern;
-
-    console.log("Raster pattern selected:", pattern);
-    // console.log(selectedRasterPattern);
-}
-
-rasterBtnA.addEventListener('click', () => selectRaster(rasterBtnA, 'line_raster'));
-rasterBtnB.addEventListener('click', () => selectRaster(rasterBtnB, 'spiral_raster'));
-
-
+    rasterBtnA.addEventListener('click', () => selectRaster(rasterBtnA, 'line_raster'));
+    rasterBtnB.addEventListener('click', () => selectRaster(rasterBtnB, 'spiral_raster'));
 
     function handleShapeSelection(button: HTMLButtonElement, shape: ShapeType) {
         const isRealTime = processingModeSwitch.checked;
@@ -491,7 +522,7 @@ rasterBtnB.addEventListener('click', () => selectRaster(rasterBtnB, 'spiral_rast
         if (drawingTracker) {
             drawingTracker.updateCanvasSize(canvas.width, canvas.height);
         }
-        
+
         // Clear drawing on resize to prevent skewed paths
         if (drawingTracker?.isDrawingEnabled()) {
             clearDrawing();
@@ -508,17 +539,13 @@ rasterBtnB.addEventListener('click', () => selectRaster(rasterBtnB, 'spiral_rast
     canvas.addEventListener('click', function (event) {
         if (processingModeSwitch.checked) return;
         if (drawingTracker?.isDrawingEnabled()) return;
-
+ 
         const pos = getCanvasCoordinates(event.clientX, event.clientY);
-
+ 
         const vidX = (pos.x / canvas.width) * video.videoWidth;
         const vidY = (pos.y / canvas.height) * video.videoHeight;
-
+ 
         wsHandler.updateState({ x: vidX, y: vidY });
     });
     */
-
-    robotBtn.addEventListener('click', () => {
-        robotBtn.classList.toggle('active');
-    });
 });
