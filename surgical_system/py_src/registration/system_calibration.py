@@ -33,8 +33,19 @@ class System_Calibration():
         self.rgbd_cali = CameraCalibration()
         self.therm_cali = CameraCalibration()
         
-        self.rgb_M = None
-        self.therm_M = None
+        self.calibration_folder = "/calibration_info"
+        self.rgb_cali_folder = "/calibration_info/rgb_cali/"
+        self.therm_cali_folder = "/calibration_info/thermal_cali/"
+        
+        self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder)
+        self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder)
+        
+        self.rgb_H_shifted, self.rgb_out, self.rgb_min = self.make_positive_homography(self.rgb_M, (rgbd_cam.height, rgbd_cam.width))
+        self.therm_H_shifted, self.therm_out, self.therm_min = self.make_positive_homography(self.therm_M, (therm_cam.height, therm_cam.width))
+        
+        
+        self.rgb_H_shifted_inv = np.linalg.inv(self.rgb_H_shifted)
+        self.therm_H_shifted_inv = np.linalg.inv(self.therm_H_shifted)
 
         self.home_pose = robot_controller.get_home_pose()
     
@@ -180,13 +191,13 @@ class System_Calibration():
         out_h = int(np.ceil(y_max - y_min))
 
         # Translation to shift everything so min coords become 0
-        T = np.array([
+        S = np.array([
             [1, 0, -x_min],
             [0, 1, -y_min],
             [0, 0, 1]
         ], dtype=np.float32)
 
-        H_shifted = T @ H  
+        H_shifted = S @ H  
         
         #flip vertically 
         V = [[1,  0, 0], 
@@ -195,7 +206,8 @@ class System_Calibration():
 
         H_shifted = V @ H_shifted
         
-        return H_shifted, (out_w, out_h)
+        return H_shifted, (out_w, out_h), (x_min, y_min)
+
 
     def pixel_to_world(self, img_points, cam_type, z = 0.0):
         M = self.get_cam_M(cam_type)
@@ -205,6 +217,34 @@ class System_Calibration():
         world_point[:, -1] = z
         world_point[:, :2] = cv2.perspectiveTransform(img_points.reshape(-1,1,2).astype(np.float32), M).reshape(-1,2) / pix_Per_M
         return world_point
+    
+    def world_to_real(self, img_points, cam_type, z = 0.0):
+        # 1) Get warped image size and the shift we used when building H_shifted
+        out_w, out_h = self.get_cam_out(cam_type)      # (out_w, out_h)
+        x_min, y_min = self.get_cam_min(cam_type)      # (x_min, y_min) from make_positive_homography
+
+        # 2) Work on a copy and ensure float
+        pts = img_points.astype(np.float32).copy()
+        
+        display_w, display_h = 1280.0, 720.0
+        pts[:, 0] = pts[:, 0] * (out_w / display_w)   # x: width scale
+        pts[:, 1] = pts[:, 1] * (out_h / display_h)   # y: height scale
+
+        # 3) Unflip (V^{-1} = V)
+        pts[:, 1] = -pts[:, 1] + (out_h - 1)
+
+        # 4) Unshift (T^{-1})
+        pts[:, 0] = pts[:, 0] + x_min
+        pts[:, 1] = pts[:, 1] + y_min
+
+        cam_obj = self.get_cam_obj(cam_type)
+        pix_Per_M = cam_obj.pix_Per_M
+
+        world_point = np.zeros((pts.shape[0], 3), dtype=np.float32)
+        world_point[:, :2] = pts / pix_Per_M
+        world_point[:, 2] = z
+        return world_point
+    
     
     def select_ROI(self, cam_type):
         print("\nSelecting Region of Interest")
@@ -341,6 +381,33 @@ class System_Calibration():
             return self.rgbd_cali
         elif cam_type == "thermal":
             return self.therm_cali
+        else:
+            print("Incorrect camera type: ", cam_type)
+            return None
+    
+    def get_cam_out(self, cam_type):
+        if cam_type == "color" :
+            return self.rgb_out
+        elif cam_type == "thermal":
+            return self.therm_out
+        else:
+            print("Incorrect camera type: ", cam_type)
+            return None
+    
+    def get_cam_H_shift_inverse(self, cam_type):
+        if cam_type == "color" :
+            return self.rgb_H_shifted_inv
+        elif cam_type == "thermal":
+            return self.therm_H_shifted_inv
+        else:
+            print("Incorrect camera type: ", cam_type)
+            return None
+    
+    def get_cam_min(self, cam_type):
+        if cam_type == "color" :
+            return self.rgb_min
+        elif cam_type == "thermal":
+            return self.therm_min
         else:
             print("Incorrect camera type: ", cam_type)
             return None

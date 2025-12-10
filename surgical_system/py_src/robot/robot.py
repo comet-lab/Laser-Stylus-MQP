@@ -15,7 +15,12 @@ class RobotSchema:
     laserY: float = None
     beamWaist: float = None
     isLaserOn: bool = None
-    raster_mask: bytes = None
+    isTransformedViewOn: bool = None
+    isThermalViewOn: bool = None
+    pathEvent: str = None
+    raster_mask: str = None
+    raster_type: str = None
+    speed: float = None
     path: List[Dict[str, float]] = None
 
     @staticmethod

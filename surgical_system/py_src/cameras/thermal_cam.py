@@ -16,6 +16,7 @@ class ThermalCam(Camera):
         self.frame_rate = frame_rate
         self.temp_scale = 100.0      
         self.acquiring_flag = False
+        self.width = 640
         try:
             ### THIS CANNOT BE INIT IN THE THREAD, LEAVE THIS HERE
             self.initialize_camera()

@@ -63,6 +63,7 @@ async def main():
     therm_cam = None
     rgbd_cam = None
     cam_type = "color"
+    transformed_view = False
     
     if(not mock_robot):
         therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frame_rate="Rate50Hz",focal_distance=0.2)
@@ -132,6 +133,7 @@ async def main():
     def recv_fn(msg: str):
         data = json.loads(msg)
         desired_state.update(data)
+
         
         if(desired_state.raster_mask is not None):
             # Do raster 
@@ -171,9 +173,6 @@ async def main():
     #----------------------------- Camera Calibration -------------------------------#
     ##################################################################################
     
-    if camera_calibration:
-        pass
-
     
     start_pose[2,3] = 0.0
     robot_controller.go_to_pose(start_pose@home_pose,1) # Send robot to start position
@@ -189,7 +188,10 @@ async def main():
             diff = current_time - recv_fn.last_update
         # If no new message in 200ms, stop
         if is_planned_path():
-            robot_path = camera_reg.pixel_to_world(desired_state.path, cam_type=cam_type)
+            if desired_state.isTransformedViewOn:
+                robot_path = camera_reg.world_to_real(desired_state.path, cam_type=cam_type)
+            else:
+                robot_path = camera_reg.pixel_to_world(desired_state.path, cam_type=cam_type)
             robot_controller.create_custom_trajectory(robot_path, 0.01)
         else:
             if(diff > .12):
@@ -202,7 +204,15 @@ async def main():
                     
                 laser_obj.set_output(False)
             else:
-                target_world_point = camera_reg.pixel_to_world(np.array([desired_state.x, desired_state.y]), cam_type=cam_type, z=start_pose[2,3])[0]
+                if desired_state.isTransformedViewOn:
+                    target_world_point = camera_reg.world_to_real(np.array([[desired_state.x, desired_state.y]]), cam_type=cam_type, z=start_pose[2,3])[0]
+                    # print("Heard: ", np.array([[desired_state.x, desired_state.y]]))
+                    raw_pixel = camera_reg.rgb_M @ (target_world_point * 7000)
+                    # print("Raw original: ", raw_pixel)
+                    # print("Original World: ", camera_reg.world_to_real(np.array([[desired_state.x, desired_state.y]]), cam_type=cam_type, z=start_pose[2,3])[0])
+                else:
+                    target_world_point = camera_reg.pixel_to_world(np.array([[desired_state.x, desired_state.y]]), cam_type=cam_type, z=start_pose[2,3])[0]
+                    
                 target_pose = np.eye(4)
                 target_pose[:3, -1] = target_world_point
                 target_vel = robot_controller.live_control(target_pose, 0.05) # TODO given current and desired pose, set vel
@@ -213,6 +223,12 @@ async def main():
             
         # Camera frame publishing
         latest = camera_reg.get_cam_latest(cam_type=cam_type)
+        
+        if desired_state.isTransformedViewOn:
+            latest = camera_reg.get_transformed_view(latest, cam_type=cam_type)
+            latest = cv2.resize(latest, (1280, 720))
+            
+        
         if isinstance(latest, dict):
             latest = latest.get(cam_type, None)
         if(type(latest) == type(None)):
