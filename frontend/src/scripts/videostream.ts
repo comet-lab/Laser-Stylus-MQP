@@ -548,8 +548,4 @@ window.addEventListener('load', () => {
         wsHandler.updateState({ x: vidX, y: vidY });
     });
     */
-
-    robotBtn.addEventListener('click', () => {
-        robotBtn.classList.toggle('active');
-    });
 });
