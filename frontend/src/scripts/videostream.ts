@@ -20,7 +20,7 @@ window.addEventListener('load', () => {
     const prepareCloseBtn = document.getElementById('prepareCloseBtn') as HTMLButtonElement;
     const prepareCancelBtn = document.getElementById('prepareCancelBtn') as HTMLButtonElement;
     const executeBtn = document.getElementById('executeBtn') as HTMLButtonElement;
-    const speedInput = document.getElementById('speedInput') as HTMLInputElement; // NEW
+    const speedInput = document.getElementById('speedInput') as HTMLInputElement;
 
     const video = document.getElementById('video') as HTMLVideoElement;
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
@@ -151,25 +151,50 @@ window.addEventListener('load', () => {
         return robotBtn.classList.contains('active');
     }
 
+    // --- Race Condition Handling: syncUiToState ---
+    // If a timeout is active (waiting for confirmation), we ONLY update
+    // if the incoming message confirms our desired state.
+    // If the message is "old" (e.g. says ON when we just clicked OFF), we ignore it.
     function syncUiToState(state: Partial<WebSocketMessage>) {
+        // --- 1. Handle Laser Update ---
         if (state.isLaserOn !== undefined) {
+            const incomingState = !!state.isLaserOn;
+            const currentVisualState = getLocalLaserState();
+
             if (laserConfirmationTimeout) {
-                clearTimeout(laserConfirmationTimeout);
-                laserConfirmationTimeout = null;
+                // We are waiting for a response. 
+                // We only accept the update if the server confirms the CHANGE we asked for.
+                if (incomingState !== currentVisualState) {
+                    clearTimeout(laserConfirmationTimeout);
+                    laserConfirmationTimeout = null;
+                    laserBtn.classList.toggle('active', incomingState); // Update Visuals
+                    laserBtn.style.pointerEvents = 'auto'; // Unlock
+                }
+            } else {
+                // Not waiting for a user action (e.g. broadcast from another user)
+                // Just sync purely.
+                laserBtn.classList.toggle('active', incomingState);
+                laserBtn.style.pointerEvents = 'auto';
             }
-            const newLaserState = !!state.isLaserOn;
-            laserBtn.classList.toggle('active', newLaserState);
-            laserBtn.style.pointerEvents = 'auto';
         }
 
+        // --- 2. Handle Robot Update ---
         if (state.isRobotOn !== undefined) {
+            const incomingState = !!state.isRobotOn;
+            const currentVisualState = getLocalRobotState();
+
             if (robotConfirmationTimeout) {
-                clearTimeout(robotConfirmationTimeout);
-                robotConfirmationTimeout = null;
+                // We are waiting for a response.
+                if (incomingState !== currentVisualState) {
+                    clearTimeout(robotConfirmationTimeout);
+                    robotConfirmationTimeout = null;
+                    robotBtn.classList.toggle('active', incomingState); // Update Visuals
+                    robotBtn.style.pointerEvents = 'auto'; // Unlock
+                }
+            } else {
+                robotBtn.classList.toggle('active', incomingState);
+                robotBtn.style.pointerEvents = 'auto';
             }
-            const newRobotState = !!state.isRobotOn;
-            robotBtn.classList.toggle('active', newRobotState);
-            robotBtn.style.pointerEvents = 'auto';
         }
     }
 
@@ -193,13 +218,8 @@ window.addEventListener('load', () => {
     wsHandler.connect();
 
     const updateCanvas = (now: DOMHighResTimeStamp, metadata: VideoFrameCallbackMetadata) => {
-        // 1. Draw Video Frame
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // REMOVED: Real-Time Red Line Drawing (Performance Optimization)
-        // We now only send coordinates, we do not visualize the path locally.
-
-        // 2. Draw Batch Tracker Overlay (Only in Batch Mode)
         if (processingModeSwitch && !processingModeSwitch.checked && drawingTracker) {
             drawingTracker.drawOnMainCanvas();
         }
@@ -233,60 +253,40 @@ window.addEventListener('load', () => {
     });
 
     // --- 6. Real-Time Event Listeners ---
-
     const runRealTimeLoop = () => {
-        // 1. Safety Check: If drawing stopped, kill the loop entirely.
         if (!isRealTimeDrawing) return;
-
-        // 2. Capture the current position
         const currentPos = latestRealTimePos;
 
-        // 3. Data Check: Only send if we actually have a position
         if (currentPos) {
             const vidX = (currentPos.x / canvas.width) * video.videoWidth;
             const vidY = (currentPos.y / canvas.height) * video.videoHeight;
-
             wsHandler.updateState({ x: vidX, y: vidY });
         }
-
-        // 4. Loop Logic: Request the next frame regardless of whether we sent data this time
         requestAnimationFrame(runRealTimeLoop);
     }
 
     const handleRealTimeStart = (e: PointerEvent) => {
         if (!processingModeSwitch.checked || selectedShape !== 'freehand') return;
-
         e.preventDefault();
         canvas.setPointerCapture(e.pointerId);
-
         isRealTimeDrawing = true;
-
-
         latestRealTimePos = getCanvasCoordinates(e.clientX, e.clientY);
-
-        // 1. Send start signal
         wsHandler.updateState({ pathEvent: 'start' });
-
-        // 2. Start Loop
         runRealTimeLoop();
     };
 
     const handleRealTimeMove = (e: PointerEvent) => {
         if (!isRealTimeDrawing) return;
         e.preventDefault();
-
         latestRealTimePos = getCanvasCoordinates(e.clientX, e.clientY);
     };
 
     const handleRealTimeEnd = (e: PointerEvent) => {
         if (!isRealTimeDrawing) return;
         e.preventDefault();
-
         canvas.releasePointerCapture(e.pointerId);
         isRealTimeDrawing = false;
         latestRealTimePos = null;
-
-        // End Signal
         wsHandler.updateState({ pathEvent: 'end' });
     };
 
@@ -327,46 +327,99 @@ window.addEventListener('load', () => {
     }
 
     laserBtn.addEventListener('click', () => {
+        // Optimistically lock button immediately
         laserBtn.style.pointerEvents = 'none';
         if (laserConfirmationTimeout) clearTimeout(laserConfirmationTimeout);
         changeLaserState(!getLocalLaserState());
     });
 
     function changeLaserState(newState: boolean) {
-        const success = wsHandler.updateState({ isLaserOn: newState });
+        // 1. Lock the UI immediately (Visuals stay same, but unclickable)
+        laserBtn.style.pointerEvents = 'none';
+        
+        const updates: any = { isLaserOn: newState };
+
+        // 2. Mutual Shutdown Logic
+        // If turning Laser OFF, check if Robot is ON. If so, turn it off too.
+        if (newState === false && getLocalRobotState() === true) {
+            updates.isRobotOn = false;
+            
+            // Lock the Robot button too, so user can't click it while it's shutting down
+            robotBtn.style.pointerEvents = 'none';
+
+            if (robotConfirmationTimeout) clearTimeout(robotConfirmationTimeout);
+            robotConfirmationTimeout = setTimeout(() => {
+                console.error("No confirmation from robot (triggered by laser kill). Unlocking Robot.");
+                robotBtn.style.pointerEvents = 'auto'; 
+                // We do NOT revert class, because we never changed it visually.
+            }, 2000);
+        }
+
+        // 3. Send Message
+        const success = wsHandler.updateState(updates);
+
         if (success) {
+            if (laserConfirmationTimeout) clearTimeout(laserConfirmationTimeout);
             laserConfirmationTimeout = setTimeout(() => {
-                console.error("No confirmation from robot. Resetting UI.");
+                console.error("No confirmation from robot (laser). Unlocking Laser.");
                 laserBtn.style.pointerEvents = 'auto';
+                // We do NOT revert class, because we never changed it visually.
             }, 2000);
         } else {
+            // Failed to send - unlock immediately
             laserBtn.style.pointerEvents = 'auto';
+            if (updates.isRobotOn === false) robotBtn.style.pointerEvents = 'auto';
             console.error('Failed to send laser state update');
         }
     }
 
     robotBtn.addEventListener('click', () => {
+        // Optimistically lock button immediately
         robotBtn.style.pointerEvents = 'none';
         if (robotConfirmationTimeout) clearTimeout(robotConfirmationTimeout);
         changeRobotState(!getLocalRobotState());
     });
 
     function changeRobotState(newState: boolean) {
-        const success = wsHandler.updateState({ isRobotOn: newState });
+        // 1. Lock UI
+        robotBtn.style.pointerEvents = 'none';
+
+        const updates: any = { isRobotOn: newState };
+
+        // 2. Mutual Shutdown Logic
+        // If turning Robot OFF, check if Laser is ON. If so, turn it off too.
+        if (newState === false && getLocalLaserState() === true) {
+            updates.isLaserOn = false;
+
+            // Lock Laser button
+            laserBtn.style.pointerEvents = 'none';
+
+            if (laserConfirmationTimeout) clearTimeout(laserConfirmationTimeout);
+            laserConfirmationTimeout = setTimeout(() => {
+                console.error("No confirmation from robot (triggered by robot kill). Unlocking Laser.");
+                laserBtn.style.pointerEvents = 'auto';
+            }, 2000);
+        }
+
+        // 3. Send Message
+        const success = wsHandler.updateState(updates);
+        
         if (success) {
+            if (robotConfirmationTimeout) clearTimeout(robotConfirmationTimeout);
             robotConfirmationTimeout = setTimeout(() => {
-                console.error("No confirmation from robot. Resetting UI.");
+                console.error("No confirmation from robot (robot). Unlocking Robot.");
                 robotBtn.style.pointerEvents = 'auto';
             }, 2000);
         } else {
+            // Failed to send
             robotBtn.style.pointerEvents = 'auto';
+            if (updates.isLaserOn === false) laserBtn.style.pointerEvents = 'auto';
             console.error('Failed to send robot state update');
         }
     }
 
     function clearDrawing() {
         if (!drawingTracker) { return }
-
         drawingTracker.clearDrawing();
         drawingState = 'idle';
         updateDrawButtonState();
@@ -374,9 +427,7 @@ window.addEventListener('load', () => {
 
     function cancelDrawing() {
         if (!drawingTracker) { return }
-
         clearDrawing();
-
         drawingTracker.disableDrawing();
         selectedShape = null;
         toggleButtons.forEach(btn => btn.classList.remove('selected'));
@@ -387,10 +438,8 @@ window.addEventListener('load', () => {
         executeBtn.disabled = true;
         prepareBtn.disabled = true;
 
-        // Parse speed from text input
         const speed = parseFloat(speedInput.value);
 
-        // Validate speed
         if (isNaN(speed) || speed <= 0) {
             alert("Please enter a valid speed greater than 0 m/s");
             executeBtn.disabled = false;
@@ -400,17 +449,12 @@ window.addEventListener('load', () => {
 
         try {
             console.log(`Executing path at speed: ${speed / 1000} m/s`);
-
-            // Execute path (sends JSON coordinates and PNG image in parallel)
-            //console.log("Selected Raster Pattern:", selectedRasterPattern);
             const result = await drawingTracker.executePath(speed, String(selectedRasterPattern));
 
             if (result) {
                 console.log("Execution started successfully");
                 console.log("Response:", result);
             }
-
-            // Clear the drawing after successful send
             cancelDrawing();
             closePrepareMenu();
         } catch (e) {
@@ -426,7 +470,6 @@ window.addEventListener('load', () => {
         if (!drawingTracker) return;
         const transformedView = transformedModeSwitch.checked;
         const thermalView = thermalModeSwitch.checked;
-        //console.log(transformedView, thermalView);
         const result = await drawingTracker.updateViewSettings(transformedView, thermalView);
 
         if (result) {
@@ -449,23 +492,17 @@ window.addEventListener('load', () => {
         } else {
             rasterPatternContainer.classList.add('hidden');
             selectedRasterPattern = null;
-
             rasterBtnA.classList.remove('active');
             rasterBtnB.classList.remove('active');
         }
     });
 
     function selectRaster(btn: HTMLButtonElement, pattern: 'line_raster' | 'spiral_raster') {
-        // Reset both buttons visually
         rasterBtnA.classList.remove('active');
         rasterBtnB.classList.remove('active');
-
-        // Activate selected
         btn.classList.add('active');
         selectedRasterPattern = pattern;
-
         console.log("Raster pattern selected:", pattern);
-        // console.log(selectedRasterPattern);
     }
 
     rasterBtnA.addEventListener('click', () => selectRaster(rasterBtnA, 'line_raster'));
@@ -494,7 +531,6 @@ window.addEventListener('load', () => {
             } else {
                 if (drawingTracker) {
                     clearDrawing();
-
                     drawingTracker.setShapeType(shape);
                     drawingTracker.enableDrawing(() => {
                         drawingState = 'complete';
@@ -518,34 +554,14 @@ window.addEventListener('load', () => {
     const handleResize = () => {
         canvas.width = canvas.offsetWidth;
         canvas.height = canvas.offsetHeight;
-
         if (drawingTracker) {
             drawingTracker.updateCanvasSize(canvas.width, canvas.height);
         }
-
-        // Clear drawing on resize to prevent skewed paths
         if (drawingTracker?.isDrawingEnabled()) {
             clearDrawing();
         }
     };
 
-    // Add the listener
     window.addEventListener('resize', handleResize);
     handleResize();
-
-    // Click-to-move (Guarded against Real-Time mode)
-    //Currently disabled to avoid sending extraneous commands
-    /*
-    canvas.addEventListener('click', function (event) {
-        if (processingModeSwitch.checked) return;
-        if (drawingTracker?.isDrawingEnabled()) return;
- 
-        const pos = getCanvasCoordinates(event.clientX, event.clientY);
- 
-        const vidX = (pos.x / canvas.width) * video.videoWidth;
-        const vidY = (pos.y / canvas.height) * video.videoHeight;
- 
-        wsHandler.updateState({ x: vidX, y: vidY });
-    });
-    */
 });
