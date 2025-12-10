@@ -1,19 +1,18 @@
 #preparePopup {
     position: absolute;
     z-index: 101;
-    right: 2%;
     top: 10%;
+    right: 3%;
     width: 30vw;
     height: 40vh;
     display: none;
-    background-color: #0f1419;
+    background-color: #0f1419ba;
     border-radius: 16px;
     border: 2px solid #2c343b;
     color: #e0f2e0;
     flex-direction: column;
     overflow: hidden;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    opacity: 85%;
 }
 
 /* Active state for popup */
@@ -72,15 +71,61 @@
 .prepare-body {
     display: flex;
     flex-grow: 1;
-    /* height: 100%; */ /* Removed this line */
     width: 100%;
-    /* New styles for button positioning */
-    flex-direction: row;
-    justify-content: center; /* "middle" */
-    align-items: flex-end;   /* "bottom" */
-    padding: 1.5rem 2rem;    /* Padding from the bottom/sides */
-    gap: 1rem;               /* Space between buttons */
-    box-sizing: border-box;  /* Ensure padding is included */
+    flex-direction: column;
+    /* Changed to column to stack input and buttons better */
+    justify-content: center;
+    align-items: center;
+    padding: 1.5rem 2rem;
+    gap: 2rem;
+    box-sizing: border-box;
+}
+
+.control-group {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.input-label {
+    display: block;
+    color: #E0F2E0;
+    margin-bottom: 1rem;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 500;
+    font-size: 1.2rem;
+}
+
+.input-wrapper {
+    position: relative;
+    width: 80%;
+}
+
+.styled-input {
+    background: #161b22;
+    border: 2px solid #2c343b;
+    color: #E0F2E0;
+    padding: 15px;
+    border-radius: 8px;
+    width: 100%;
+    font-family: 'Inter', sans-serif;
+    font-size: 1.5rem;
+    text-align: center;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.styled-input:focus {
+    outline: none;
+    border-color: #e0f2e0;
+    background: #1c2128;
+}
+
+.styled-input::-webkit-outer-spin-button,
+.styled-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
 }
 
 #bottomButtons {
@@ -88,4 +133,19 @@
     flex-direction: row;
     gap: 40px;
     height: 70px;
+}
+
+.raster-pattern.hidden {
+    display: none;
+}
+
+.raster-btn {
+    margin-right: 10px;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+
+.raster-btn.active {
+    background-color: #4caf50;
+    color: white;
 }

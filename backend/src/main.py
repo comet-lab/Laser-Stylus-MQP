@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, WebSocket, UploadFile
+from fastapi import FastAPI, HTTPException, WebSocket, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import base64
@@ -45,20 +45,79 @@ async def submit_path(request: dict):
         "message": f"Path with {len(pixels)} pixels dispatched to robot"
     }
 
+@app.post("/api/settings")
+async def submit_settings(request: Request):
+    data = await request.json()
+    raster_type = data.get("raster_type")
+    speed = data.get("speed")
+    print(data)
+    
+    manager.desired_state.raster_type = raster_type
+    manager.desired_state.speed = float(speed)
+
+    print(f"Received settings: raster_type={raster_type}, speed={speed}")
+    await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
+    
+    return {
+        "status": "success",
+        "raster_type": raster_type,
+        "speed": speed,
+        "message": "Settings dispatched to robot"
+    }
+
+@app.post("/api/view_settings")
+async def submit_settings(request: Request):
+    data = await request.json()
+    isTransformedViewOn = data.get("isTransformedViewOn")
+    isThermalViewOn = data.get("isThermalViewOn")
+    print(data)
+    # isTransformedViewOn: bool = None
+    # isThermalViewOn: bool = None
+    
+    manager.desired_state.isTransformedViewOn = isTransformedViewOn
+    manager.desired_state.isThermalViewOn = isThermalViewOn
+
+    print(f"Received settings: tranformed view on? {isTransformedViewOn}, thermal view on? {isThermalViewOn}")
+    await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
+    
+    return {
+        "status": "success",
+        "isTransformedViewOn": isTransformedViewOn,
+        "isThermalViewOn": isThermalViewOn,
+        "message": "Settings dispatched to robot"
+    }
+
+
 @app.post("/api/raster_mask")   
 async def submit_raster_mask(file: UploadFile):
+    # Validate extension
     extension = file.filename.split('.')[-1]
-    if(file.filename.split('.')[-1] != "png"):
-        raise HTTPException(status_code = 400, detail=f"Incompatible file extension: {extension}")
+    if extension != "png":
+        raise HTTPException(status_code=400, detail=f"Incompatible file extension: {extension}")
     
-    bytes = file.file.read()
-    encoded_b64 = base64.b64encode(bytes) # png is base 64 encoded
+    # Read the file content
+    file_content = file.file.read()
+
+    #Save the file to disk
+    save_directory = "saved_masks"
+    os.makedirs(save_directory, exist_ok=True) # Create folder if it doesn't exist
+    
+    file_location = f"{save_directory}/{file.filename}"
+    
+    with open(file_location, "wb") as f:
+        f.write(file_content)
+    
+    print(f"File saved to {file_location}")
+
+    # Proceed with your existing logic
+    encoded_b64 = base64.b64encode(file_content) # png is base 64 encoded
     encoded_utf8 = encoded_b64.decode('utf-8') # re-encode to utf-8 to send over websocket
     
     manager.desired_state.raster_mask = encoded_utf8
     print("Sending raster")
     await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
-    return file.filename
+    
+    return {"filename": file.filename, "saved_at": file_location}
 
 manager = ConnectionManager()
 

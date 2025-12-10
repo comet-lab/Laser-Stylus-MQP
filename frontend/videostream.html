@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html>
 
 <head>
@@ -34,6 +35,35 @@
       </button>
     </div>
     <div class="prepare-body">
+      <div class="control-group">
+        <label for="speedInput" class="input-label">Robot Speed (mm/s)</label>
+        <div class="input-wrapper">
+          <input 
+            type="number" 
+            id="speedInput" 
+            class="styled-input" 
+            value="10" 
+            step="10" 
+            min="1"
+            max="100"
+            placeholder="e.g. 10"
+          >
+        </div>
+        <div class="fill-option-container">
+    <label class="fill-checkbox-label">
+        <input type="checkbox" id="fillCheckbox">
+        Fill Shape
+    </label>
+</div>
+
+    <div id="rasterPatternContainer" class="raster-pattern hidden">
+        <p>Select Raster Pattern:</p>
+        <button id="rasterA" class="raster-btn">Line Raster</button>
+        <button id="rasterB" class="raster-btn">Spiral Raster</button>
+    </div>
+
+      </div>
+      
       <div id="bottomButtons">
         <button id="prepareCancelBtn" class="action-btn action-btn-cancel">
           <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
@@ -92,6 +122,29 @@
         </div>
         <div id="camera-settings" class="settings-panel">
           <h3>Camera Settings</h3>
+          <div class="setting-item">
+            <span class="setting-label">Transformed</span>
+            <div class="switch-container">
+              <span class="switch-label">Off</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="transformed-view-mode">
+                <span class="slider round"></span>
+              </label>
+              <span class="switch-label">On</span>
+            </div>
+          </div>
+          <div class="setting-item">
+            <span class="setting-label">Thermal/RGB</span>
+            <div class="switch-container">
+              <span class="switch-label">RGB</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="thermal-rgb-view">
+                <span class="slider round"></span>
+              </label>
+              <span class="switch-label">Thermal</span>
+            </div>
+          </div>
+          <button id="save-view" class="btn-text" data-state="ready">SAVE</button>
         </div>
         <div id="laser-settings" class="settings-panel">
           <h3>Laser Settings</h3>
