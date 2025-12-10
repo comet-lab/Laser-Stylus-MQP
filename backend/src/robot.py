@@ -14,8 +14,12 @@ class RobotSchema:
     beamWaist: float = None
     isLaserOn: bool = None
     isRobotOn: bool = None
+    isTransformedViewOn: bool = None
+    isThermalViewOn: bool = None
     pathEvent: str = None
     raster_mask: str = None
+    raster_type: str = None
+    speed: float = None
     path: list[dict[str, float]] = None
 
     def flush(self):
