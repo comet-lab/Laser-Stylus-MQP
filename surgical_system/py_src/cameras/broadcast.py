@@ -22,7 +22,7 @@ class Broadcast:
             '-c:v', 'libx264',  # Video codec H.264
             '-preset', 'ultrafast',
             '-tune', 'zerolatency',
-            '-rtsp_transport', 'udp',
+            '-rtsp_transport', 'tcp',
             '-f', 'rtsp',  # Output format is RTSP
             rtsp_url
         ]

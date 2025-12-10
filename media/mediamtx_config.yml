@@ -1,13 +1,16 @@
-webrtcIpsFromInterfaces: yes
+webrtcIpsFromInterfaces: no
 webrtcIpsFromInterfacesList:
   - wlp3s0
 webrtcAdditionalHosts:
   - 130.215.124.84
   - localhost
-  - media
-pathDefaults:
-  source: publisher
-  rtspTransport: udp
+rtsp: yes
+rtspTransports: [tcp, udp]
+rtspEncryption: "no"
+# Address of the UDP/RTP listener. This is needed only when "udp" is in protocols.
+rtpAddress: :8000
+# Address of the UDP/RTCP listener. This is needed only when "udp" is in protocols.
+rtcpAddress: :8001
 paths:
   mystream:
     source: publisher

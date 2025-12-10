@@ -328,7 +328,7 @@ class CameraCalibration():
                 print("World point from pixel location: ",world_point[i,:])
         return world_point
 
-    def change_image_perspective(self,image, scale = 1, marker = None):
+    def change_image_perspective(self,image, scale = 1, marker = None, debug = False):
         '''
         This function will change the perspective of the image to a top down view. It will perform any
         necessry shifting to guarantee the full input image is displayed in the output window. Additionally, 
@@ -372,15 +372,15 @@ class CameraCalibration():
             # Plot the marker(s)
             plt.scatter(warped_pts[:, 0], warped_pts[:, 1], marker='o', s=60, facecolors='none', edgecolors='red', linewidths=2)
         
-        if self.debug:
+        if debug:
             plt.imshow(dst,cmap='gray')
             plt.gca().invert_yaxis()
             plt.xlabel("X axis")
             plt.ylabel("Y axis")
             plt.show(block=True)
-            # cv2.imshow("Warped Image",dst)
-            # cv2.waitKey(0)   # waits for a key press
-            # cv2.destroyAllWindows()
+            cv2.imshow("Warped Image",dst)
+            cv2.waitKey(0)   # waits for a key press
+            cv2.destroyAllWindows()
         return dst
 
     def apply_distortion(self,u_pixel_coords):
@@ -441,6 +441,7 @@ class CameraCalibration():
             obj_points = np.hstack((obj_points, np.zeros((obj_points.shape[0], 1))))  # Add Z coordinate as 0
         obj_points = obj_points*M_pix_per_m
         M = self.generate_transform(img_points,obj_points)
+        self.M = M
         
         # project all image points through M
         projected_points = self.pixel_to_world(img_points)
@@ -609,22 +610,6 @@ class CameraCalibration():
             print("CSV file not found: ", filepath)
             return None  
 
-    @staticmethod
-    def get_thermal_image(thermal_cam_obj):
-        '''
-        This function will return a single image from the thermal camera with increased contrast.
-        
-        @return image: numpy array of the image
-        '''
-        # Thermal camera data is using a unit16 (range of 0-65536). To save an as image that has good contrast, we need to 
-        # scale the range of values in the image, to a range of values between 0 and 255. For any sort of calibration
-        # we probably want a large contrast, but we can also force a certain bounds if we want.
-        images = thermal_cam_obj.acquire_and_display_images(1,display=False)
-        image = images[0]
-        min_val = np.min(image)
-        max_val = np.max(image)
-        image = (image - min_val)/(max_val - min_val) * 255
-        return np.uint8(image)
     
     @staticmethod
     def save_calibration_pictures(thermal_cam_obj,folder_name='img_processing/calibration_imgs/',\
