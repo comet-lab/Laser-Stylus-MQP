@@ -11,6 +11,7 @@ export interface WebSocketMessage {
     beamWaist: number;
     speed: number;
     isLaserOn: boolean;
+    isRobotOn: boolean;
     pathEvent: string | null;
 }
 
