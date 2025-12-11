@@ -10,7 +10,9 @@ from datetime import datetime as dt
 from scipy.spatial.transform import Rotation
 from robot.robot import RobotSchema
 from dataclasses import dataclass, asdict
+import matplotlib.pyplot as plt
 
+from robot.motion_planning import Motion_Planner
 # Classes
 mock_robot = os.getenv("MOCK_ROBOT", "0") == "1"
 print(f"Mocking? {mock_robot}")
@@ -134,25 +136,47 @@ async def main():
     def recv_fn(msg: str):
         data = json.loads(msg)
         desired_state.update(data)
-        # if(desired_state.raster_mask is not None):
-        #     # Do raster 
-        #     image_bytes = desired_state.raster_mask.encode('utf-8')
-        #     numpy_array = np.frombuffer(image_bytes, np.uint8)
-        #     cv2.imdecode(numpy_array, cv2.IMREAD_COLOR)
-        #     print("recieved raster png")
+        path = []
+        if(desired_state.raster_mask is not None):
+            # Do raster 
+            data_str = desired_state.raster_mask
+
+            image_bytes = base64.b64decode(data_str)
+            numpy_array = np.frombuffer(image_bytes, np.uint8)
+            img = cv2.imdecode(numpy_array, cv2.IMREAD_UNCHANGED) # 842 x 1543 
+            img = cv2.resize(img, (1280, 720)) # TODO change this to reflect correct transformation
+            img = Motion_Planner.fill_in_shape(img)
+            path = Motion_Planner.raster_pattern(img)
+            
         if(desired_state.path is not None and len(desired_state.path) > 1):
             # Do path
-            path = desired_state.path
-            desired_state.path = None
-            
-            path = np.array([[d["x"], d["y"]] for d in path], dtype=float)
+            if len(path) == 0:
+                print("Tracing path")
+                path = desired_state.path 
+                desired_state.path = None
+                path = np.array([[d["x"], d["y"]] for d in path], dtype=float)
+            else:
+                # Raster pattern branch
+                path = np.array(path, dtype=float)
+
+                # If Motion_Planner returned (row, col) = (y, x),
+                # convert to (x, y) to match camera_reg expectations:
+                #   path[:,0] = row (y), path[:,1] = col (x)
+                #   pixels[:,0] = x = col
+                #   pixels[:,1] = y = row
+                h, w = img.shape[:2]
+                pixels = np.zeros_like(path)
+                pixels[:, 0] = path[:, 1]         # x = col
+                pixels[:, 1] = path[:, 0]  
+                
             pixels = path
+            path = None
             pixels = camera_reg.moving_average_smooth(pixels, window=5)
             if desired_state.isTransformedViewOn:
                 robot_path = camera_reg.world_to_real(pixels, cam_type=cam_type)
             else:
                 robot_path = camera_reg.pixel_to_world(pixels, cam_type=cam_type)
-            print("Desired speed ", desired_state.speed)
+            print("Desired speed ", desired_state.speed) # TODO bug on speed one step behind
             speed = desired_state.speed if desired_state.speed != None else 0.01 # m/s
             traj = robot_controller.create_custom_trajectory(robot_path, speed)
             print("traj created")
