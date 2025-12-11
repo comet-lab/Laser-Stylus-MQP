@@ -340,19 +340,45 @@ class System_Calibration():
         return coords
     
     def moving_average_smooth(self, points, window=5):
-        """Apply a simple moving average to (N,2) points."""
-        if len(points) < 3 or window <= 1:
-            return points
+        """
+        Apply a simple moving average to (N, 2) points.
+        Returns an array of the same length as `points`.
+        """
+        points = np.asarray(points, dtype=float)
+        n = len(points)
+        if n < 3 or window <= 1:
+            return points.copy()
 
-        pad = window // 2
-        # pad endpoints to avoid shrinking the path
-        padded = np.pad(points, ((pad, pad), (0, 0)), mode='edge')
+        # Do not let window be larger than the number of points
+        window = min(window, n)
 
-        kernel = np.ones(window) / float(window)
+        # For even windows, distribute padding asymmetrically so that
+        # we still end up with exactly n points after 'valid' convolution.
+        pad_left  = window // 2
+        pad_right = window - 1 - pad_left   # ensures pad_left + pad_right = window - 1
+
+        # Pad endpoints to avoid shrinking the path
+        padded = np.pad(points, ((pad_left, pad_right), (0, 0)), mode='edge')
+
+        kernel = np.ones(window, dtype=float) / float(window)
+
         x_smooth = np.convolve(padded[:, 0], kernel, mode='valid')
         y_smooth = np.convolve(padded[:, 1], kernel, mode='valid')
 
-        return np.stack((x_smooth, y_smooth), axis=1)
+        smoothed = np.stack((x_smooth, y_smooth), axis=1)
+
+        # Safety: enforce same length as input
+        if len(smoothed) > n:
+            smoothed = smoothed[:n]
+        elif len(smoothed) < n:
+            # This should not happen with the padding logic above,
+            # but just in case:
+            smoothed = np.pad(smoothed, ((0, n - len(smoothed)), (0, 0)), mode='edge')
+
+        smoothed[0] = points[0]
+        smoothed[-1] = points[-1]
+
+        return smoothed
     
     def get_cam_M(self, cam_type):
         if cam_type == "color":

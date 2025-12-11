@@ -1,5 +1,6 @@
 import os, subprocess, time, sys, math
 from scipy.spatial.transform import Rotation
+import threading
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -19,6 +20,10 @@ class Robot_Controller():
         print("Robot Online")
         self.home_pose = self.load_home_pose()
         self.home_pose_inv = self.HT_Inv(self.home_pose)
+        
+         # Trajectory thread management
+        self._traj_thread = None
+        self._stop_traj = threading.Event()
 
     def load_home_pose(self, home_pose_path = "surgical_system/py_src/robot/home_pose.csv"):
         if(os.path.exists(home_pose_path)):
@@ -174,95 +179,135 @@ class Robot_Controller():
         path_info['Positions'] = path_info['Positions'] / 100.0 #converts from cm to m
         return TrajectoryController(path_info, debug=True)
     
-    def run_trajectory(self, traj: TrajectoryController):
-        #
+    def _run_trajectory_worker(self, traj: TrajectoryController):
         total_time = traj.durations[-1]
         print("Path Duration: ", total_time)
         
         start_pos = traj.start_pos
         start_pose = np.eye(4)
         start_pose[:3, -1] = start_pos
-        print(start_pose)
-        current_pose = np.array(self.go_to_pose(start_pose@self.home_pose))
-        # current_pose = self.quat_to_Mat(current_pose)
+        current_pose = np.array(self.go_to_pose(start_pose @ self.home_pose))
         
         time_step = 0.05
-        elapsedTime = 0
-        t = time.time()
-        # TODO ask user to verify they want to continue
+        elapsedTime = 0.0
+        t = time.monotonic()
+
         target_vel = np.zeros(3)
         
-        #record data
-        data_num = int(math.ceil(total_time/time_step)) 
+        # record data
+        data_num = int(math.ceil(total_time / time_step))
         actual_vel_list = np.empty((data_num, 3))
         target_vel_list = np.empty((data_num, 3))
         actual_pos_list = np.empty((data_num, 3))
         target_pos_list = np.empty((data_num, 3))
         i = 0
-        while (elapsedTime) < total_time:
-            if (time.time() - t) >= time_step:    
-                elapsedTime = elapsedTime + time.time() - t
-                t = time.time()
-                movement = traj.update(elapsedTime)
-                target_vel = (movement['velocity'])
-                target_pos = (movement['position'])
-                print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel, f" | Target Pos: ", target_pos) 
-                state = self.set_velocity(target_vel, [0,0,0])
-                pos, vel = state[:3], state[7:10]
-                # new_pose = np.array(self.franka_client.request_pose())
-                actual_vel_list[i, :] =  vel[:3] if i != 0 else np.zeros(3)
-                target_vel_list[i, :] = target_vel
-                actual_pos_list[i, :] =  pos[:3] - self.home_pose[:3, -1]
-                target_pos_list[i, :] = target_pos
-                
-                # current_pose = new_pose
-                i += 1
-        self.robot_stop()
-        
-        plt.figure(figsize=(10,6))
-        time_range = np.arange(0, total_time, time_step)
-        plt.plot(time_range, actual_vel_list[:, 0], label="actual x")
-        plt.plot(time_range, actual_vel_list[:, 1], label="actual y")
-        plt.plot(time_range, actual_vel_list[:, 2], label="actual z")
-        plt.plot(time_range, target_vel_list[:, 0], '--', label="target x")
-        plt.plot(time_range, target_vel_list[:, 1], '--', label="target y")
-        plt.plot(time_range, target_vel_list[:, 2], '--', label="target z")
-        plt.xlabel("Time [s]")
-        plt.ylabel("velcity [m/s]")
-        title = "Time vs velocity "+ traj.pattern
-        plt.title(title)
-        plt.grid(True)
-        plt.legend()
-        plt.tight_layout()
+        try:
+            while (elapsedTime < total_time) and (not self._stop_traj.is_set()):
+                now = time.monotonic()
+                if (now - t) >= time_step:
+                    elapsedTime += (now - t)
+                    t = now
 
-        # Save and also display inline
-        out_path = "time_vs_velocity_" + traj.pattern + ".png"
-        plt.savefig(out_path, dpi=200)
-        plt.show()
-        
-        plt.figure(figsize=(10,6))
-        time_range = np.arange(0, total_time, time_step)
-        plt.plot(time_range, actual_pos_list[:, 0], label="actual x")
-        plt.plot(time_range, actual_pos_list[:, 1], label="actual y")
-        plt.plot(time_range, actual_pos_list[:, 2], label="actual z")
-        plt.plot(time_range, target_pos_list[:, 0], '--', label="target x")
-        plt.plot(time_range, target_pos_list[:, 1], '--', label="target y")
-        plt.plot(time_range, target_pos_list[:, 2], '--', label="target z")
-        plt.xlabel("Time [s]")
-        plt.ylabel("position [m]")
-        title = "Time vs position "+ traj.pattern
-        plt.title(title)
-        plt.grid(True)
-        plt.legend()
-        plt.tight_layout()
+                    movement = traj.update(elapsedTime)
+                    target_vel = movement['velocity']
+                    target_pos = movement['position']
 
-        # Save and also display inline
-        out_path = "time_vs_position_" + traj.pattern + ".png"
-        plt.savefig(out_path, dpi=200)
-        plt.show()
-        # np.savetxt("actualVel.npy", actual_vel_list)
-        # np.savetxt("targetVel.npy", actual_vel_list)
+                    print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel, f" | Target Pos: ", target_pos)
+
+                    state = self.set_velocity(target_vel, [0, 0, 0])
+                    pos, vel = state[:3], state[7:10]
+
+                    if i < data_num:
+                        actual_vel_list[i, :] = vel[:3] if i != 0 else np.zeros(3)
+                        target_vel_list[i, :] = target_vel
+                        actual_pos_list[i, :] = pos[:3] - self.home_pose[:3, -1]
+                        target_pos_list[i, :] = target_pos
+                        i += 1
+
+            # stop robot on exit (normal or stopped)
+            self.robot_stop()
+
+            # Optional: if you are okay plotting from a thread, keep this.
+            # Otherwise, you can return the data instead and plot in main thread.
+            # time_range = np.arange(0, total_time, time_step)
+
+            # plt.figure(figsize=(10,6))
+            # plt.plot(time_range, actual_vel_list[:, 0], label="actual x")
+            # plt.plot(time_range, actual_vel_list[:, 1], label="actual y")
+            # plt.plot(time_range, actual_vel_list[:, 2], label="actual z")
+            # plt.plot(time_range, target_vel_list[:, 0], '--', label="target x")
+            # plt.plot(time_range, target_vel_list[:, 1], '--', label="target y")
+            # plt.plot(time_range, target_vel_list[:, 2], '--', label="target z")
+            # plt.xlabel("Time [s]")
+            # plt.ylabel("velocity [m/s]")
+            # title = "Time vs velocity " + traj.pattern
+            # plt.title(title)
+            # plt.grid(True)
+            # plt.legend()
+            # plt.tight_layout()
+            # plt.savefig("time_vs_velocity_" + traj.pattern + ".png", dpi=200)
+            # plt.close()
+
+            # plt.figure(figsize=(10,6))
+            # plt.plot(time_range, actual_pos_list[:, 0], label="actual x")
+            # plt.plot(time_range, actual_pos_list[:, 1], label="actual y")
+            # plt.plot(time_range, actual_pos_list[:, 2], label="actual z")
+            # plt.plot(time_range, target_pos_list[:, 0], '--', label="target x")
+            # plt.plot(time_range, target_pos_list[:, 1], '--', label="target y")
+            # plt.plot(time_range, target_pos_list[:, 2], '--', label="target z")
+            # plt.xlabel("Time [s]")
+            # plt.ylabel("position [m]")
+            # title = "Time vs position " + traj.pattern
+            # plt.title(title)
+            # plt.grid(True)
+            # plt.legend()
+            # plt.tight_layout()
+            # plt.savefig("time_vs_position_" + traj.pattern + ".png", dpi=200)
+            # plt.close()
+        finally:
+            self._stop_traj.set()
+            self._traj_thread = None
+            print("traj done")
     
+    def run_trajectory(self, traj: TrajectoryController, blocking: bool = True):
+        """
+        Run trajectory either blocking or in a background thread.
+        """
+        if blocking:
+            # Old behavior
+            self._stop_traj.clear()
+            self._run_trajectory_worker(traj)
+        else:
+            # Non-blocking background thread
+            if self._traj_thread is not None and self._traj_thread.is_alive():
+                print("[WARNING] A trajectory is already running.")
+                return
+
+            self._stop_traj.clear()
+            self._traj_thread = threading.Thread(
+                target=self._run_trajectory_worker,
+                args=(traj,),
+                daemon=True,
+            )
+            self._traj_thread.start()
+    
+    
+    def is_trajectory_running(self) -> bool:
+        return (self._traj_thread is not None
+            and self._traj_thread.is_alive())
+
+        
+    def stop_trajectory(self, wait: bool = False):
+        """
+        Signal the running trajectory to stop and optionally wait for it.
+        """
+        self._stop_traj.set()
+        # ensure robot commanded to stop
+        self.robot_stop()
+
+        if wait and self._traj_thread is not None:
+            self._traj_thread.join(timeout=2.0)
+            
     def live_control(self, target_pose_home, max_vel):
         current_pose, _ = self.get_current_state()
         current_pose = current_pose[:3, -1] - self.home_pose[:3, -1]

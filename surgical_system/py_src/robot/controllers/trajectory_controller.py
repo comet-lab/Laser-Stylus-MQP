@@ -154,8 +154,9 @@ class TrajectoryController():
         plt.grid(True)
         plt.legend()
         plt.tight_layout()
-        plt.show()
-        plt.close(3)
+        plt.savefig("trajectory.png")
+        # plt.show()
+        # plt.close(3)
 
     def update(self, time):
         self.t = time
@@ -181,13 +182,14 @@ class TrajectoryController():
             # width = self.laser_info['w0']*np.sqrt(1 + ((self._laser_pos[2] * self.laser_info['wavelength'])/(np.pi*self.laser_info['w0']**2))**2) 
             # self._irradiance = 2*power/(np.pi*(width**2))
         if self.debug:
+            pass
             # print("Spot Temperature: ", np.amax(controller_msg.current_temp))
             # print("Irradiance: ", self._irradiance)
-            print("Laser Position [m]: ", self.laser_pos)
-            print("Laser Velocity [m/s]: ", self.laser_pos_vel)
-            print("Current Path: ", self.positions[pathIdx+1])
-            print("Time: ", self.t)
-            print("")
+            # print("Laser Position [m]: ", self.laser_pos)
+            # print("Laser Velocity [m/s]: ", self.laser_pos_vel)
+            # print("Current Path: ", self.positions[pathIdx+1])
+            # print("Time: ", self.t)
+            # print("")
 
         return traj
     

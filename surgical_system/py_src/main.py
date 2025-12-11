@@ -47,6 +47,7 @@ async def main():
                             [0,0,1,start_pos[2]],
                             [0,0,0,1]])
     robot_controller.go_to_pose(start_pose@home_pose,1) # Send robot to start position
+
     desired_state = RobotSchema()
     await asyncio.sleep(2) # ?
     
@@ -133,28 +134,35 @@ async def main():
     def recv_fn(msg: str):
         data = json.loads(msg)
         desired_state.update(data)
-
-        
-        if(desired_state.raster_mask is not None):
-            # Do raster 
-            image_bytes = desired_state.raster_mask.encode('utf-8')
-            numpy_array = np.frombuffer(image_bytes, np.uint8)
-            cv2.imdecode(numpy_array, cv2.IMREAD_COLOR)
-            print("recieved raster png")
-        elif(desired_state.path is not None and len(desired_state.path) > 1):
+        # if(desired_state.raster_mask is not None):
+        #     # Do raster 
+        #     image_bytes = desired_state.raster_mask.encode('utf-8')
+        #     numpy_array = np.frombuffer(image_bytes, np.uint8)
+        #     cv2.imdecode(numpy_array, cv2.IMREAD_COLOR)
+        #     print("recieved raster png")
+        if(desired_state.path is not None and len(desired_state.path) > 1):
             # Do path
-            desired_state.path = np.array([[d["x"], d["y"]] for d in desired_state.path], dtype=float)
-            # print(path)
-            # robot_waypoints = camera_reg.pixel_to_world(path, cam_type=cam_type)
-            # print(robot_waypoints)
-            # traj = robot_controller.create_trajectory(gains)
+            path = desired_state.path
+            desired_state.path = None
+            
+            path = np.array([[d["x"], d["y"]] for d in path], dtype=float)
+            pixels = path
+            pixels = camera_reg.moving_average_smooth(pixels, window=5)
+            if desired_state.isTransformedViewOn:
+                robot_path = camera_reg.world_to_real(pixels, cam_type=cam_type)
+            else:
+                robot_path = camera_reg.pixel_to_world(pixels, cam_type=cam_type)
+            print("Desired speed ", desired_state.speed)
+            speed = desired_state.speed if desired_state.speed != None else 0.01 # m/s
+            traj = robot_controller.create_custom_trajectory(robot_path, speed)
+            print("traj created")
+            robot_controller.run_trajectory(traj, blocking=False)
+
 
         # TODO keep looping
         # desired_state.go_to_pose(home_t=home_pose, robot_controller=robot_controller)
         recv_fn.last_update = time.time()       
-        
-    def is_planned_path():
-        return desired_state.path is not None and len(desired_state.path) > 1
+
     
     recv_fn.last_update = None
 
@@ -186,13 +194,9 @@ async def main():
         diff = 1
         if(recv_fn.last_update is not None):
             diff = current_time - recv_fn.last_update
-        # If no new message in 200ms, stop
-        if is_planned_path():
-            if desired_state.isTransformedViewOn:
-                robot_path = camera_reg.world_to_real(desired_state.path, cam_type=cam_type)
-            else:
-                robot_path = camera_reg.pixel_to_world(desired_state.path, cam_type=cam_type)
-            robot_controller.create_custom_trajectory(robot_path, 0.01)
+        
+        if robot_controller.is_trajectory_running():
+            pass
         else:
             if(diff > .12):
                 current_pose, current_vel = robot_controller.get_current_state()
@@ -204,14 +208,11 @@ async def main():
                     
                 laser_obj.set_output(False)
             else:
+                pixel = np.array([[desired_state.x, desired_state.y]])
                 if desired_state.isTransformedViewOn:
-                    target_world_point = camera_reg.world_to_real(np.array([[desired_state.x, desired_state.y]]), cam_type=cam_type, z=start_pose[2,3])[0]
-                    # print("Heard: ", np.array([[desired_state.x, desired_state.y]]))
-                    raw_pixel = camera_reg.rgb_M @ (target_world_point * 7000)
-                    # print("Raw original: ", raw_pixel)
-                    # print("Original World: ", camera_reg.world_to_real(np.array([[desired_state.x, desired_state.y]]), cam_type=cam_type, z=start_pose[2,3])[0])
+                    target_world_point = camera_reg.world_to_real(pixel, cam_type=cam_type, z=start_pose[2,3])[0]
                 else:
-                    target_world_point = camera_reg.pixel_to_world(np.array([[desired_state.x, desired_state.y]]), cam_type=cam_type, z=start_pose[2,3])[0]
+                    target_world_point = camera_reg.pixel_to_world(pixel, cam_type=cam_type, z=start_pose[2,3])[0]
                     
                 target_pose = np.eye(4)
                 target_pose[:3, -1] = target_world_point
