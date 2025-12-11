@@ -1,9 +1,9 @@
 class MockLaser():
     def __init__(self):
-        self.state = None
+        self.last_state = None
 
     def set_output(self, output):
-        self.state = "ON" if output else "OFF"
-
-    def get_laser_state(self):
-        return self.state
+        state = "ON" if output else "OFF"
+        if(self.last_state != state):
+            print(f"LASER {state}")
+        self.last_state = state

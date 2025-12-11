@@ -1,0 +1,183 @@
+from robot.robot import RobotSchema
+from robot.mock_robot_controller import MockRobotController
+from registration.mock_camera_registration import MockCameraRegistration
+from laser_control.mock_laser import MockLaser
+import numpy as np
+from backend.listener import BackendConnection
+import time
+import json
+import cv2
+from dataclasses import asdict
+import asyncio
+import base64
+from robot.motion_planning import Motion_Planner
+
+
+class Handler:
+    def __init__(self, desired_state: RobotSchema, robot_controller: MockRobotController, cam_reg: MockCameraRegistration, laser_obj: MockLaser, start_pose, mock_robot):
+        self.desired_state = desired_state
+        self.robot_controller = robot_controller
+        self.last_update_time = time.time()
+        self.home_tf = robot_controller.load_home_pose()
+        self.start_pose = start_pose
+        self.cam_reg = cam_reg
+        self.laser_obj = laser_obj
+        self.cam_type = "color"
+        self.prev_robot_on = False
+
+        initial_pose, _ = robot_controller.get_current_state()
+        desired_state.update(asdict(RobotSchema.from_pose(initial_pose@np.linalg.inv(self.home_tf))))
+        desired_state.isLaserOn = False
+        desired_state.isRobotOn = False
+
+        backend_connection = BackendConnection(
+            send_fn=self._send_fn,
+            recv_fn=self._recv_fn,
+            mocking=mock_robot
+        )
+        asyncio.create_task(backend_connection.connect_to_websocket())
+
+    def _input_downtime(self):  
+        return time.time() - self.last_update_time
+    
+    def _send_fn(self) -> str:
+        current_pose, _ = self.robot_controller.get_current_state()
+        status = RobotSchema.from_pose(np.linalg.inv(self.home_tf)@current_pose)
+        status.isLaserOn = self.desired_state.isLaserOn # TODO Separate variable for on & enabled? Need read-only portions of schema?
+        status.isRobotOn = self.desired_state.isRobotOn # TODO get from ???
+        return status.to_str()
+    
+    def _recv_fn(self, msg: str):
+        self.last_update_time = time.time()
+        data = json.loads(msg)
+        self.desired_state.update(data)
+        if(self.desired_state.isThermalViewOn):
+            self.cam_type = "thermal"
+        else:
+            self.cam_type = "color"
+            
+    def _read_raster(self):
+        data_str = self.desired_state.raster_mask
+        image_bytes = base64.b64decode(data_str)
+        numpy_array = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(numpy_array, cv2.IMREAD_UNCHANGED)
+        img = cv2.resize(img, (1280, 720)) # TODO change this to reflect correct transformation
+        img = Motion_Planner.fill_in_shape(img)
+        path = Motion_Planner.raster_pattern(img)
+        return path
+        
+    '''
+    path = []
+    if(desired_state.path is not None and len(desired_state.path) > 1):
+        # Do path
+        if len(path) == 0:
+            print("Tracing path")
+            path = desired_state.path 
+            desired_state.path = None
+            path = np.array([[d["x"], d["y"]] for d in path], dtype=float)
+        else:
+            # Raster pattern branch
+            path = np.array(path, dtype=float)
+            
+
+            # If Motion_Planner returned (row, col) = (y, x),
+            # convert to (x, y) to match camera_reg expectations:
+            #   path[:,0] = row (y), path[:,1] = col (x)
+            #   pixels[:,0] = x = col
+            #   pixels[:,1] = y = row
+            h, w = img.shape[:2]
+            pixels = np.zeros_like(path)
+            pixels[:, 0] = path[:, 1]         # x = col
+            pixels[:, 1] = path[:, 0]  
+            
+        
+    '''    
+    
+    def _read_path(self):
+        # TODO determine cam type from desired state
+        # TODO convert path from List
+        path = np.array([[d['x'], d['y']] for d in self.desired_state.path])
+        return path
+
+    def _do_path(self, path):
+        # TODO determine cam type from desired state
+        # TODO convert path from List
+        pixels = path
+        path = None
+        pixels = self.cam_reg.moving_average_smooth(pixels, window=5)
+        if self.desired_state.isTransformedViewOn:
+            robot_path = self.cam_reg.world_to_real(pixels, cam_type=self.cam_type)
+        else:
+            robot_path = self.cam_reg.pixel_to_world(pixels, cam_type=self.cam_type)
+        speed = self.desired_state.speed if self.desired_state.speed != None else 0.01 # m/s
+        traj = self.robot_controller.create_custom_trajectory(robot_path, speed)
+        self.robot_controller.run_trajectory(traj, blocking=False)
+        
+    def _do_hold_pose(self):
+        current_pose, current_vel = self.robot_controller.get_current_state()
+        # Stop robot, no drift
+        if np.linalg.norm(current_vel[:3]) > 2e-5:
+            self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
+        else:
+            self.robot_controller.go_to_pose(current_pose, blocking=False)
+            
+        self.laser_obj.set_output(False)
+
+    def _do_live_control(self):
+        # If no new message in 200ms, stop
+        if(self._input_downtime() > .12):
+            self._do_hold_pose()
+        else:
+            pixel = np.array([[self.desired_state.x, self.desired_state.y]])
+            if self.desired_state.isTransformedViewOn:
+                target_world_point = self.cam_reg.world_to_real(pixel, cam_type=self.cam_type, z=self.start_pose[2,3])[0]
+            else:
+                target_world_point = self.cam_reg.pixel_to_world(pixel, cam_type=self.cam_type, z=self.start_pose[2,3])[0]
+            target_pose = np.eye(4)
+            # print(target_world_point)
+            target_pose[:3, -1] = target_world_point
+            target_vel = self.robot_controller.live_control(target_pose, 0.05)
+            self.robot_controller.set_velocity(target_vel, np.zeros(3))
+
+            self.laser_obj.set_output(self.desired_state.isLaserOn)
+
+    async def main_loop(self):
+        # Yield to other threads (video stream, websocket comms)
+        await asyncio.sleep(0.0001)
+        
+        if(self.desired_state.isRobotOn != self.prev_robot_on):
+            # Hold position when turning on/off
+            # current_pose, _ = self.robot_controller.get_current_state()
+            # xyz = current_pose[3,0:3]
+            # print(xyz)
+            # px = self.cam_reg.rgbd_cali.world_to_pixel(xyz) # TODO switch cam types
+            # print(px)
+            # self.desired_state.x = px[0]
+            # self.desired_state.y = px[1]
+            self.desired_state.x = None
+            self.desired_state.y = None
+            self.desired_state.z = None 
+            # self. TODO stop traj
+              
+            
+
+        if(self.desired_state.isRobotOn):
+            # TODO interrupt trajectory?
+
+            # if(self.desired_state.raster_mask is not None):
+            #     raster = self._read_raster()
+            #     self._do_path(raster)
+            #     self.desired_state.raster_mask = None
+                
+            if(self.desired_state.path is not None and len(self.desired_state.path) > 1):
+                path = self._read_path()
+                self._do_path(path)
+                self.desired_state.path = None
+
+            elif(self.desired_state.x is not None and self.desired_state.y is not None and not self.robot_controller.is_trajectory_running()):
+                self._do_live_control()
+        else:
+            self._do_hold_pose()
+                
+        self.prev_robot_on = self.desired_state.isRobotOn
+        

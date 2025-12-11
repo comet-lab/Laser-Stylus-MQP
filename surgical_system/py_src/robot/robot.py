@@ -15,6 +15,7 @@ class RobotSchema:
     laserY: float = None
     beamWaist: float = None
     isLaserOn: bool = None
+    isRobotOn: bool = None
     isTransformedViewOn: bool = None
     isThermalViewOn: bool = None
     pathEvent: str = None
@@ -22,6 +23,7 @@ class RobotSchema:
     raster_type: str = None
     speed: float = None
     path: List[Dict[str, float]] = None
+
 
     @staticmethod
     def from_pose(pose: np.ndarray):

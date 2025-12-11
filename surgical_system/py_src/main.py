@@ -30,6 +30,7 @@ else:
 
 from cameras.broadcast import Broadcast
 from backend.listener import BackendConnection
+from backend.handler import Handler
 
 
 async def main():
@@ -65,16 +66,14 @@ async def main():
     # free beam laser spot.
     therm_cam = None
     rgbd_cam = None
-    cam_type = "color"
-    transformed_view = False
     
     if(not mock_robot):
         therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frame_rate="Rate50Hz",focal_distance=0.2)
         rgbd_cam = RGBD_Cam() #Runs a thread internally
         rgbd_cam.set_default_setting() # Auto-exposure
     else:
-        therm_cam = MockCamera(cam_type=cam_type)
-        rgbd_cam = MockCamera(cam_type=cam_type)
+        therm_cam = MockCamera(cam_type="thermal")
+        rgbd_cam = MockCamera(cam_type="color")
         
 
     
@@ -127,135 +126,38 @@ async def main():
     #----------------------------- Backend Connection -------------------------------#
     ##################################################################################
 
-    def send_fn() -> str:
-        current_pose, _ = robot_controller.get_current_state()
-        status = RobotSchema.from_pose(current_pose@np.linalg.inv(home_pose))
-        status.isLaserOn = desired_state.isLaserOn
-        return status.to_str()
-    
-    def recv_fn(msg: str):
-        data = json.loads(msg)
-        desired_state.update(data)
-        path = []
-        if(desired_state.raster_mask is not None):
-            # Do raster 
-            data_str = desired_state.raster_mask
-
-            image_bytes = base64.b64decode(data_str)
-            numpy_array = np.frombuffer(image_bytes, np.uint8)
-            img = cv2.imdecode(numpy_array, cv2.IMREAD_UNCHANGED) # 842 x 1543 
-            img = cv2.resize(img, (1280, 720)) # TODO change this to reflect correct transformation
-            img = Motion_Planner.fill_in_shape(img)
-            path = Motion_Planner.raster_pattern(img)
-            
-        if(desired_state.path is not None and len(desired_state.path) > 1):
-            # Do path
-            if len(path) == 0:
-                print("Tracing path")
-                path = desired_state.path 
-                desired_state.path = None
-                path = np.array([[d["x"], d["y"]] for d in path], dtype=float)
-            else:
-                # Raster pattern branch
-                path = np.array(path, dtype=float)
-
-                # If Motion_Planner returned (row, col) = (y, x),
-                # convert to (x, y) to match camera_reg expectations:
-                #   path[:,0] = row (y), path[:,1] = col (x)
-                #   pixels[:,0] = x = col
-                #   pixels[:,1] = y = row
-                h, w = img.shape[:2]
-                pixels = np.zeros_like(path)
-                pixels[:, 0] = path[:, 1]         # x = col
-                pixels[:, 1] = path[:, 0]  
-                
-            pixels = path
-            path = None
-            pixels = camera_reg.moving_average_smooth(pixels, window=5)
-            if desired_state.isTransformedViewOn:
-                robot_path = camera_reg.world_to_real(pixels, cam_type=cam_type)
-            else:
-                robot_path = camera_reg.pixel_to_world(pixels, cam_type=cam_type)
-            print("Desired speed ", desired_state.speed) # TODO bug on speed one step behind
-            speed = desired_state.speed if desired_state.speed != None else 0.01 # m/s
-            traj = robot_controller.create_custom_trajectory(robot_path, speed)
-            print("traj created")
-            robot_controller.run_trajectory(traj, blocking=False)
-
-
-        # TODO keep looping
-        # desired_state.go_to_pose(home_t=home_pose, robot_controller=robot_controller)
-        recv_fn.last_update = time.time()       
-
-    
-    recv_fn.last_update = None
-
-    # TODO this is a hotfix, overload update to accept a robot schema
-    initial_pose, _ = robot_controller.get_current_state()
-    desired_state.update(asdict(RobotSchema.from_pose(initial_pose@np.linalg.inv(home_pose))))
-
-    backend_connection = BackendConnection(
-        send_fn=send_fn,
-        recv_fn=recv_fn,
-        mocking=mock_robot
+    control_flow_handler = Handler(
+        desired_state=desired_state,
+        robot_controller=robot_controller,
+        cam_reg=camera_reg,
+        laser_obj=laser_obj,
+        start_pose=start_pose,
+        mock_robot=mock_robot
     )
-    asyncio.create_task(backend_connection.connect_to_websocket())
     
     ##################################################################################
     #----------------------------- Camera Calibration -------------------------------#
     ##################################################################################
     
     
+    if camera_calibration:
+        pass
+
     start_pose[2,3] = 0.0
     robot_controller.go_to_pose(start_pose@home_pose,1) # Send robot to start position
-    
+
     while (True):
-        # Backend pose update
-        await asyncio.sleep(0.0001)
-        
-        # Robot velocity controller        
-        current_time = time.time()
-        diff = 1
-        if(recv_fn.last_update is not None):
-            diff = current_time - recv_fn.last_update
-        
-        if robot_controller.is_trajectory_running():
-            pass
-        else:
-            if(diff > .12):
-                current_pose, current_vel = robot_controller.get_current_state()
-                # Stop robot, no drift
-                if np.linalg.norm(current_vel[:3]) > 2e-5:
-                    robot_controller.set_velocity(np.zeros(3), np.zeros(3))
-                else:
-                    robot_controller.go_to_pose(current_pose, blocking=False)
-                    
-                laser_obj.set_output(False)
-            else:
-                pixel = np.array([[desired_state.x, desired_state.y]])
-                if desired_state.isTransformedViewOn:
-                    target_world_point = camera_reg.world_to_real(pixel, cam_type=cam_type, z=start_pose[2,3])[0]
-                else:
-                    target_world_point = camera_reg.pixel_to_world(pixel, cam_type=cam_type, z=start_pose[2,3])[0]
-                    
-                target_pose = np.eye(4)
-                target_pose[:3, -1] = target_world_point
-                target_vel = robot_controller.live_control(target_pose, 0.05) # TODO given current and desired pose, set vel
-                robot_controller.set_velocity(target_vel, np.zeros(3))
-                
-                laser_obj.set_output(desired_state.isLaserOn)
-            
+        await control_flow_handler.main_loop()            
             
         # Camera frame publishing
-        latest = camera_reg.get_cam_latest(cam_type=cam_type)
+        latest = camera_reg.get_cam_latest(cam_type=control_flow_handler.cam_type)
         
-        if desired_state.isTransformedViewOn:
-            latest = camera_reg.get_transformed_view(latest, cam_type=cam_type)
+        if control_flow_handler.desired_state.isTransformedViewOn:
+            latest = camera_reg.get_transformed_view(latest, cam_type=control_flow_handler.cam_type)
             latest = cv2.resize(latest, (1280, 720))
-            
-        
+
         if isinstance(latest, dict):
-            latest = latest.get(cam_type, None)
+            latest = latest.get(control_flow_handler.cam_type, None)
         if(type(latest) == type(None)):
             continue
         if(b.connected):
