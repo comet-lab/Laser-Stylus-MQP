@@ -1,4 +1,5 @@
 import numpy as np
+import cv2
 from cameras.mock_camera import MockCamera
 from robot.mock_robot_controller import MockRobotController
 
@@ -21,3 +22,20 @@ class MockCameraRegistration():
             return self.therm_cam.get_latest()
         else:
             return self.rgbd_cam.get_latest()
+        
+    def moving_average_smooth(self, pixels, window):
+        return pixels
+    
+    def world_to_real(self, pixels, cam_type, z = None):
+        if(z is None):
+            return pixels
+        else:
+            return pixels.append(z)
+
+
+
+    def get_transformed_view(self, latest, cam_type):
+        H = np.array([[1.2, 0.0, 0],
+                  [0.2, 1.1, 0],
+                  [0.0012, 0.0035, 1]])
+        return cv2.warpPerspective(latest, H, (1280//8,720//8))

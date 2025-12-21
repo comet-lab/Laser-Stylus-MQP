@@ -146,20 +146,7 @@ class Handler:
         await asyncio.sleep(0.0001)
         
         if(self.desired_state.isRobotOn != self.prev_robot_on):
-            # Hold position when turning on/off
-            # current_pose, _ = self.robot_controller.get_current_state()
-            # xyz = current_pose[3,0:3]
-            # print(xyz)
-            # px = self.cam_reg.rgbd_cali.world_to_pixel(xyz) # TODO switch cam types
-            # print(px)
-            # self.desired_state.x = px[0]
-            # self.desired_state.y = px[1]
-            self.desired_state.x = None
-            self.desired_state.y = None
-            self.desired_state.z = None 
-            # self. TODO stop traj
-              
-            
+            self._do_hold_pose() 
 
         if(self.desired_state.isRobotOn):
             # TODO interrupt trajectory?

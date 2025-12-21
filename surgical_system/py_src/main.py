@@ -152,14 +152,18 @@ async def main():
         # Camera frame publishing
         latest = camera_reg.get_cam_latest(cam_type=control_flow_handler.cam_type)
         
-        if control_flow_handler.desired_state.isTransformedViewOn:
-            latest = camera_reg.get_transformed_view(latest, cam_type=control_flow_handler.cam_type)
-            latest = cv2.resize(latest, (1280, 720))
-
         if isinstance(latest, dict):
             latest = latest.get(control_flow_handler.cam_type, None)
+
+        if control_flow_handler.desired_state.isTransformedViewOn:
+            latest = camera_reg.get_transformed_view(latest, cam_type=control_flow_handler.cam_type)
+
         if(type(latest) == type(None)):
             continue
+
+        if latest.shape != (1280, 720):
+            latest = cv2.resize(latest, (1280, 720), interpolation=cv2.INTER_NEAREST)
+
         if(b.connected):
             b.publish_frame(latest)
         else:
