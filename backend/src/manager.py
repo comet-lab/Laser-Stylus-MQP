@@ -56,7 +56,8 @@ class ConnectionManager:
 
                     # Update the robot's state
                     if forwarding_group == self.robot_connections:
-                        print(message)
+                        # print(message)
+                        pass
                     state.update(message)
                     await self.broadcast_to_group(forwarding_group, state)
                     

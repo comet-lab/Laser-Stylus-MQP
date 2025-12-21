@@ -94,11 +94,11 @@ class RGBD_Cam(Camera):
                 depth = frames.get_depth_frame()
                 color = frames.get_color_frame()
                 raw = np.asanyarray(depth.get_data())
-                print(
-                    "scale:", self.depth_scale,
-                    "raw mean:", raw.mean(),
-                    "meters mean:", raw.mean() * self.depth_scale
-                )
+                # print(
+                #     "scale:", self.depth_scale,
+                #     "raw mean:", raw.mean(),
+                #     "meters mean:", raw.mean() * self.depth_scale
+                # )
 
                 # for f in self.recommended_filters:
                 #     depth = f.process(depth)

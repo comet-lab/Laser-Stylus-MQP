@@ -29,9 +29,7 @@ from laser_control.laser_arduino import Laser_Arduino
 class Camera_Registration(System_Calibration):
     def __init__(self, therm_cam: ThermalCam, rgbd_cam: RGBD_Cam, robot_controller: Robot_Controller, laser_controller:Laser_Arduino):
         super().__init__(therm_cam, rgbd_cam, robot_controller, laser_controller)
-        self.calibration_folder = "/calibration_info"
-        self.rgb_cali_folder = "/calibration_info/rgb_cali/"
-        self.therm_cali_folder = "/calibration_info/thermal_cali/"
+        
         self.therm_cam.start_stream()
         self.rgbd_cam.start_stream()
         
@@ -39,8 +37,8 @@ class Camera_Registration(System_Calibration):
             print("Waiting for camera response...")
             time.sleep(0.5)
             
-        self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder)
-        self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder)
+        
+        
         
     def run(self): 
         debug = True
@@ -354,6 +352,13 @@ class Camera_Registration(System_Calibration):
                 break
 
         cv2.destroyAllWindows()
+    
+    def get_transformed_view(self, img, cam_type = "color"):
+        if cam_type == "color":
+            warped = cv2.warpPerspective(img, self.rgb_H_shifted, self.rgb_out)
+        else:
+            warped = img
+        return warped
 
     def live_control_view(self, cam_type, max_vel = 0.05, window_name="Camera", frame_key="color"):
         """
