@@ -28,8 +28,13 @@ class MockCameraRegistration():
     def world_to_real(self, pixels, cam_type, z = None):
         if(z is None):
             return pixels
+        elif(pixels.shape == (1,2)):
+            return np.append(pixels, z)
         else:
-            return pixels.append(z)
+    
+            print(pixels)
+            print(type(pixels))
+            raise Exception("Unkown pixel type")
 
 
 
