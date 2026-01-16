@@ -10,6 +10,7 @@ declare global {
 
 window.addEventListener('load', () => {
     // --- 1. Get DOM Elements ---
+    const viewport = document.getElementById('viewport') as HTMLElement; // NEW: Parent container
     const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
     const settingsPopup = document.getElementById('settingsPopup') as HTMLElement;
     const overlay = document.getElementById('overlay') as HTMLElement;
@@ -39,7 +40,7 @@ window.addEventListener('load', () => {
     const circleBtn = document.getElementById('circleBtn') as HTMLButtonElement;
     const triangleBtn = document.getElementById('triangleBtn') as HTMLButtonElement;
     const lineBtn = document.getElementById('lineBtn') as HTMLButtonElement;
-
+    
     const toggleButtons: NodeListOf<HTMLButtonElement> = document.querySelectorAll('#middle-icon-section .icon-btn');
     const sidebarButtons: NodeListOf<HTMLButtonElement> = document.querySelectorAll('.settings-sidebar .sidebar-btn');
     const settingsPanels: NodeListOf<HTMLElement> = document.querySelectorAll('.settings-main .settings-panel');
@@ -51,8 +52,8 @@ window.addEventListener('load', () => {
     // --- 2. State Variables ---
     let laserConfirmationTimeout: number | null = null;
     let robotConfirmationTimeout: number | null = null;
-    let selectedShape: ShapeType | null = null; // Currently selected TOOL
-    let drawnShapeType: ShapeType | null = null; // Currently drawn SHAPE on canvas
+    let selectedShape: ShapeType | null = null; 
+    let drawnShapeType: ShapeType | null = null; 
     let reader: any = null;
     let drawingTracker: DrawingTracker | null = null;
     let fillEnabled = false;
@@ -64,7 +65,6 @@ window.addEventListener('load', () => {
     // --- 3. UI Helpers & State Machine ---
     
     function updateDrawButtonState() {
-        // If a shape exists on canvas (tracked by drawnShapeType), we are in the "Has Shape" state
         const hasShape = drawnShapeType !== null;
 
         // 1. Action Buttons
@@ -74,15 +74,12 @@ window.addEventListener('load', () => {
 
         // 2. Shape Tool Buttons
         if (hasShape) {
-            // Rule: Disable all OTHER shape buttons, but keep the one corresponding to the drawn shape enabled.
-            // Even if it is not "selected" (highlighted), it should be clickable.
             penBtn.disabled      = (drawnShapeType !== 'freehand');
             squareBtn.disabled   = (drawnShapeType !== 'square');
             circleBtn.disabled   = (drawnShapeType !== 'circle');
             triangleBtn.disabled = (drawnShapeType !== 'triangle');
             lineBtn.disabled     = (drawnShapeType !== 'line');
         } else {
-            // Rule: Start state. No shape? All buttons enabled.
             toggleButtons.forEach(btn => btn.disabled = false);
         }
     }
@@ -91,7 +88,7 @@ window.addEventListener('load', () => {
         if (drawingTracker && drawingTracker.hasShape()) {
             drawingTracker.clearDrawing();
             selectedShape = null;
-            drawnShapeType = null; // Reset drawn state
+            drawnShapeType = null;
             toggleButtons.forEach(btn => btn.classList.remove('selected'));
             updateDrawButtonState();
         }
@@ -184,36 +181,41 @@ window.addEventListener('load', () => {
 
     video.muted = true;
     video.autoplay = true;
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    // Set initial size based on Viewport, not window innerWidth directly
+    canvas.width = viewport.offsetWidth;
+    canvas.height = viewport.offsetHeight;
     setMessage("Loading stream");
 
     reader = new window.MediaMTXWebRTCReader({
         url: new URL(`http://${window.location.hostname}:8889/mystream/whep`),
         onError: (err: string) => setMessage(err),
         onTrack: (evt: RTCTrackEvent) => {
-            video.srcObject = evt.streams[0];
-            video.requestVideoFrameCallback(updateCanvas);
-            
-            drawingTracker = new DrawingTracker(
-                canvas, 
-                video, 
-                `http://${window.location.hostname}:443`,
-                () => {
-                    // Callback: Shape Completed
-                    // Lock the state to the current shape type
-                    if (selectedShape) {
-                        drawnShapeType = selectedShape;
-                        updateDrawButtonState();
-                    }
+            if (evt.track.kind === 'video') {
+                video.srcObject = evt.streams[0];
+                video.requestVideoFrameCallback(updateCanvas);
+                
+                if (drawingTracker) {
+                    drawingTracker.dispose(); 
                 }
-            );
-            
-            updateDrawButtonState();
+
+                drawingTracker = new DrawingTracker(
+                    canvas, 
+                    video, 
+                    `http://${window.location.hostname}:443`,
+                    () => {
+                        if (selectedShape) {
+                            drawnShapeType = selectedShape;
+                            updateDrawButtonState();
+                        }
+                    }
+                );
+                
+                updateDrawButtonState();
+            }
         },
     });
 
-    // --- 6. Real-Time (Freehand WebSocket) Logic ---
+    // --- 6. Real-Time Logic ---
     const getCanvasCoordinates = (clientX: number, clientY: number) => {
         const rect = canvas.getBoundingClientRect();
         return { x: clientX - rect.left, y: clientY - rect.top };
@@ -257,7 +259,7 @@ window.addEventListener('load', () => {
     canvas.addEventListener('pointerup', handleRealTimeEnd);
     canvas.addEventListener('pointercancel', handleRealTimeEnd);
 
-    // --- 7. Controls & Logic ---
+    // --- 7. Controls ---
 
     const toggleMode = () => {
         const isRealTime = processingModeSwitch.checked;
@@ -277,7 +279,7 @@ window.addEventListener('load', () => {
             btn.disabled = false;
         });
         selectedShape = null;
-        drawnShapeType = null; // Reset on mode toggle
+        drawnShapeType = null;
         updateDrawButtonState();
     };
     processingModeSwitch.addEventListener('change', toggleMode);
@@ -330,13 +332,10 @@ window.addEventListener('load', () => {
         const isAlreadySelected = button.classList.contains('selected');
         
         if (isAlreadySelected) {
-            // Deselect Current Tool
             button.classList.remove('selected');
             selectedShape = null;
             drawingTracker?.disableDrawing();
-            // drawnShapeType stays as is!
         } else {
-            // Select New Tool
             toggleButtons.forEach(btn => btn.classList.remove('selected'));
             button.classList.add('selected');
             selectedShape = shape;
@@ -360,13 +359,8 @@ window.addEventListener('load', () => {
     triangleBtn.addEventListener('click', () => handleShapeSelection(triangleBtn, 'triangle'));
     lineBtn.addEventListener('click', () => handleShapeSelection(lineBtn, 'line'));
 
-    // Redundant safety check
-    canvas.addEventListener('mouseup', () => {
-         setTimeout(updateDrawButtonState, 50);
-    });
-    canvas.addEventListener('touchend', () => {
-         setTimeout(updateDrawButtonState, 50);
-    });
+    canvas.addEventListener('mouseup', () => { setTimeout(updateDrawButtonState, 50); });
+    canvas.addEventListener('touchend', () => { setTimeout(updateDrawButtonState, 50); });
 
     executeBtn.addEventListener('click', async () => {
         if (!drawingTracker) return;
@@ -400,7 +394,7 @@ window.addEventListener('load', () => {
 
     clearBtn.addEventListener('click', () => {
         drawingTracker?.clearDrawing();
-        drawnShapeType = null; // Clear the state type tracking
+        drawnShapeType = null;
         updateDrawButtonState();
     });
 
@@ -432,9 +426,12 @@ window.addEventListener('load', () => {
         await drawingTracker.updateViewSettings(transformedModeSwitch.checked, thermalModeSwitch.checked);
     });
 
+    // --- FIX: Proper Resize Logic ---
     window.addEventListener('resize', () => {
-        canvas.width = canvas.offsetWidth;
-        canvas.height = canvas.offsetHeight;
-        drawingTracker?.updateCanvasSize(canvas.width, canvas.height);
+        // Use Viewport as source of truth. DO NOT manually set canvas.width here.
+        // Let Fabric handle the sync via the tracker.
+        if (drawingTracker) {
+            drawingTracker.updateCanvasSize(viewport.offsetWidth, viewport.offsetHeight);
+        }
     });
 });
