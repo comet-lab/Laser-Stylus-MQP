@@ -374,16 +374,30 @@ window.addEventListener('load', () => {
         prepareBtn.disabled = true;
 
         try {
+            // Execute the path
             await drawingTracker.executePath(speed, String(selectedRasterPattern));
             
+            // Clear the canvas (visuals only)
             drawingTracker.clearDrawing();
-            toggleButtons.forEach(btn => {
-                btn.classList.remove('selected');
-                btn.disabled = false;
-            });
-            selectedShape = null;
+            
+            // Reset only the drawn state (so Execute becomes disabled until you draw again)
             drawnShapeType = null;
+
+            // Do not remove 'selected' class and do not set selectedShape to null.
+            // We want the current tool to remain active.
+            toggleButtons.forEach(btn => {
+                btn.disabled = false; // Just ensure they aren't disabled
+            });
+
+            // Update state to disable action buttons (Clear/Execute) but keep tool buttons ready
             updateDrawButtonState();
+            
+            // Force tracker to remain in drawing mode for the currently selected shape
+            if (selectedShape) {
+                drawingTracker.setShapeType(selectedShape);
+                drawingTracker.enableDrawing();
+            }
+
             preparePopup.classList.remove('active');
         } catch (e) {
             console.error(e);
@@ -393,9 +407,20 @@ window.addEventListener('load', () => {
     });
 
     clearBtn.addEventListener('click', () => {
+        // Clear visuals
         drawingTracker?.clearDrawing();
+        
+        // Reset drawn state
         drawnShapeType = null;
+        
+        // Update buttons (Disables Clear/Execute, Enables Tools)
         updateDrawButtonState();
+
+        // Ensure the tracker knows we are still trying to draw with the currently selected shape
+        if (drawingTracker && selectedShape) {
+            drawingTracker.setShapeType(selectedShape);
+            drawingTracker.enableDrawing();
+        }
     });
 
     fillCheckbox.addEventListener('change', () => {
