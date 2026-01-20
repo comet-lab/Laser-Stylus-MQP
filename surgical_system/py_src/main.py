@@ -12,7 +12,6 @@ from robot.robot import RobotSchema
 from dataclasses import dataclass, asdict
 import matplotlib.pyplot as plt
 
-from robot.motion_planning import Motion_Planner
 # Classes
 mock_robot = os.getenv("MOCK_ROBOT", "0") == "1"
 print(f"Mocking? {mock_robot}")

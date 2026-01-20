@@ -268,6 +268,10 @@ class Robot_Controller():
             self._stop_traj.set()
             self._traj_thread = None
             print("traj done")
+        # return [actual_vel_list,
+        #         target_vel_list,
+        #         actual_pos_list,
+        #         target_pos_list]
     
     def run_trajectory(self, traj: TrajectoryController, blocking: bool = True):
         """
