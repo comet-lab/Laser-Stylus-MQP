@@ -1,4 +1,4 @@
-import * as fabric from 'fabric'; 
+import * as fabric from 'fabric';
 import { Position, ShapeType } from './types';
 import * as Utils from './utils';
 
@@ -7,7 +7,7 @@ export class DrawingTracker {
     private video: HTMLVideoElement;
     private apiBaseUrl: string;
     private onShapeComplete: () => void;
-    
+
     // State for Drag-to-Create
     private currentShapeType: ShapeType | null = null;
     private isCreatingShape: boolean = false;
@@ -23,9 +23,9 @@ export class DrawingTracker {
         strokeUniform: true,
         strokeLineCap: 'round' as const,
         strokeLineJoin: 'round' as const,
-        
+
         // Prevent borders scaling when resizing objects
-        objectCaching: false, 
+        objectCaching: false,
 
         cornerColor: '#007AFF',
         cornerStrokeColor: '#ffffff',
@@ -35,16 +35,16 @@ export class DrawingTracker {
         touchCornerSize: 24,
         transparentCorners: false,
         padding: 10,
-        
+
         originX: 'left' as const,
         originY: 'top' as const
     };
 
     constructor(
-        canvas: HTMLCanvasElement, 
-        video: HTMLVideoElement, 
+        canvas: HTMLCanvasElement,
+        video: HTMLVideoElement,
         apiBaseUrl: string = `http://${window.location.hostname}:443`,
-        onShapeComplete: () => void = () => {} 
+        onShapeComplete: () => void = () => { }
     ) {
         this.video = video;
         this.apiBaseUrl = apiBaseUrl;
@@ -62,12 +62,12 @@ export class DrawingTracker {
         this.fCanvas = new fabric.Canvas(canvas, {
             selection: false,
             preserveObjectStacking: true,
-            containerClass: 'fabric-canvas-container' 
+            containerClass: 'fabric-canvas-container'
         });
 
         fabric.FabricObject.ownDefaults = {
             ...fabric.FabricObject.ownDefaults,
-            ...(this.SHAPE_DEFAULTS as any) 
+            ...(this.SHAPE_DEFAULTS as any)
         };
 
         const brush = new fabric.PencilBrush(this.fCanvas);
@@ -78,12 +78,12 @@ export class DrawingTracker {
         this.fCanvas.on('mouse:down', this.onMouseDown.bind(this));
         this.fCanvas.on('mouse:move', this.onMouseMove.bind(this));
         this.fCanvas.on('mouse:up', this.onMouseUp.bind(this));
-        
+
         this.fCanvas.on('path:created', (e: any) => {
             if (e.path) {
                 e.path.set({
                     ...this.SHAPE_DEFAULTS,
-                    strokeUniform: false 
+                    strokeUniform: false
                 });
                 e.path.setCoords();
             }
@@ -105,17 +105,17 @@ export class DrawingTracker {
 
     private onMouseDown(opt: any) {
         if (this.hasPlacedShape) return;
-        
+
         if (!this.currentShapeType || this.currentShapeType === 'freehand') return;
-        if (opt.target) return; 
+        if (opt.target) return;
 
         this.isCreatingShape = true;
-        
+
         const pointer = this.fCanvas.getScenePoint(opt.e);
         this.shapeStartPos = { x: pointer.x, y: pointer.y };
 
         const commonOpts = {
-            left: pointer.x, 
+            left: pointer.x,
             top: pointer.y,
             ...this.SHAPE_DEFAULTS
         };
@@ -187,7 +187,7 @@ export class DrawingTracker {
                 this.activeShape.setCoords();
                 this.hasPlacedShape = true;
                 this.fCanvas.requestRenderAll();
-                this.onShapeComplete(); 
+                this.onShapeComplete();
             }
         }
     }
@@ -198,7 +198,7 @@ export class DrawingTracker {
         if (this.hasPlacedShape && type !== null) {
             return;
         }
-        
+
         this.currentShapeType = type;
 
         if (type === 'freehand') {
@@ -227,12 +227,12 @@ export class DrawingTracker {
         this.fCanvas.isDrawingMode = false;
         this.currentShapeType = null;
         this.fCanvas.discardActiveObject();
-        
+
         this.fCanvas.forEachObject(o => {
             o.selectable = false;
-            o.evented = false; 
+            o.evented = false;
         });
-        
+
         this.fCanvas.requestRenderAll();
         this.fCanvas.defaultCursor = 'default';
     }
@@ -262,74 +262,64 @@ export class DrawingTracker {
 
     // --- Execution & Export Logic ---
 
+    // drawingtracker.ts
+
     public async executePath(speed: number, raster_type: string): Promise<any> {
         const pixels = this.generatePixelPath();
-        
+
+        // Convert canvas pixels to video-space coordinates
         const videoPixels = pixels.map(p => ({
             x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
             y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
         }));
 
+        // --- Generate the Raster Mask Blob ---
         const width = this.fCanvas.getWidth();
         const height = this.fCanvas.getHeight();
-        
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = width;
         tempCanvas.height = height;
         const ctx = tempCanvas.getContext('2d');
-        
+
         if (!ctx) throw new Error("Could not create temp context");
 
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, width, height);
-
         const imgData = ctx.getImageData(0, 0, width, height);
         const data = imgData.data;
 
         for (const p of pixels) {
             const x = Math.round(p.x);
             const y = Math.round(p.y);
-
             if (x >= 0 && x < width && y >= 0 && y < height) {
                 const index = (y * width + x) * 4;
-                data[index] = 0;     // R
-                data[index + 1] = 0; // G
-                data[index + 2] = 0; // B
-                data[index + 3] = 255; // A
+                data[index] = 0; data[index + 1] = 0; data[index + 2] = 0; data[index + 3] = 255;
             }
         }
-        
         ctx.putImageData(imgData, 0, 0);
 
         const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
-        
         if (!blob) throw new Error("Failed to generate image blob");
 
+        // --- Bundle everything into one FormData object ---
         const formData = new FormData();
+        formData.append('speed', (Number(speed) / 1000).toString());
+        formData.append('raster_type', raster_type);
+        formData.append('pixels', JSON.stringify(videoPixels));
         formData.append('file', blob, 'path.png');
 
-        // Sequential Execution
-        const settingsRes = await fetch(`${this.apiBaseUrl}/api/settings`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ raster_type, speed: Number(speed) / 1000 })
-        });
-        if (!settingsRes.ok) throw new Error("Settings upload failed");
-
-        const pathRes = await fetch(`${this.apiBaseUrl}/api/path`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pixels: videoPixels })
-        });
-        if (!pathRes.ok) throw new Error("Path upload failed");
-
-        const imageRes = await fetch(`${this.apiBaseUrl}/api/raster_mask`, {
+        // Single POST request
+        const response = await fetch(`${this.apiBaseUrl}/api/execute`, {
             method: 'POST',
             body: formData
         });
-        if (!imageRes.ok) throw new Error("Image upload failed");
 
-        return { success: true };
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "Execution failed");
+        }
+
+        return await response.json();
     }
 
     public async updateViewSettings(isTransformedViewOn: boolean, isThermalViewOn: boolean): Promise<any> {
@@ -349,7 +339,7 @@ export class DrawingTracker {
 
         for (const obj of objects) {
             if (obj instanceof fabric.Path) {
-                const pathObj = obj as any; 
+                const pathObj = obj as any;
                 if (pathObj.path) {
                     let lastX = 0, lastY = 0;
                     for (const cmd of pathObj.path) {
@@ -358,21 +348,21 @@ export class DrawingTracker {
                         const y = cmd[2];
                         if (type === 'M') {
                             lastX = x; lastY = y;
-                        } else if (type === 'L' || type === 'Q') { 
+                        } else if (type === 'L' || type === 'Q') {
                             const gen = Utils.generateLinePixels(lastX, lastY, x, y);
                             for (const p of gen) pixels.push(p);
                             lastX = x; lastY = y;
                         }
                     }
                 }
-            } 
+            }
             else if (obj.type === 'ellipse' || obj.type === 'circle') {
                 const ellipse = obj as fabric.Ellipse;
                 const center = ellipse.getCenterPoint();
-                const rx = ellipse.rx * ellipse.scaleX; 
+                const rx = ellipse.rx * ellipse.scaleX;
                 const ry = ellipse.ry * ellipse.scaleY;
                 const rotation = (ellipse.angle || 0) * (Math.PI / 180);
-                
+
                 const steps = Math.max(120, Math.floor((rx + ry) * 2));
                 let prevX = 0, prevY = 0;
 
@@ -397,7 +387,7 @@ export class DrawingTracker {
                 const coords = obj.getCoords();
                 for (let i = 0; i < coords.length; i++) {
                     const start = coords[i];
-                    const end = coords[(i + 1) % coords.length]; 
+                    const end = coords[(i + 1) % coords.length];
                     if (obj.type === 'line' && i === coords.length - 1) continue;
                     const gen = Utils.generateLinePixels(start.x, start.y, end.x, end.y);
                     for (const p of gen) pixels.push(p);
