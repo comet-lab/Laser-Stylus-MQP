@@ -273,6 +273,22 @@ pre {
   border-radius: 6px;
 }
 
+/* Styles for the circular robot marker */
+#robot-marker {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border: 3px solid #70ff57;
+    border-radius: 50%;
+    background-color: transparent;
+    pointer-events: none;
+    z-index: 999;
+    display: none;
+    transform: translate(-50%, -50%); 
+    transition: left 0.1s linear, top 0.1s linear;
+}
+
+
 /* Code to allow for drawing on the tablet */
 html, body {
   touch-action: none;

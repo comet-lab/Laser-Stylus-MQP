@@ -33,6 +33,7 @@ window.addEventListener('load', () => {
     const saveView = document.getElementById('save-view') as HTMLInputElement;
     const batchUiElements = document.querySelectorAll('.batch-ui');
     const statusControlValue = document.querySelector('.status-value.status-batch') as HTMLElement;
+    const robotMarker = document.getElementById('robot-marker') as HTMLElement;
     
     // Shape Buttons
     const penBtn = document.getElementById('penBtn') as HTMLButtonElement;
@@ -160,6 +161,9 @@ window.addEventListener('load', () => {
                 robotBtn.classList.toggle('active', incomingState);
                 robotBtn.style.pointerEvents = 'auto';
             }
+        }
+        if (state.x !== undefined && state.y !== undefined) {
+            updateMarkerPosition(state.x, state.y);
         }
     }
 
@@ -361,6 +365,27 @@ window.addEventListener('load', () => {
 
     canvas.addEventListener('mouseup', () => { setTimeout(updateDrawButtonState, 50); });
     canvas.addEventListener('touchend', () => { setTimeout(updateDrawButtonState, 50); });
+
+
+    function updateMarkerPosition(robotX: number, robotY: number) {
+        //Get viewport size
+        const viewportWidth = viewport.offsetWidth;
+        const viewportHeight = viewport.offsetHeight;
+
+        //Use video dimensions to map coordinates
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+            const displayX = (robotX / video.videoWidth) * viewportWidth;
+            const displayY = (robotY / video.videoHeight) * viewportHeight;
+
+            robotMarker.style.left = `${displayX}px`;
+            robotMarker.style.top = `${displayY}px`;
+
+            if (robotMarker.style.display === 'none') {
+                robotMarker.style.display = 'block';
+            }
+        }
+    }
+
 
     executeBtn.addEventListener('click', async () => {
         if (!drawingTracker) return;
