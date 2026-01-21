@@ -10,7 +10,7 @@
     rel="stylesheet">
   <script>
     var scriptElm = document.createElement('script');
-    scriptElm.defer = true; // Use .defer for the defer attribute
+    scriptElm.defer = true;
     scriptElm.src = 'http://' + window.location.hostname + ':8889/mystream/reader.js';
     document.head.appendChild(scriptElm);
   </script>
@@ -207,8 +207,7 @@
   </div>
   <div id="left-panel">
 
-    <div id="top-icon-section">
-    </div>
+    <div id="top-icon-section"></div>
 
     <div id="main-section-wrapper">
       <div id="middle-icon-section">
@@ -253,8 +252,11 @@
       </div>
     </div>
   </div>
-  <canvas id="canvas"></canvas>
-  <video id="video"></video>
+  <div id = "viewport">
+    <canvas id="canvas"></canvas>
+    <video id="video"></video>
+    <div id="robot-marker"></div>
+  </div>
 </body>
 
 </html>
