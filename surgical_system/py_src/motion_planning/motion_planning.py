@@ -73,7 +73,7 @@ class Motion_Planner():
         for p in path:
             if not out or out[-1] != p:
                 out.append(p)
-        return out
+        return np.array(out)
     
     @staticmethod
     def fill_in_shape(img):
@@ -100,21 +100,23 @@ class Motion_Planner():
         return mask_in 
     
 def main():
-    img_path = "backend/src/saved_masks/path.png"
+    img_path = "surgical_system/py_src/motion_planning/path.png"
     img = np.array(Image.open(img_path))
     img = Motion_Planner.fill_in_shape(img)
-    path = Motion_Planner.raster_pattern(img)
+    img = cv2.resize(img, (1280, 720), interpolation=cv2.INTER_NEAREST)
+    path = Motion_Planner.raster_pattern(img, pitch = 10)
     # 4) Visualize the path overlayed on the mask
+    print("img size: ", np.shape(img))
     fig, ax = plt.subplots(figsize=(8,4))
-    ax.imshow(img, cmap='gray')
+    # ax.imshow(img, cmap='gray')
     if len(path) > 1:
         xs = [p[0] for p in path]
         ys_plot = [p[1] for p in path]
         ax.plot(xs, ys_plot, linewidth=1)  # default color
-    ax.set_title("Continuous boustrophedon path inside oval")
     ax.set_axis_off()
     plt.show()
-    pass
+    
+    print(path)
 
 if __name__=='__main__':
     main()
