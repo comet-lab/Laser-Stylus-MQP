@@ -3,6 +3,7 @@ from scipy.spatial.transform import Rotation
 import threading
 import numpy as np
 import matplotlib.pyplot as plt
+from laser_control.laser_arduino import Laser_Arduino
 
 if __name__=='__main__':    
     from franka_client import FrankaClient
@@ -12,9 +13,10 @@ else:
     from .controllers.trajectory_controller import TrajectoryController
 
 class Robot_Controller():
-    def __init__(self):
+    def __init__(self, laser_obj:Laser_Arduino):
         pathToCWD = os.getcwd()
         self.franka_client = FrankaClient()
+        self.laser_obj = laser_obj
         subprocess.Popen([pathToCWD + "/surgical_system/cpp_src/main"]) 
         time.sleep(3)
         print("Robot Online")
@@ -179,7 +181,7 @@ class Robot_Controller():
         path_info['Positions'] = path_info['Positions'] / 100.0 #converts from cm to m
         return TrajectoryController(path_info, debug=True)
     
-    def _run_trajectory_worker(self, traj: TrajectoryController):
+    def _run_trajectory_worker(self, traj: TrajectoryController, laser_on):
         total_time = traj.durations[-1]
         print("Path Duration: ", total_time)
         
@@ -205,6 +207,7 @@ class Robot_Controller():
         try:
             while (elapsedTime < total_time) and (not self._stop_traj.is_set()):
                 now = time.monotonic()
+                self.laser_obj.set_output(laser_on)
                 if (now - t) >= time_step:
                     elapsedTime += (now - t)
                     t = now
@@ -217,7 +220,7 @@ class Robot_Controller():
                     
                     target_pose = np.eye(4)
                     target_pose[:3, -1] = target_pos
-                    velocity_correction = self.live_control(target_pose, 0.01, 5)
+                    velocity_correction = self.live_control(target_pose, 0.015, 5) #TODO CHANGE MAX SPEED
                     print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
                     target_vel += velocity_correction
                     state = self.set_velocity(target_vel, [0, 0, 0]) 
@@ -233,8 +236,9 @@ class Robot_Controller():
                         i += 1
 
             # stop robot on exit (normal or stopped)
+            self.laser_obj.set_output(False)
             self.robot_stop()
-
+    
             # Optional: if you are okay plotting from a thread, keep this.
             # Otherwise, you can return the data instead and plot in main thread.
             # time_range = np.arange(0, total_time, time_step)
@@ -281,7 +285,7 @@ class Robot_Controller():
         #         actual_pos_list,
         #         target_pos_list]
     
-    def run_trajectory(self, traj: TrajectoryController, blocking: bool = True):
+    def run_trajectory(self, traj: TrajectoryController, blocking: bool = True, laser_on = False):
         """
         Run trajectory either blocking or in a background thread.
         """
@@ -298,7 +302,7 @@ class Robot_Controller():
             self._stop_traj.clear()
             self._traj_thread = threading.Thread(
                 target=self._run_trajectory_worker,
-                args=(traj,),
+                args=(traj,laser_on),
                 daemon=True,
             )
             self._traj_thread.start()
