@@ -36,6 +36,7 @@ class Broadcast:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
         elif frame.shape[2] == 1:
             frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+        # frame = cv2.resize(frame, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
         frame = np.ascontiguousarray(frame)
         if not self.connected or self.process == None:
             print("not connected... Initializing ffmpeg process")
@@ -56,19 +57,24 @@ class Broadcast:
             '-f', 'rawvideo',  # Input format is raw video
             '-pix_fmt', 'bgr24',
             '-s', f'{width}x{height}',
-            '-r', '60', # framerate
+            # '-r', '24', # framerate
+            '-re', # framerate
             '-i', '-',  # Read input from stdin pipe
             '-c:v', 'libx264',  # Video codec H.264
             '-preset', 'ultrafast',
             '-tune', 'zerolatency',
+            '-x264opts', 'sync-lookahead=0:sliced-threads=1',
             # '-c:v', 'h264_nvenc',  # Video codec nvidia encode
             # '-preset', 'llhq', # Low latency high quality
             # '-tune', 'ull', # Ultra low latency
             '-rtsp_transport', 'tcp',
             '-fflags', 'nobuffer',
             '-flags', 'low_delay',
-            '-g', '1',
+            '-probesize', '32',
+            '-analyzeduration', '0',
+            '-g', '30',
             '-bf', '0',
+            '-b:v', '6M',
             '-f', 'rtsp',  # Output format is RTSP
             self.rtsp_url
         ]

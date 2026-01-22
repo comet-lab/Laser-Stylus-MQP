@@ -201,7 +201,7 @@ class Handler:
                     # TODO check outside boundary
                     # Disable laser
                     # Pull laser back into closest valid position
-                    print(f"Live controller trigger {self.desired_state.x}, {self.desired_state.y}")
+                    # print(f"Live controller trigger {self.desired_state.x}, {self.desired_state.y}")
                     self._do_live_control()
                     self.desired_state.path = None
                     
