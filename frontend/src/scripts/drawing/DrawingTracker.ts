@@ -264,7 +264,7 @@ export class DrawingTracker {
 
     // drawingtracker.ts
 
-    public async executePath(speed: number, raster_type: string): Promise<any> {
+    public async executePath(speed: number, raster_type: string, density: number): Promise<any> {
         const pixels = this.generatePixelPath();
 
         // Convert canvas pixels to video-space coordinates
@@ -305,6 +305,7 @@ export class DrawingTracker {
         const formData = new FormData();
         formData.append('speed', (Number(speed) / 1000).toString());
         formData.append('raster_type', raster_type);
+        formData.append('density', density.toString());
         formData.append('pixels', JSON.stringify(videoPixels));
         formData.append('file', blob, 'path.png');
 

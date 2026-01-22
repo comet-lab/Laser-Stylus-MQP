@@ -49,6 +49,7 @@ window.addEventListener('load', () => {
     const rasterPatternContainer = document.getElementById('rasterPatternContainer') as HTMLElement;
     const rasterBtnA = document.getElementById('rasterA') as HTMLButtonElement;
     const rasterBtnB = document.getElementById('rasterB') as HTMLButtonElement;
+    const rasterDensityInput = document.getElementById('densityRaster') as HTMLInputElement;
 
     // --- 2. State Variables ---
     let laserConfirmationTimeout: number | null = null;
@@ -390,6 +391,11 @@ window.addEventListener('load', () => {
     executeBtn.addEventListener('click', async () => {
         if (!drawingTracker) return;
         const speed = parseFloat(speedInput.value);
+        let density = 0;
+        if (fillEnabled){
+            density = parseFloat(rasterDensityInput.value);
+
+        }
         if (isNaN(speed) || speed <= 0) {
             alert("Invalid speed");
             return;
@@ -400,7 +406,7 @@ window.addEventListener('load', () => {
 
         try {
             // Execute the path
-            await drawingTracker.executePath(speed, String(selectedRasterPattern));
+            await drawingTracker.executePath(speed, String(selectedRasterPattern), density);
             
             // Clear the canvas (visuals only)
             drawingTracker.clearDrawing();
