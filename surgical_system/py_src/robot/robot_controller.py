@@ -186,6 +186,7 @@ class Robot_Controller():
         start_pos = traj.start_pos
         start_pose = np.eye(4)
         start_pose[:3, -1] = start_pos
+        print("Heading to starting location")
         current_pose = np.array(self.go_to_pose(start_pose @ self.home_pose))
         
         time_step = 0.05
@@ -212,9 +213,16 @@ class Robot_Controller():
                     target_vel = movement['velocity']
                     target_pos = movement['position']
 
-                    print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel, f" | Target Pos: ", target_pos)
-
-                    state = self.set_velocity(target_vel, [0, 0, 0])
+                    # print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel, f" | Target Pos: ", target_pos)
+                    
+                    target_pose = np.eye(4)
+                    target_pose[:3, -1] = target_pos
+                    velocity_correction = self.live_control(target_pose, 0.01, 5)
+                    print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
+                    target_vel += velocity_correction
+                    state = self.set_velocity(target_vel, [0, 0, 0]) 
+                    
+                    
                     pos, vel = state[:3], state[7:10]
 
                     if i < data_num:
@@ -268,6 +276,10 @@ class Robot_Controller():
             self._stop_traj.set()
             self._traj_thread = None
             print("traj done")
+        # return [actual_vel_list,
+        #         target_vel_list,
+        #         actual_pos_list,
+        #         target_pos_list]
     
     def run_trajectory(self, traj: TrajectoryController, blocking: bool = True):
         """
@@ -292,6 +304,7 @@ class Robot_Controller():
             self._traj_thread.start()
     
     
+    
     def is_trajectory_running(self) -> bool:
         return (self._traj_thread is not None
             and self._traj_thread.is_alive())
@@ -308,11 +321,10 @@ class Robot_Controller():
         if wait and self._traj_thread is not None:
             self._traj_thread.join(timeout=2.0)
             
-    def live_control(self, target_pose_home, max_vel):
+    def live_control(self, target_pose_home, max_vel, KP = 5.0):
         current_pose, _ = self.get_current_state()
         current_pose = current_pose[:3, -1] - self.home_pose[:3, -1]
         position_error = target_pose_home[:3, -1] - current_pose
-        KP = 5.0
         target_vel = position_error * KP
         mag = np.linalg.norm(target_vel)
         
