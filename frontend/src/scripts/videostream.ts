@@ -386,7 +386,8 @@ window.addEventListener('load', () => {
     canvas.addEventListener('touchend', () => { setTimeout(updateDrawButtonState, 50); });
 
     executeBtn.addEventListener('click', async () => {
-        if (!drawingTracker) return;
+        if (!drawingTracker) return;      
+
         const speed = parseFloat(speedInput.value);
         let density = 0;
         if (fillEnabled) {
