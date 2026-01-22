@@ -15,14 +15,20 @@ class Broadcast:
         self.ffmpeg_command = [
             'ffmpeg',
             '-y',  # Overwrite output files without asking
-            '-f', 'image2pipe',  # Input format is raw video
-            '-vcodec', 'mjpeg',
-            '-framerate', '60',
+            '-f', 'rawvideo',  # Input format is raw video
+            '-pix_fmt', 'bgr24',
+            '-s', 'WxH',
+            '-r', '60', # framerate
             '-i', '-',  # Read input from stdin pipe
-            '-c:v', 'libx264',  # Video codec H.264
-            '-preset', 'ultrafast',
-            '-tune', 'zerolatency',
+            # '-c:v', 'libx264',  # Video codec H.264
+            '-c:v', 'h264_nvenc',  # Video codec nvidia encode
+            '-preset', 'llhq', # Low latency high quality
+            '-tune', 'ull', # Ultra low latency
             '-rtsp_transport', 'tcp',
+            '-fflags', 'nobuffer',
+            '-flags', 'low_delay',
+            '-g', '1',
+            '-bf', '0',
             '-f', 'rtsp',  # Output format is RTSP
             rtsp_url
         ]

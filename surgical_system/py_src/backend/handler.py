@@ -145,6 +145,7 @@ class Handler:
             pixel = np.array([[self.desired_state.x, self.desired_state.y]])
             if self.desired_state.isTransformedViewOn:
                 target_world_point = self.cam_reg.world_to_real(pixel, cam_type=self.cam_type, z=self.working_height)[0]
+                # TODO change working height
             else:
                 target_world_point = self.cam_reg.pixel_to_world(pixel, cam_type=self.cam_type, z=self.working_height)[0]
             target_pose = np.eye(4)
@@ -197,6 +198,9 @@ class Handler:
             elif(self.desired_state.x is not None and self.desired_state.y is not None 
                  and not self.robot_controller.is_trajectory_running()):
                 if (self.desired_state.x >= 0 and self.desired_state.y >= 0):
+                    # TODO check outside boundary
+                    # Disable laser
+                    # Pull laser back into closest valid position
                     print(f"Live controller trigger {self.desired_state.x}, {self.desired_state.y}")
                     self._do_live_control()
                     self.desired_state.path = None
