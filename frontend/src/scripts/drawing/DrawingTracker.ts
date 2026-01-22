@@ -357,6 +357,34 @@ export class DrawingTracker {
                     }
                 }
             }
+            else if (obj instanceof fabric.Triangle) {
+                const triangle = obj as fabric.Triangle;
+
+                // 1. Get the object's transformation matrix (handles position, rotation, scale)
+                const matrix = triangle.calcTransformMatrix();
+
+                // 2. Define the 3 local vertices of a Fabric Triangle
+                // Fabric defines triangles with (0,0) at the center of the bounding box
+                const w = triangle.width;
+                const h = triangle.height;
+
+                const localPoints = [
+                    new fabric.Point(0, -h / 2),      // Top Center
+                    new fabric.Point(w / 2, h / 2),   // Bottom Right
+                    new fabric.Point(-w / 2, h / 2)   // Bottom Left
+                ];
+
+                // 3. Transform local points to absolute canvas coordinates
+                const vertices = localPoints.map(p => p.transform(matrix));
+
+                // 4. Generate pixels for the three edges
+                for (let i = 0; i < vertices.length; i++) {
+                    const start = vertices[i];
+                    const end = vertices[(i + 1) % vertices.length];
+                    const gen = Utils.generateLinePixels(start.x, start.y, end.x, end.y);
+                    for (const p of gen) pixels.push(p);
+                }
+            }
             else if (obj.type === 'ellipse' || obj.type === 'circle') {
                 const ellipse = obj as fabric.Ellipse;
                 const center = ellipse.getCenterPoint();

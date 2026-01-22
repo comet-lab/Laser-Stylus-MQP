@@ -34,14 +34,14 @@ window.addEventListener('load', () => {
     const batchUiElements = document.querySelectorAll('.batch-ui');
     const statusControlValue = document.querySelector('.status-value.status-batch') as HTMLElement;
     const robotMarker = document.getElementById('robot-marker') as HTMLElement;
-    
+
     // Shape Buttons
     const penBtn = document.getElementById('penBtn') as HTMLButtonElement;
     const squareBtn = document.getElementById('squareBtn') as HTMLButtonElement;
     const circleBtn = document.getElementById('circleBtn') as HTMLButtonElement;
     const triangleBtn = document.getElementById('triangleBtn') as HTMLButtonElement;
     const lineBtn = document.getElementById('lineBtn') as HTMLButtonElement;
-    
+
     const toggleButtons: NodeListOf<HTMLButtonElement> = document.querySelectorAll('#middle-icon-section .icon-btn');
     const sidebarButtons: NodeListOf<HTMLButtonElement> = document.querySelectorAll('.settings-sidebar .sidebar-btn');
     const settingsPanels: NodeListOf<HTMLElement> = document.querySelectorAll('.settings-main .settings-panel');
@@ -54,8 +54,8 @@ window.addEventListener('load', () => {
     // --- 2. State Variables ---
     let laserConfirmationTimeout: number | null = null;
     let robotConfirmationTimeout: number | null = null;
-    let selectedShape: ShapeType | null = null; 
-    let drawnShapeType: ShapeType | null = null; 
+    let selectedShape: ShapeType | null = null;
+    let drawnShapeType: ShapeType | null = null;
     let reader: any = null;
     let drawingTracker: DrawingTracker | null = null;
     let fillEnabled = false;
@@ -64,8 +64,6 @@ window.addEventListener('load', () => {
     let latestRealTimePos: { x: number, y: number } | null = null;
     const wsHandler = new WebSocketHandler(null);
 
-    // --- 3. UI Helpers & State Machine ---
-    
     function updateDrawButtonState() {
         const hasShape = drawnShapeType !== null;
 
@@ -76,11 +74,11 @@ window.addEventListener('load', () => {
 
         // 2. Shape Tool Buttons
         if (hasShape) {
-            penBtn.disabled      = (drawnShapeType !== 'freehand');
-            squareBtn.disabled   = (drawnShapeType !== 'square');
-            circleBtn.disabled   = (drawnShapeType !== 'circle');
+            penBtn.disabled = (drawnShapeType !== 'freehand');
+            squareBtn.disabled = (drawnShapeType !== 'square');
+            circleBtn.disabled = (drawnShapeType !== 'circle');
             triangleBtn.disabled = (drawnShapeType !== 'triangle');
-            lineBtn.disabled     = (drawnShapeType !== 'line');
+            lineBtn.disabled = (drawnShapeType !== 'line');
         } else {
             toggleButtons.forEach(btn => btn.disabled = false);
         }
@@ -135,6 +133,29 @@ window.addEventListener('load', () => {
     function getLocalRobotState(): boolean { return robotBtn.classList.contains('active'); }
 
     function syncUiToState(state: Partial<WebSocketMessage>) {
+        if (state.x !== undefined && state.y !== undefined) {
+            // Get the current dimensions of the viewport/canvas container
+            const containerWidth = viewport.offsetWidth;
+            const containerHeight = viewport.offsetHeight;
+
+            // Get the intrinsic resolution of the video stream
+            const videoWidth = video.videoWidth;
+            const videoHeight = video.videoHeight;
+
+            if (videoWidth > 0 && videoHeight > 0) {
+                // Calculate the position scaled to the UI dimensions
+                // Formula: (RobotPixel / VideoResolution) * ContainerSize
+                const cssLeft = (state.x / videoWidth) * containerWidth;
+                const cssTop = (state.y / videoHeight) * containerHeight;
+
+                // Update the marker position
+                robotMarker.style.left = `${cssLeft}px`;
+                robotMarker.style.top = `${cssTop}px`;
+
+                // Ensure it's visible if it was hidden
+                robotMarker.style.display = 'block';
+            }
+        }
         if (state.isLaserOn !== undefined) {
             const incomingState = !!state.isLaserOn;
             if (laserConfirmationTimeout) {
@@ -162,9 +183,6 @@ window.addEventListener('load', () => {
                 robotBtn.classList.toggle('active', incomingState);
                 robotBtn.style.pointerEvents = 'auto';
             }
-        }
-        if (state.x !== undefined && state.y !== undefined) {
-            updateMarkerPosition(state.x, state.y);
         }
     }
 
@@ -198,14 +216,14 @@ window.addEventListener('load', () => {
             if (evt.track.kind === 'video') {
                 video.srcObject = evt.streams[0];
                 video.requestVideoFrameCallback(updateCanvas);
-                
+
                 if (drawingTracker) {
-                    drawingTracker.dispose(); 
+                    drawingTracker.dispose();
                 }
 
                 drawingTracker = new DrawingTracker(
-                    canvas, 
-                    video, 
+                    canvas,
+                    video,
                     `http://${window.location.hostname}:443`,
                     () => {
                         if (selectedShape) {
@@ -214,7 +232,7 @@ window.addEventListener('load', () => {
                         }
                     }
                 );
-                
+
                 updateDrawButtonState();
             }
         },
@@ -246,8 +264,8 @@ window.addEventListener('load', () => {
         runRealTimeLoop();
     };
 
-    canvas.addEventListener('pointerdown', handleRealTimeStart);
-    canvas.addEventListener('pointermove', (e) => {
+    viewport.addEventListener('pointerdown', handleRealTimeStart);
+    viewport.addEventListener('pointermove', (e) => {
         if (isRealTimeDrawing) {
             e.preventDefault();
             latestRealTimePos = getCanvasCoordinates(e.clientX, e.clientY);
@@ -261,8 +279,8 @@ window.addEventListener('load', () => {
         latestRealTimePos = null;
         wsHandler.updateState({ pathEvent: 'end' });
     };
-    canvas.addEventListener('pointerup', handleRealTimeEnd);
-    canvas.addEventListener('pointercancel', handleRealTimeEnd);
+    viewport.addEventListener('pointerup', handleRealTimeEnd);
+    viewport.addEventListener('pointercancel', handleRealTimeEnd);
 
     // --- 7. Controls ---
 
@@ -335,7 +353,7 @@ window.addEventListener('load', () => {
         if (button.disabled) return;
 
         const isAlreadySelected = button.classList.contains('selected');
-        
+
         if (isAlreadySelected) {
             button.classList.remove('selected');
             selectedShape = null;
@@ -367,32 +385,11 @@ window.addEventListener('load', () => {
     canvas.addEventListener('mouseup', () => { setTimeout(updateDrawButtonState, 50); });
     canvas.addEventListener('touchend', () => { setTimeout(updateDrawButtonState, 50); });
 
-
-    function updateMarkerPosition(robotX: number, robotY: number) {
-        //Get viewport size
-        const viewportWidth = viewport.offsetWidth;
-        const viewportHeight = viewport.offsetHeight;
-
-        //Use video dimensions to map coordinates
-        if (video.videoWidth > 0 && video.videoHeight > 0) {
-            const displayX = (robotX / video.videoWidth) * viewportWidth;
-            const displayY = (robotY / video.videoHeight) * viewportHeight;
-
-            robotMarker.style.left = `${displayX}px`;
-            robotMarker.style.top = `${displayY}px`;
-
-            if (robotMarker.style.display === 'none') {
-                robotMarker.style.display = 'block';
-            }
-        }
-    }
-
-
     executeBtn.addEventListener('click', async () => {
         if (!drawingTracker) return;
         const speed = parseFloat(speedInput.value);
         let density = 0;
-        if (fillEnabled){
+        if (fillEnabled) {
             density = parseFloat(rasterDensityInput.value);
 
         }
@@ -407,10 +404,10 @@ window.addEventListener('load', () => {
         try {
             // Execute the path
             await drawingTracker.executePath(speed, String(selectedRasterPattern), density);
-            
+
             // Clear the canvas (visuals only)
             drawingTracker.clearDrawing();
-            
+
             // Reset only the drawn state (so Execute becomes disabled until you draw again)
             drawnShapeType = null;
 
@@ -422,7 +419,7 @@ window.addEventListener('load', () => {
 
             // Update state to disable action buttons (Clear/Execute) but keep tool buttons ready
             updateDrawButtonState();
-            
+
             // Force tracker to remain in drawing mode for the currently selected shape
             if (selectedShape) {
                 drawingTracker.setShapeType(selectedShape);
@@ -440,10 +437,10 @@ window.addEventListener('load', () => {
     clearBtn.addEventListener('click', () => {
         // Clear visuals
         drawingTracker?.clearDrawing();
-        
+
         // Reset drawn state
         drawnShapeType = null;
-        
+
         // Update buttons (Disables Clear/Execute, Enables Tools)
         updateDrawButtonState();
 
