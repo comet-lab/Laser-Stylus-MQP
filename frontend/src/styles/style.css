@@ -283,7 +283,7 @@ pre {
     background-color: transparent;
     pointer-events: none;
     z-index: 999;
-    display: block;
+    display: none;
     transform: translate(-50%, -50%); 
     transition: left 0.1s linear, top 0.1s linear;
 }
