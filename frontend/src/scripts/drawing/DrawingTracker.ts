@@ -261,7 +261,7 @@ export class DrawingTracker {
     }
 
     // --- Execution & Export Logic ---
-    public async executePath(speed: number, raster_type: string, density: number): Promise<any> {
+    public async executePath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<any> {
         const pixels = this.generatePixelPath();
 
         // Convert canvas pixels to video-space coordinates for the movement path
@@ -309,10 +309,13 @@ export class DrawingTracker {
                     }
                 });
 
-                // Ensure the shape is closed for the raster even if the user didn't finish the loop
-                ctx.closePath();
-                // 'nonzero' ensures self-intersecting loops (like a fish tail) stay filled
-                ctx.fill('nonzero');
+                if (isFillEnabled) {
+                    // Ensure the shape is closed for the raster even if the user didn't finish the loop
+                    ctx.closePath();
+                    // 'nonzero' ensures self-intersecting loops (like a fish tail) stay filled
+                    ctx.fill('nonzero');
+                }
+
                 // Stroke as well to ensure the boundary pixels are captured
                 ctx.stroke();
 
