@@ -33,6 +33,7 @@ def health():
 async def execute_bundled_command(
     speed: float = Form(...),
     raster_type: str = Form(...),
+    density: float = Form(...),
     pixels: str = Form(...),
     file: UploadFile = File(...)
 ):
@@ -57,12 +58,13 @@ async def execute_bundled_command(
     # Update the global desired state
     manager.desired_state.speed = speed
     manager.desired_state.raster_type = raster_type
+    manager.desired_state.density = density
     manager.desired_state.path = pixel_list
     manager.desired_state.raster_mask = encoded_utf8
 
     # Broadcast once to the robot
     # This sends one single json packet containing all updated fields
-    print(f"Bundled Execution: Broadcasting {len(pixel_list)} pixels at speed {speed}")
+    print(f"Bundled Execution: Broadcasting {len(pixel_list)} pixels at speed {speed}. Density is {density}, raster type is {raster_type}")
     await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
 
     return {
