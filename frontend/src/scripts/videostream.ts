@@ -404,7 +404,7 @@ window.addEventListener('load', () => {
 
         try {
             // Execute the path
-            await drawingTracker.executePath(speed, String(selectedRasterPattern), density);
+            await drawingTracker.executePath(speed, String(selectedRasterPattern), density, fillEnabled);
 
             // Clear the canvas (visuals only)
             drawingTracker.clearDrawing();
