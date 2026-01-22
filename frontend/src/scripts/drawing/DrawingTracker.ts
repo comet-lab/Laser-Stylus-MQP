@@ -261,13 +261,10 @@ export class DrawingTracker {
     }
 
     // --- Execution & Export Logic ---
-
-    // drawingtracker.ts
-
     public async executePath(speed: number, raster_type: string, density: number): Promise<any> {
         const pixels = this.generatePixelPath();
 
-        // Convert canvas pixels to video-space coordinates
+        // Convert canvas pixels to video-space coordinates for the movement path
         const videoPixels = pixels.map(p => ({
             x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
             y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
@@ -283,25 +280,53 @@ export class DrawingTracker {
 
         if (!ctx) throw new Error("Could not create temp context");
 
+        // 1. Initialize background to white (non-engrave area)
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, width, height);
-        const imgData = ctx.getImageData(0, 0, width, height);
-        const data = imgData.data;
 
-        for (const p of pixels) {
-            const x = Math.round(p.x);
-            const y = Math.round(p.y);
-            if (x >= 0 && x < width && y >= 0 && y < height) {
-                const index = (y * width + x) * 4;
-                data[index] = 0; data[index + 1] = 0; data[index + 2] = 0; data[index + 3] = 255;
+        // 2. Setup drawing styles for the mask (black = engrave area)
+        ctx.fillStyle = "#000000";
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = 1;
+
+        // 3. Draw every object from the Fabric canvas onto the mask
+        this.fCanvas.getObjects().forEach(obj => {
+            ctx.save();
+
+            // Fabric objects have a path or coordinate array we can iterate
+            if (obj instanceof fabric.Path) {
+                ctx.beginPath();
+                const pathData = (obj as any).path; // Access the SVG command array
+
+                pathData.forEach((cmd: any) => {
+                    const type = cmd[0];
+                    switch (type) {
+                        case 'M': ctx.moveTo(cmd[1], cmd[2]); break;
+                        case 'L': ctx.lineTo(cmd[1], cmd[2]); break;
+                        case 'Q': ctx.quadraticCurveTo(cmd[1], cmd[2], cmd[3], cmd[4]); break;
+                        case 'C': ctx.bezierCurveTo(cmd[1], cmd[2], cmd[3], cmd[4], cmd[5], cmd[6]); break;
+                        case 'Z': ctx.closePath(); break;
+                    }
+                });
+
+                // Ensure the shape is closed for the raster even if the user didn't finish the loop
+                ctx.closePath();
+                // 'nonzero' ensures self-intersecting loops (like a fish tail) stay filled
+                ctx.fill('nonzero');
+                // Stroke as well to ensure the boundary pixels are captured
+                ctx.stroke();
+
+            } else if (obj instanceof fabric.Rect || obj instanceof fabric.Triangle || obj instanceof fabric.Ellipse) {
+                obj.render(ctx);
             }
-        }
-        ctx.putImageData(imgData, 0, 0);
+
+            ctx.restore();
+        });
 
         const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
         if (!blob) throw new Error("Failed to generate image blob");
 
-        // --- Bundle everything into one FormData object ---
+        // --- Bundle everything into FormData ---
         const formData = new FormData();
         formData.append('speed', (Number(speed) / 1000).toString());
         formData.append('raster_type', raster_type);
@@ -309,7 +334,6 @@ export class DrawingTracker {
         formData.append('pixels', JSON.stringify(videoPixels));
         formData.append('file', blob, 'path.png');
 
-        // Single POST request
         const response = await fetch(`${this.apiBaseUrl}/api/execute`, {
             method: 'POST',
             body: formData
@@ -355,6 +379,34 @@ export class DrawingTracker {
                             lastX = x; lastY = y;
                         }
                     }
+                }
+            }
+            else if (obj instanceof fabric.Triangle) {
+                const triangle = obj as fabric.Triangle;
+
+                // 1. Get the object's transformation matrix (handles position, rotation, scale)
+                const matrix = triangle.calcTransformMatrix();
+
+                // 2. Define the 3 local vertices of a Fabric Triangle
+                // Fabric defines triangles with (0,0) at the center of the bounding box
+                const w = triangle.width;
+                const h = triangle.height;
+
+                const localPoints = [
+                    new fabric.Point(0, -h / 2),      // Top Center
+                    new fabric.Point(w / 2, h / 2),   // Bottom Right
+                    new fabric.Point(-w / 2, h / 2)   // Bottom Left
+                ];
+
+                // 3. Transform local points to absolute canvas coordinates
+                const vertices = localPoints.map(p => p.transform(matrix));
+
+                // 4. Generate pixels for the three edges
+                for (let i = 0; i < vertices.length; i++) {
+                    const start = vertices[i];
+                    const end = vertices[(i + 1) % vertices.length];
+                    const gen = Utils.generateLinePixels(start.x, start.y, end.x, end.y);
+                    for (const p of gen) pixels.push(p);
                 }
             }
             else if (obj.type === 'ellipse' || obj.type === 'circle') {

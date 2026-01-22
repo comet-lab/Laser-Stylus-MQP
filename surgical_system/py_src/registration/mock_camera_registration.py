@@ -12,7 +12,7 @@ class MockCameraRegistration():
 
     def pixel_to_world(self, img_points, cam_type, z = 0.0):
         if(isinstance(img_points, np.ndarray) and len(img_points.shape) > 1):
-            return [[0,0,z], [1,1,z]]
+            return [[img_points[0][0],img_points[0][1],z]]
         else:
             return np.array([img_points[0], img_points[1], z])
     
