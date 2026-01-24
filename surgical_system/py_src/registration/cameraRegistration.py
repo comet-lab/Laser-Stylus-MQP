@@ -450,6 +450,27 @@ class Camera_Registration(System_Calibration):
         self.robot_controller.run_trajectory(traj)
         # print(pixels)
     
+    def rgb_thermal_data(self, rgb_img, therm_img, pixel_point, transformed_view):
+        disp = rgb_img.copy()
+        disp = cv2.resize(disp, (1280, 720), interpolation=cv2.INTER_NEAREST)
+        therm_h, therm_w = therm_img.shape[:2]
+        temp = None 
+        
+        if pixel_point is not None:
+            if transformed_view == True:
+                mouse_loc = np.array([pixel_point], dtype=np.float32)
+                world_loc = self.world_to_real(mouse_loc, "color", pix_Per_M = 1)[0, :2]
+                pixel_loc = cv2.perspectiveTransform(np.array([[world_loc]]), 
+                                                        self.world_therm_M).reshape((2)).astype('int32')
+            else:
+                pixel_loc = self.rgbd_therm_cali.pixel_to_world(pixel_point)[0][:2].astype('int32')
+            
+            # print(f"Pixel Location {world_loc}")
+            if 0 <= pixel_loc[0] < therm_w and 0 <= pixel_loc[1] < therm_h:
+                temp = therm_img[pixel_loc[1], pixel_loc[0]]
+        
+        return temp
+    
     def view_rgbd_therm_registration(self, transformed_view = True):
         debug = True
        
@@ -537,6 +558,199 @@ class Camera_Registration(System_Calibration):
         pass 
 
 
+    def view_rgbd_therm_heat_overlay(self, transformed_view: bool = True,
+                                alpha: float = 0.45,
+                                colormap: int = cv2.COLORMAP_JET,
+                                window_name: str = "RGB + Thermal Overlay"):
+        """
+        Display RGB with a thermal heat overlay inside a user-selected rectangle.
+
+        Controls
+        --------
+        - Click + drag LEFT mouse to draw/resize rectangle ROI
+        - Release to "lock" ROI (overlay updates live within it)
+        - Press 'r' to reset ROI
+        - Press 'q' or ESC to quit
+        """
+
+        self.therm_cam.start_stream()
+        self.rgbd_cam.start_stream()
+
+        while not self.therm_cam.get_latest() or not self.rgbd_cam.get_latest():
+            print("Waiting for camera response...")
+            time.sleep(0.5)
+
+        # Display size (matches your existing function)
+        DISP_W, DISP_H = 1280, 720
+
+        # ROI state
+        roi = None  # (x0, y0, x1, y1) in display coordinates
+        dragging = False
+        anchor = None  # (x0, y0)
+
+        def clamp(v, lo, hi):
+            return max(lo, min(hi, v))
+
+        def normalize_rect(x0, y0, x1, y1):
+            xa, xb = sorted([x0, x1])
+            ya, yb = sorted([y0, y1])
+            return xa, ya, xb, yb
+
+        def on_mouse(event, x, y, flags, param):
+            nonlocal roi, dragging, anchor
+            if event == cv2.EVENT_LBUTTONDOWN:
+                dragging = True
+                anchor = (x, y)
+                roi = (x, y, x, y)
+
+            elif event == cv2.EVENT_MOUSEMOVE and dragging:
+                x0, y0 = anchor
+                roi = (x0, y0, x, y)
+
+            elif event == cv2.EVENT_LBUTTONUP:
+                dragging = False
+                if roi is not None:
+                    x0, y0, x1, y1 = roi
+                    x0, y0, x1, y1 = normalize_rect(x0, y0, x1, y1)
+
+                    # Clamp to display bounds
+                    x0 = clamp(x0, 0, DISP_W - 1)
+                    x1 = clamp(x1, 0, DISP_W - 1)
+                    y0 = clamp(y0, 0, DISP_H - 1)
+                    y1 = clamp(y1, 0, DISP_H - 1)
+
+                    # Require non-trivial ROI
+                    if (x1 - x0) < 5 or (y1 - y0) < 5:
+                        roi = None
+                    else:
+                        roi = (x0, y0, x1, y1)
+
+        cv2.namedWindow(window_name)
+        cv2.setMouseCallback(window_name, on_mouse)
+
+        # Get a first thermal frame for dimensions
+        therm_img = self.get_cam_latest('thermal')
+        therm_h, therm_w = therm_img.shape[:2]
+
+        try:
+            while True:
+                rgb_img = self.get_cam_latest('color')
+                therm_img = self.get_cam_latest('thermal')
+
+                if rgb_img is None or therm_img is None:
+                    continue
+
+                # Optional: transform RGB to world/top-down
+                if transformed_view:
+                    rgb_img = self.get_transformed_view(rgb_img, cam_type="color")
+
+                # Display image is always resized to 1280x720 for consistent mouse mapping
+                disp = cv2.resize(rgb_img, (DISP_W, DISP_H), interpolation=cv2.INTER_NEAREST)
+
+                # Draw ROI rectangle (even while dragging)
+                if roi is not None:
+                    x0, y0, x1, y1 = roi
+                    x0, y0, x1, y1 = normalize_rect(x0, y0, x1, y1)
+                    cv2.rectangle(disp, (x0, y0), (x1, y1), (0, 255, 0), 1)
+
+                # If ROI exists, compute overlay inside ROI
+                if roi is not None:
+                    x0, y0, x1, y1 = normalize_rect(*roi)
+                    x0, y0 = int(x0), int(y0)
+                    x1, y1 = int(x1), int(y1)
+
+                    # Create grid of display pixels in ROI
+                    xs = np.arange(x0, x1 + 1, dtype=np.float32)
+                    ys = np.arange(y0, y1 + 1, dtype=np.float32)
+                    X, Y = np.meshgrid(xs, ys)  # shapes (roi_h, roi_w)
+                    pts_disp = np.stack([X, Y], axis=-1).reshape(-1, 2)  # (N,2)
+
+                    if transformed_view:
+                        world_pts = self.world_to_real(pts_disp, "color", pix_Per_M=1)[:, :2]  # (N,2) world canvas pixels
+                        pts_for_cv = world_pts.reshape(-1, 1, 2).astype(np.float32)
+                        therm_uv = cv2.perspectiveTransform(pts_for_cv, self.world_therm_M).reshape(-1, 2)
+                    else:
+                        pts_for_cv = pts_disp.reshape(-1, 1, 2).astype(np.float32)
+                        therm_uv = cv2.perspectiveTransform(pts_for_cv, self.rgbd_therm_M).reshape(-1, 2)
+
+                    # bounds checking
+                    tx = np.rint(therm_uv[:, 0]).astype(np.int32)
+                    ty = np.rint(therm_uv[:, 1]).astype(np.int32)
+
+                    valid = (tx >= 0) & (tx < therm_w) & (ty >= 0) & (ty < therm_h)
+
+                    # Prepare ROI heat buffer
+                    roi_h = (y1 - y0 + 1)
+                    roi_w = (x1 - x0 + 1)
+                    heat = np.zeros((roi_h * roi_w,), dtype=np.float32)
+                    heat[:] = np.nan
+
+                    # Fill valid samples
+                    heat[valid] = therm_img[ty[valid], tx[valid]].astype(np.float32)
+
+                    # Reshape to ROI image
+                    heat_img = heat.reshape(roi_h, roi_w)
+
+                    # Normalize heat for colormap (robust to NaNs)
+                    finite = np.isfinite(heat_img)
+                    if np.any(finite):
+                        vmin = np.nanmin(heat_img)
+                        vmax = np.nanmax(heat_img)
+                        if vmax - vmin < 1e-6:
+                            norm = np.zeros_like(heat_img, dtype=np.uint8)
+                        else:
+                            norm = (255.0 * (heat_img - vmin) / (vmax - vmin)).astype(np.uint8)
+                    else:
+                        norm = np.zeros_like(heat_img, dtype=np.uint8)
+
+                    # Colorize
+                    heat_color = cv2.applyColorMap(norm, colormap)
+
+                    # mask out invalid pixels from overlay
+                    if np.any(~finite):
+                        heat_color[~finite] = 0
+
+                    # Alpha blend overlay 
+                    roi_bgr = disp[y0:y1 + 1, x0:x1 + 1]
+                    disp[y0:y1 + 1, x0:x1 + 1] = cv2.addWeighted(heat_color, alpha, roi_bgr, 1.0 - alpha, 0)
+
+                    
+                    if np.any(finite):
+                        cv2.putText(
+                            disp,
+                            f"ROI Temp: {vmin:.2f} .. {vmax:.2f} C",
+                            (10, 20),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.55,
+                            (0, 255, 0),
+                            1,
+                            cv2.LINE_AA,
+                        )
+
+                # Help text
+                cv2.putText(
+                    disp,
+                    "Drag LMB to select ROI | r reset | q/ESC quit",
+                    (10, DISP_H - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.55,
+                    (0, 255, 0),
+                    1,
+                    cv2.LINE_AA,
+                )
+
+                cv2.imshow(window_name, disp)
+
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('r'):
+                    roi = None
+                elif key == ord('q') or key == 27:
+                    break
+
+        finally:
+            cv2.destroyWindow(window_name)
+        
+        
 if __name__ == '__main__':
     ##################################################################################
     #-------------------------------- Laser Config ----------------------------------#
@@ -587,6 +801,7 @@ if __name__ == '__main__':
     # camera_reg.run()
     rgbd_cam.set_default_setting()
     camera_reg.view_rgbd_therm_registration()
+    # camera_reg.view_rgbd_therm_heat_overlay()
     # camera_reg.transformed_view()
     # camera_reg.draw_traj()
     therm_cam.deinitialize_cam()
