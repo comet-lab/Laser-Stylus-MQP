@@ -43,19 +43,19 @@ class System_Calibration():
         self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder)
         print("[System Calibration] Thermal Camera to robot calibration info:")
         self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder)
-        
+        self.world_therm_M = np.linalg.inv(self.therm_M).astype(np.float32)
         
         img_points = CameraCalibration.load_pts(self.directory +  self.rgb_cali_folder + "laser_spots.csv")
         obj_points = CameraCalibration.load_pts(self.directory + self.therm_cali_folder  + "laser_spots.csv")
         print("[System Calibration]  RGBD camera to thermal camera calibration info:")
         self.rgbd_therm_M = self.rgbd_therm_cali.load_homography(M_pix_per_m = 1, img_points=img_points, obj_points=obj_points)
         
+        
         self.rgb_H_shifted, self.rgb_out, self.rgb_min = self.make_positive_homography(self.rgb_M, (rgbd_cam.height, rgbd_cam.width))
         self.therm_H_shifted, self.therm_out, self.therm_min = self.make_positive_homography(self.therm_M, (therm_cam.height, therm_cam.width))
         
+      
         
-        self.rgb_H_shifted_inv = np.linalg.inv(self.rgb_H_shifted)
-        self.therm_H_shifted_inv = np.linalg.inv(self.therm_H_shifted)
 
         self.home_pose = robot_controller.get_home_pose()
     
@@ -228,27 +228,28 @@ class System_Calibration():
         world_point[:, :2] = cv2.perspectiveTransform(img_points.reshape(-1,1,2).astype(np.float32), M).reshape(-1,2) / pix_Per_M
         return world_point
     
-    def world_to_real(self, img_points, cam_type, z = 0.0):
+    def world_to_real(self, img_points, cam_type, z = 0.0, pix_Per_M = None, display_w = 1280.0, display_h = 720.0):
         # 1) Get warped image size and the shift we used when building H_shifted
         out_w, out_h = self.get_cam_out(cam_type)      # (out_w, out_h)
         x_min, y_min = self.get_cam_min(cam_type)      # (x_min, y_min) from make_positive_homography
 
-        # 2) Work on a copy and ensure float
         pts = img_points.astype(np.float32).copy()
         
-        display_w, display_h = 1280.0, 720.0
+         # TODO this needs to follow camera shape
         pts[:, 0] = pts[:, 0] * (out_w / display_w)   # x: width scale
         pts[:, 1] = pts[:, 1] * (out_h / display_h)   # y: height scale
 
-        # 3) Unflip (V^{-1} = V)
+        # 2) Unflip (V^{-1} = V)
         pts[:, 1] = -pts[:, 1] + (out_h - 1)
 
-        # 4) Unshift (T^{-1})
+        # 3) Unshift (T^{-1})
         pts[:, 0] = pts[:, 0] + x_min
         pts[:, 1] = pts[:, 1] + y_min
 
         cam_obj = self.get_cam_obj(cam_type)
-        pix_Per_M = cam_obj.pix_Per_M
+        
+        pix_Per_M = cam_obj.pix_Per_M if pix_Per_M == None else pix_Per_M
+        
 
         world_point = np.zeros((pts.shape[0], 3), dtype=np.float32)
         world_point[:, :2] = pts / pix_Per_M
@@ -430,14 +431,6 @@ class System_Calibration():
             print("Incorrect camera type: ", cam_type)
             return None
     
-    def get_cam_H_shift_inverse(self, cam_type):
-        if cam_type == "color" :
-            return self.rgb_H_shifted_inv
-        elif cam_type == "thermal":
-            return self.therm_H_shifted_inv
-        else:
-            print("Incorrect camera type: ", cam_type)
-            return None
     
     def get_cam_min(self, cam_type):
         if cam_type == "color" :

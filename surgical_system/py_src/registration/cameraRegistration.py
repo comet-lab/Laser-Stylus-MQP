@@ -450,7 +450,7 @@ class Camera_Registration(System_Calibration):
         self.robot_controller.run_trajectory(traj)
         # print(pixels)
     
-    def view_rgbd_therm_registration(self):
+    def view_rgbd_therm_registration(self, transformed_view = True):
         debug = True
        
         self.therm_cam.start_stream()
@@ -476,28 +476,54 @@ class Camera_Registration(System_Calibration):
         try:
             while True:
                 
+                
                 rgb_img = self.get_cam_latest('color')
                 therm_img = self.get_cam_latest('thermal')
-
+                
                 if rgb_img is None or therm_img is None:
                     continue
+                
+                
+                if transformed_view == True:
+                    rgb_img = self.get_transformed_view(rgb_img, cam_type="color")
+
 
                 disp = rgb_img.copy()
+                disp = cv2.resize(disp, (1280, 720), interpolation=cv2.INTER_NEAREST)
                 
                 if mouse_pos is not None:
-                    pixel_loc = self.rgbd_therm_cali.pixel_to_world(mouse_pos)[0][:2].astype('int32')
-                    if 0 <= pixel_loc[1] < therm_w and 0 <= pixel_loc[0] < therm_h:
-                        temp = therm_img[pixel_loc[0], pixel_loc[1]]
-                        print(f"Temperature: {temp}")
-
-                # if last_point is not None:
-                #     cv2.circle(disp, last_point, 5, (0, 255, 0), 2)
+                    if transformed_view == True:
+                        mouse_loc = np.array([mouse_pos], dtype=np.float32)
+                        world_loc = self.world_to_real(mouse_loc, "color", pix_Per_M = 1)[0, :2]
+                        pixel_loc = cv2.perspectiveTransform(np.array([[world_loc]]), 
+                                                             self.world_therm_M).reshape((2)).astype('int32')
+                    else:
+                        pixel_loc = self.rgbd_therm_cali.pixel_to_world(mouse_pos)[0][:2].astype('int32')
                     
-                #     if cam_type == "thermal" or cam_type == "color":
-                #         target_position = self.pixel_to_world(last_point, cam_type)[0]
-                #     else:
-                #         raise(f"Wrong camera type: {cam_type}")
+                    # print(f"Pixel Location {world_loc}")
+                    if 0 <= pixel_loc[0] < therm_w and 0 <= pixel_loc[1] < therm_h:
+                        temp = therm_img[pixel_loc[1], pixel_loc[0]]
+                        # print(f"Temperature: {temp}")
                 
+                        x, y = mouse_pos
+                        
+                        info = [
+                            f"Temp: {temp:.2f} C",
+                            f"x: {x}, y: {y}",
+                        ]
+
+                        for i, line in enumerate(info):
+                            cv2.putText(
+                                disp,
+                                line,
+                                (x, y + 20*i),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.5,
+                                (0, 255, 0),
+                                1,
+                                cv2.LINE_AA
+                            )
+
                 cv2.imshow(window_name, disp)
                 
                 # Press 'q' or ESC to quit
