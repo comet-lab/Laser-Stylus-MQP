@@ -38,8 +38,6 @@ class Camera_Registration(System_Calibration):
             time.sleep(0.5)
             
         
-        
-        
     def run(self): 
         debug = True
        
@@ -452,15 +450,81 @@ class Camera_Registration(System_Calibration):
         self.robot_controller.run_trajectory(traj)
         # print(pixels)
     
-    
+    def view_rgbd_therm_registration(self):
+        debug = True
+       
+        self.therm_cam.start_stream()
+        self.rgbd_cam.start_stream()
+        
+        while not self.therm_cam.get_latest() or not self.rgbd_cam.get_latest():
+            print("Waiting for camera response...")
+            time.sleep(0.5)
+        
+        mouse_pos = None
+        window_name = "wow this is cool"
+        def on_mouse(event, x, y, flags, param):
+            nonlocal mouse_pos
+            if event == cv2.EVENT_MOUSEMOVE:
+                mouse_pos = np.array([x, y])
+                
+        cv2.namedWindow(window_name)
+        cv2.setMouseCallback(window_name, on_mouse)
+        
+        therm_img = self.get_cam_latest('thermal')
+        therm_h, therm_w = therm_img.shape[:2]
+        
+        try:
+            while True:
+                
+                rgb_img = self.get_cam_latest('color')
+                therm_img = self.get_cam_latest('thermal')
+
+                if rgb_img is None or therm_img is None:
+                    continue
+
+                disp = rgb_img.copy()
+                
+                if mouse_pos is not None:
+                    pixel_loc = self.rgbd_therm_cali.pixel_to_world(mouse_pos)[0][:2].astype('int32')
+                    if 0 <= pixel_loc[1] < therm_w and 0 <= pixel_loc[0] < therm_h:
+                        temp = therm_img[pixel_loc[0], pixel_loc[1]]
+                        print(f"Temperature: {temp}")
+
+                # if last_point is not None:
+                #     cv2.circle(disp, last_point, 5, (0, 255, 0), 2)
+                    
+                #     if cam_type == "thermal" or cam_type == "color":
+                #         target_position = self.pixel_to_world(last_point, cam_type)[0]
+                #     else:
+                #         raise(f"Wrong camera type: {cam_type}")
+                
+                cv2.imshow(window_name, disp)
+                
+                # Press 'q' or ESC to quit
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q') or key == 27:
+                    break
+                
+        finally:
+            cv2.destroyWindow(window_name)
+            self.laser_controller.set_output(0)
+        pass 
 
 
 if __name__ == '__main__':
     ##################################################################################
+    #-------------------------------- Laser Config ----------------------------------#
+    ##################################################################################
+    
+    laser_controller = Laser_Arduino()  # controls whether laser is on or off
+    laser_on = False
+    laser_controller.set_output(laser_on)
+    
+    ##################################################################################
     #------------------------------ Robot Config ------------------------------------#
     ##################################################################################
     # Create FrankaNode object for controlling robot
-    robot_controller = Robot_Controller()
+    robot_controller = Robot_Controller(laser_controller)
     # TODO fix running in container
     home_pose = robot_controller.load_home_pose()
     # home_pose = robot_controller.load_edit_pose()
@@ -491,18 +555,13 @@ if __name__ == '__main__':
     rgbd_cam = RGBD_Cam() #Runs a thread internally
 
     
-    ##################################################################################
-    #-------------------------------- Laser Config ----------------------------------#
-    ##################################################################################
-    
-    laser_controller = Laser_Arduino()  # controls whether laser is on or off
-    laser_on = False
-    laser_controller.set_output(laser_on)
+   
     
     camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_controller)
-    camera_reg.run()
+    # camera_reg.run()
     rgbd_cam.set_default_setting()
-    camera_reg.transformed_view()
+    camera_reg.view_rgbd_therm_registration()
+    # camera_reg.transformed_view()
     # camera_reg.draw_traj()
     therm_cam.deinitialize_cam()
     # camera_reg.live_control_view("color")

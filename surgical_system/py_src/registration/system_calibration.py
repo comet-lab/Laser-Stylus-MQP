@@ -32,13 +32,23 @@ class System_Calibration():
         
         self.rgbd_cali = CameraCalibration()
         self.therm_cali = CameraCalibration()
+        self.rgbd_therm_cali = CameraCalibration()
         
         self.calibration_folder = "/calibration_info"
         self.rgb_cali_folder = "/calibration_info/rgb_cali/"
         self.therm_cali_folder = "/calibration_info/thermal_cali/"
         
+        print("\n--------------------System Calibration-----------------")
+        print("[System Calibration] RGBD Camera to robot calibration info:")
         self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder)
+        print("[System Calibration] Thermal Camera to robot calibration info:")
         self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder)
+        
+        
+        img_points = CameraCalibration.load_pts(self.directory +  self.rgb_cali_folder + "laser_spots.csv")
+        obj_points = CameraCalibration.load_pts(self.directory + self.therm_cali_folder  + "laser_spots.csv")
+        print("[System Calibration]  RGBD camera to thermal camera calibration info:")
+        self.rgbd_therm_M = self.rgbd_therm_cali.load_homography(M_pix_per_m = 1, img_points=img_points, obj_points=obj_points)
         
         self.rgb_H_shifted, self.rgb_out, self.rgb_min = self.make_positive_homography(self.rgb_M, (rgbd_cam.height, rgbd_cam.width))
         self.therm_H_shifted, self.therm_out, self.therm_min = self.make_positive_homography(self.therm_M, (therm_cam.height, therm_cam.width))
