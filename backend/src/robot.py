@@ -21,7 +21,7 @@ class RobotSchema:
     raster_type: str = None
     speed: float = None
     path: list[dict[str, float]] = None
-    heat_markers: list = []
+    heat_markers: list[dict[str, float]] = None
 
     def flush(self):
             payload = self.to_str()

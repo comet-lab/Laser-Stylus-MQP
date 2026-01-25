@@ -316,6 +316,32 @@ public getHeatMarkersInVideoSpace(): Position[] {
     }));
 }
 
+public async submitHeatMarkers(markers: Position[]): Promise<any> {
+    if (!this.apiBaseUrl) throw new Error("API base URL not set");
+
+    // Convert markers to video-space coordinates
+    const videoMarkers = markers.map(p => ({
+        x: p.x,
+        y: p.y
+    }));
+
+    const formData = new FormData();
+    formData.append('markers', JSON.stringify(videoMarkers));
+
+    const response = await fetch(`${this.apiBaseUrl}/api/heat_markers`, {
+        method: 'POST',
+        body: formData
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to submit heat markers");
+    }
+
+    return await response.json();
+}
+
+
 // end heat method marker 
 
     // --- Execution & Export Logic ---
