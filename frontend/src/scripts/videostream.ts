@@ -41,6 +41,8 @@ window.addEventListener('load', () => {
     const circleBtn = document.getElementById('circleBtn') as HTMLButtonElement;
     const triangleBtn = document.getElementById('triangleBtn') as HTMLButtonElement;
     const lineBtn = document.getElementById('lineBtn') as HTMLButtonElement;
+    const markerBtn = document.getElementById('markerBtn') as HTMLButtonElement;
+    const confirmMarkersBtn = document.getElementById('confirmMarkersBtn') as HTMLButtonElement;
 
     const toggleButtons: NodeListOf<HTMLButtonElement> = document.querySelectorAll('#middle-icon-section .icon-btn');
     const sidebarButtons: NodeListOf<HTMLButtonElement> = document.querySelectorAll('.settings-sidebar .sidebar-btn');
@@ -434,6 +436,36 @@ window.addEventListener('load', () => {
             prepareBtn.disabled = false;
         }
     });
+
+    markerBtn.addEventListener('click', () => {
+    if (!drawingTracker) return;
+
+    // Visual UI reset
+    toggleButtons.forEach(btn => btn.classList.remove('selected'));
+    selectedShape = null;
+    drawnShapeType = null;
+    updateDrawButtonState();
+
+    drawingTracker.enableMarkerMode();
+});
+
+confirmMarkersBtn.addEventListener('click', async () => {
+    if (!drawingTracker) return;
+
+    const markers = drawingTracker.getHeatMarkersInVideoSpace();
+
+    if (markers.length !== 4) {
+        alert("Please select exactly 4 markers");
+        return;
+    }
+
+    await fetch(`${location.origin}/api/heat_markers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markers })
+    });
+});
+
 
     clearBtn.addEventListener('click', () => {
         // Clear visuals

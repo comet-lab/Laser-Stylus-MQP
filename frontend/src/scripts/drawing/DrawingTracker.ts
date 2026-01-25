@@ -15,6 +15,11 @@ export class DrawingTracker {
     private activeShape: fabric.FabricObject | null = null;
     private hasPlacedShape: boolean = false;
 
+    // Heat marker mode
+    private isMarkerMode: boolean = false;
+    private markerPoints: Position[] = [];
+    private markerObjects: fabric.Object[] = [];
+
     // --- CONFIG: Visual Defaults ---
     private readonly SHAPE_DEFAULTS = {
         fill: 'transparent',
@@ -104,6 +109,47 @@ export class DrawingTracker {
     // --- Interaction Handlers ---
 
     private onMouseDown(opt: any) {
+        if (this.isMarkerMode) {
+        const pointer = this.fCanvas.getScenePoint(opt.e);
+
+        if (this.markerPoints.length >= 4) return;
+
+        this.markerPoints.push({ x: pointer.x, y: pointer.y });
+
+        // Draw point
+        const dot = new fabric.Circle({
+            left: pointer.x,
+            top: pointer.y,
+            radius: 6,
+            fill: '#ff0000',
+            originX: 'center',
+            originY: 'center',
+            selectable: false,
+            evented: false
+        });
+
+        this.fCanvas.add(dot);
+        this.markerObjects.push(dot);
+
+        // If 4 points → draw polygon
+        if (this.markerPoints.length === 4) {
+            const poly = new fabric.Polygon(this.markerPoints, {
+                fill: 'rgba(255,0,0,0.15)',
+                stroke: '#ff0000',
+                strokeWidth: 3,
+                selectable: false,
+                evented: false
+            });
+
+            this.fCanvas.add(poly);
+            this.markerObjects.push(poly);
+
+            this.disableMarkerMode();
+        }
+
+        this.fCanvas.requestRenderAll();
+        return;
+    }
         if (this.hasPlacedShape) return;
 
         if (!this.currentShapeType || this.currentShapeType === 'freehand') return;
@@ -259,6 +305,36 @@ export class DrawingTracker {
     public render(): void {
         this.fCanvas.renderAll();
     }
+
+    // Heat marker methods
+    public enableMarkerMode(): void {
+        this.clearDrawing();
+        this.disableDrawing();
+
+        this.isMarkerMode = true;
+        this.markerPoints = [];
+        this.markerObjects = [];
+
+        this.fCanvas.defaultCursor = 'crosshair';
+    }
+
+    public disableMarkerMode(): void {
+        this.isMarkerMode = false;
+        this.fCanvas.defaultCursor = 'default';
+    }
+
+    public getHeatMarkers(): Position[] {
+    return this.markerPoints;
+}
+
+public getHeatMarkersInVideoSpace(): Position[] {
+    return this.markerPoints.map(p => ({
+        x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
+        y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
+    }));
+}
+
+// end heat method marker 
 
     // --- Execution & Export Logic ---
     public async executePath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<any> {
