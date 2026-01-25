@@ -437,18 +437,18 @@ window.addEventListener('load', () => {
         }
     });
 
-    markerBtn.addEventListener('click', () => {
+   markerBtn.addEventListener('click', () => {
     if (!drawingTracker) return;
 
-    // Visual UI reset
     toggleButtons.forEach(btn => btn.classList.remove('selected'));
     selectedShape = null;
     drawnShapeType = null;
     updateDrawButtonState();
 
-    drawingTracker.enableMarkerMode();
+    drawingTracker.enableMarkerMode(); // enables dot placement
 });
 
+// Confirm markers → POST to backend
 confirmMarkersBtn.addEventListener('click', async () => {
     if (!drawingTracker) return;
 
@@ -459,12 +459,34 @@ confirmMarkersBtn.addEventListener('click', async () => {
         return;
     }
 
-    await fetch(`${location.origin}/api/heat_markers`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ markers })
-    });
+    try {
+        const response = await fetch(`http://localhost:8080/api/heat_markers`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ markers })
+        });
+
+        if (!response.ok) {
+            const text = await response.text(); // Read error message from backend
+            console.error("Error response:", text);
+            alert(`Failed to submit markers: ${text}`);
+            return;
+        }
+
+        const data = await response.json(); // Parse success response
+        console.log("Heat markers submitted:", data);
+        alert("Markers submitted successfully!");
+
+        // Optional: clear the markers visually
+        drawingTracker.clearDrawing();
+        drawingTracker.disableMarkerMode();
+
+    } catch (err) {
+        console.error("Network or backend error:", err);
+        alert("Error submitting markers. Check console for details.");
+    }
 });
+
 
 
     clearBtn.addEventListener('click', () => {

@@ -109,14 +109,12 @@ export class DrawingTracker {
     // --- Interaction Handlers ---
 
     private onMouseDown(opt: any) {
-        if (this.isMarkerMode) {
+    if (this.isMarkerMode) {
         const pointer = this.fCanvas.getScenePoint(opt.e);
 
-        if (this.markerPoints.length >= 4) return;
-
+        // Add marker dot
         this.markerPoints.push({ x: pointer.x, y: pointer.y });
 
-        // Draw point
         const dot = new fabric.Circle({
             left: pointer.x,
             top: pointer.y,
@@ -130,22 +128,6 @@ export class DrawingTracker {
 
         this.fCanvas.add(dot);
         this.markerObjects.push(dot);
-
-        // If 4 points → draw polygon
-        if (this.markerPoints.length === 4) {
-            const poly = new fabric.Polygon(this.markerPoints, {
-                fill: 'rgba(255,0,0,0.15)',
-                stroke: '#ff0000',
-                strokeWidth: 3,
-                selectable: false,
-                evented: false
-            });
-
-            this.fCanvas.add(poly);
-            this.markerObjects.push(poly);
-
-            this.disableMarkerMode();
-        }
 
         this.fCanvas.requestRenderAll();
         return;
@@ -308,22 +290,22 @@ export class DrawingTracker {
 
     // Heat marker methods
     public enableMarkerMode(): void {
-        this.clearDrawing();
-        this.disableDrawing();
+    this.clearDrawing();
+    this.disableDrawing();
 
-        this.isMarkerMode = true;
-        this.markerPoints = [];
-        this.markerObjects = [];
+    this.isMarkerMode = true;
+    this.markerPoints = [];
+    this.markerObjects = [];
 
-        this.fCanvas.defaultCursor = 'crosshair';
-    }
+    this.fCanvas.defaultCursor = 'crosshair';
+}
 
-    public disableMarkerMode(): void {
-        this.isMarkerMode = false;
-        this.fCanvas.defaultCursor = 'default';
-    }
+public disableMarkerMode(): void {
+    this.isMarkerMode = false;
+    this.fCanvas.defaultCursor = 'default';
+}
 
-    public getHeatMarkers(): Position[] {
+public getHeatMarkers(): Position[] {
     return this.markerPoints;
 }
 
