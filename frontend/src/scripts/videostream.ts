@@ -454,19 +454,13 @@ confirmMarkersBtn.addEventListener('click', async () => {
 
     const markers = drawingTracker.getHeatMarkersInVideoSpace();
 
-    if (markers.length !== 4) {
-        alert("Please select exactly 4 markers");
-        return;
-    }
-
     confirmMarkersBtn.disabled = true;
     markerBtn.disabled = true;
 
     try {
-        // Use a method on DrawingTracker to submit markers (similar to executePath)
         await drawingTracker.submitHeatMarkers(markers);
 
-        // Clear the canvas visuals
+        // Clear the canvas visuals after
         drawingTracker.clearDrawing();
 
         // Reset marker mode
