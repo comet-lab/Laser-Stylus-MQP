@@ -15,6 +15,11 @@ export class DrawingTracker {
     private activeShape: fabric.FabricObject | null = null;
     private hasPlacedShape: boolean = false;
 
+    // Heat marker mode
+    private isMarkerMode: boolean = false;
+    private markerPoints: Position[] = [];
+    private markerObjects: fabric.Object[] = [];
+
     // --- CONFIG: Visual Defaults ---
     private readonly SHAPE_DEFAULTS = {
         fill: 'transparent',
@@ -104,6 +109,29 @@ export class DrawingTracker {
     // --- Interaction Handlers ---
 
     private onMouseDown(opt: any) {
+    if (this.isMarkerMode) {
+        const pointer = this.fCanvas.getScenePoint(opt.e);
+
+        // Add marker dot
+        this.markerPoints.push({ x: pointer.x, y: pointer.y });
+
+        const dot = new fabric.Circle({
+            left: pointer.x,
+            top: pointer.y,
+            radius: 6,
+            fill: '#ff0000',
+            originX: 'center',
+            originY: 'center',
+            selectable: false,
+            evented: false
+        });
+
+        this.fCanvas.add(dot);
+        this.markerObjects.push(dot);
+
+        this.fCanvas.requestRenderAll();
+        return;
+    }
         if (this.hasPlacedShape) return;
 
         if (!this.currentShapeType || this.currentShapeType === 'freehand') return;
@@ -259,6 +287,62 @@ export class DrawingTracker {
     public render(): void {
         this.fCanvas.renderAll();
     }
+
+    // Heat marker methods
+    public enableMarkerMode(): void {
+    this.clearDrawing();
+    this.disableDrawing();
+
+    this.isMarkerMode = true;
+    this.markerPoints = [];
+    this.markerObjects = [];
+
+    this.fCanvas.defaultCursor = 'crosshair';
+}
+
+public disableMarkerMode(): void {
+    this.isMarkerMode = false;
+    this.fCanvas.defaultCursor = 'default';
+}
+
+public getHeatMarkers(): Position[] {
+    return this.markerPoints;
+}
+
+public getHeatMarkersInVideoSpace(): Position[] {
+    return this.markerPoints.map(p => ({
+        x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
+        y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
+    }));
+}
+
+public async submitHeatMarkers(markers: Position[]): Promise<any> {
+    if (!this.apiBaseUrl) throw new Error("API base URL not set");
+
+    // Convert markers to video-space coordinates
+    const videoMarkers = markers.map(p => ({
+        x: p.x,
+        y: p.y
+    }));
+
+    const formData = new FormData();
+    formData.append('markers', JSON.stringify(videoMarkers));
+
+    const response = await fetch(`${this.apiBaseUrl}/api/heat_markers`, {
+        method: 'POST',
+        body: formData
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to submit heat markers");
+    }
+
+    return await response.json();
+}
+
+
+// end heat method marker 
 
     // --- Execution & Export Logic ---
     public async executePath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<any> {
