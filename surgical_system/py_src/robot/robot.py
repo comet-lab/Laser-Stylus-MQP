@@ -23,6 +23,7 @@ class RobotSchema:
     raster_type: str = None
     speed: float = None
     path: List[Dict[str, float]] = None
+    heat_markers: List[Dict[str, float]] = None
 
 
     @staticmethod

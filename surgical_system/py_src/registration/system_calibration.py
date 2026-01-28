@@ -235,7 +235,6 @@ class System_Calibration():
 
         pts = img_points.astype(np.float32).copy()
         
-         # TODO this needs to follow camera shape
         pts[:, 0] = pts[:, 0] * (out_w / display_w)   # x: width scale
         pts[:, 1] = pts[:, 1] * (out_h / display_h)   # y: height scale
 
@@ -256,6 +255,50 @@ class System_Calibration():
         world_point[:, 2] = z
         return world_point
     
+    
+    def real_to_world(self, world_points, cam_type,
+                          pix_Per_M=None,
+                          display_w=1280.0, display_h=720.0):
+        """
+        Inverse of world_to_real.
+
+        Input:
+            world_points: (N,2) or (N,3) array in WORLD METERS
+        Output:
+            display_points: (N,2) array in DISPLAY PIXELS
+        """
+
+        world_points = np.asarray(world_points, dtype=np.float32)
+
+        if world_points.ndim == 1:
+            world_points = np.array([world_points])
+            
+        if world_points.shape[1] == 3:
+            pts = world_points[:, :2].copy()
+        else:
+            pts = world_points.copy()
+
+        out_w, out_h = self.get_cam_out(cam_type)
+        x_min, y_min = self.get_cam_min(cam_type)
+
+        cam_obj = self.get_cam_obj(cam_type)
+        pix_Per_M = cam_obj.pix_Per_M if pix_Per_M is None else pix_Per_M
+
+        # 1) world meters → world pixels
+        pts *= pix_Per_M
+
+        # 2) undo translation
+        pts[:, 0] -= x_min
+        pts[:, 1] -= y_min
+
+        # 3) undo flip
+        pts[:, 1] = (out_h - 1) - pts[:, 1]
+
+        # 4) undo scaling
+        pts[:, 0] *= (display_w / out_w)
+        pts[:, 1] *= (display_h / out_h)
+
+        return pts
     
     def select_ROI(self, cam_type):
         print("\nSelecting Region of Interest")

@@ -22,6 +22,9 @@ class MockRobotController():
     def get_current_state(self):
         return self.pose, np.eye(4)
     
+    def current_robot_to_world_position(self):
+        return self.pose
+    
     def load_home_pose(self):
         rot = Rotation.from_euler('ZYX',[0,np.pi/4,np.pi/2])
         rotM = rot.as_matrix()

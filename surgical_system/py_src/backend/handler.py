@@ -104,6 +104,18 @@ class Handler:
         
     '''    
     
+    def _do_current_position(self):
+        curr_position = self.robot_controller.current_robot_to_world_position()
+        
+        if self.desired_state.isTransformedViewOn:
+            pixel = self.cam_reg.real_to_world(curr_position, self.cam_type)[0]
+            self.desired_state.laserX, self.desired_state.laserY = pixel
+        # else:
+        #     target_world_point = self.cam_reg.pixel_to_world(pixel, cam_type=self.cam_type, z=self.working_height)[0]
+    
+    def _do_current_thermal_info(self):
+        pass
+    
     def _read_path(self):
         # TODO determine cam type from desired state
         # TODO convert path from List
@@ -154,6 +166,7 @@ class Handler:
             self.robot_controller.set_velocity(target_vel, np.zeros(3))
 
             self.laser_obj.set_output(self.desired_state.isLaserOn)
+    
 
     async def main_loop(self):
         # Yield to other threads (video stream, websocket comms)
@@ -161,6 +174,9 @@ class Handler:
         
         if(self.desired_state.isRobotOn != self.prev_robot_on):
             self._do_hold_pose() 
+            
+        # print(self.desired_state.heat_markers)
+        self._do_current_position()
 
         if(self.desired_state.isRobotOn):
             # TODO interrupt trajectory?
@@ -169,6 +185,7 @@ class Handler:
             # "raster?", self.desired_state.raster_mask is not None,
             # "path?", self.desired_state.path is not None,
             # "traj_running?", self.robot_controller.is_trajectory_running())
+            
             
             if(self.desired_state.raster_mask is not None
                and not self.robot_controller.is_trajectory_running()):

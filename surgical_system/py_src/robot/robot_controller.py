@@ -325,6 +325,10 @@ class Robot_Controller():
         if wait and self._traj_thread is not None:
             self._traj_thread.join(timeout=2.0)
             
+    def current_robot_to_world_position(self):
+        current_pose, _ = self.get_current_state()
+        return current_pose[:3, -1] - self.home_pose[:3, -1]
+            
     def live_control(self, target_pose_home, max_vel, KP = 5.0):
         current_pose, _ = self.get_current_state()
         current_pose = current_pose[:3, -1] - self.home_pose[:3, -1]
