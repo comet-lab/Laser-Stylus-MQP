@@ -41,6 +41,8 @@ window.addEventListener('load', () => {
     const circleBtn = document.getElementById('circleBtn') as HTMLButtonElement;
     const triangleBtn = document.getElementById('triangleBtn') as HTMLButtonElement;
     const lineBtn = document.getElementById('lineBtn') as HTMLButtonElement;
+    const markerBtn = document.getElementById('markerBtn') as HTMLButtonElement;
+    const confirmMarkersBtn = document.getElementById('confirmMarkersBtn') as HTMLButtonElement;
 
     const toggleButtons: NodeListOf<HTMLButtonElement> = document.querySelectorAll('#middle-icon-section .icon-btn');
     const sidebarButtons: NodeListOf<HTMLButtonElement> = document.querySelectorAll('.settings-sidebar .sidebar-btn');
@@ -434,6 +436,52 @@ window.addEventListener('load', () => {
             prepareBtn.disabled = false;
         }
     });
+
+   markerBtn.addEventListener('click', () => {
+    if (!drawingTracker) return;
+
+    toggleButtons.forEach(btn => btn.classList.remove('selected'));
+    selectedShape = null;
+    drawnShapeType = null;
+    updateDrawButtonState();
+
+    drawingTracker.enableMarkerMode(); // enables dot placement
+});
+
+
+confirmMarkersBtn.addEventListener('click', async () => {
+    if (!drawingTracker) return;
+
+    const markers = drawingTracker.getHeatMarkersInVideoSpace();
+
+    confirmMarkersBtn.disabled = true;
+    markerBtn.disabled = true;
+
+    try {
+        await drawingTracker.submitHeatMarkers(markers);
+
+        // Clear the canvas visuals after
+        drawingTracker.clearDrawing();
+
+        // Reset marker mode
+        drawingTracker.disableMarkerMode();
+
+        // Reset any UI buttons that need enabling
+        toggleButtons.forEach(btn => {
+            btn.disabled = false;
+        });
+
+        // Update any other draw button states if needed
+        updateDrawButtonState();
+    } catch (e) {
+        console.error(e);
+        confirmMarkersBtn.disabled = false;
+        markerBtn.disabled = false;
+    }
+});
+
+
+
 
     clearBtn.addEventListener('click', () => {
         // Clear visuals

@@ -96,6 +96,36 @@ async def submit_settings(request: Request):
         "message": "Settings dispatched to robot"
     }
 
+
+@app.post("/api/heat_markers")
+async def submit_heat_markers(markers: str = Form(...)):
+    try:
+        markers_list = json.loads(markers)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid markers format")
+
+    if not markers_list or not isinstance(markers_list, list):
+        raise HTTPException(status_code=400, detail="Markers must be an array")
+
+    for i, m in enumerate(markers_list):
+        if not isinstance(m, dict) or "x" not in m or "y" not in m:
+            raise HTTPException(status_code=400, detail=f"Marker {i} must have x and y")
+
+    manager.desired_state.heat_markers = markers_list
+
+    print(f"Received heat markers: {markers_list}")
+    await manager.broadcast_to_group(
+        group=manager.robot_connections,
+        state=manager.desired_state
+    )
+
+    return {
+        "status": "success",
+        "marker_count": len(markers_list),
+        "markers": markers_list,
+        "message": "Heat markers dispatched to robot"
+    }
+
 manager = ConnectionManager()
 
 # this is the websocket to pass the 6 varaibles from frontend to backend
