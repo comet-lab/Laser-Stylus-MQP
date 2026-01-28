@@ -32,7 +32,6 @@ window.addEventListener('load', () => {
     const transformedModeSwitch = document.getElementById('transformed-view-mode') as HTMLInputElement;
     const saveView = document.getElementById('save-view') as HTMLInputElement;
     const batchUiElements = document.querySelectorAll('.batch-ui');
-    const statusControlValue = document.querySelector('.status-value.status-batch') as HTMLElement;
     const robotMarker = document.getElementById('robot-marker') as HTMLElement;
 
     // Shape Buttons
@@ -290,13 +289,9 @@ window.addEventListener('load', () => {
         const isRealTime = processingModeSwitch.checked;
         if (isRealTime) {
             batchUiElements.forEach(el => el.classList.add('hidden-mode'));
-            statusControlValue.textContent = "REAL-TIME";
-            statusControlValue.style.color = "#00ff00";
             drawingTracker?.disableDrawing();
         } else {
             batchUiElements.forEach(el => el.classList.remove('hidden-mode'));
-            statusControlValue.textContent = "BATCH";
-            statusControlValue.style.color = "";
             drawingTracker?.disableDrawing();
         }
         toggleButtons.forEach(btn => {
@@ -308,6 +303,41 @@ window.addEventListener('load', () => {
         updateDrawButtonState();
     };
     processingModeSwitch.addEventListener('change', toggleMode);
+
+
+    const modeButtons = document.querySelectorAll('.mode-btn');
+
+    modeButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            // 1. Remove active class from all buttons
+            modeButtons.forEach(b => b.classList.remove('active'));
+
+            // 2. Add active class to clicked button
+            btn.classList.add('active');
+
+            // 3. Trigger Mode-Specific Logic
+            const mode = btn.id; // drawingBtn, thermalBtn, or fixturesBtn
+            switchMode(mode);
+        });
+    });
+
+    // Set default active mode
+    document.getElementById('drawingBtn')?.classList.add('active');
+
+    function switchMode(modeId: string) {
+        console.log("Switching to mode:", modeId);
+
+        // Example Logic for your Fabric.js canvas:
+        if (modeId === 'fixturesBtn') {
+            // Enable "No-Go Zone" drawing mode
+            // canvas.isDrawingMode = true;
+            // setDrawingColor('red'); 
+        } else if (modeId === 'thermalBtn') {
+            // Enable point-marker placement
+        } else {
+            // Normal Batch/Real-time drawing
+        }
+    }
 
     // Laser/Robot Toggle Logic
     laserBtn.addEventListener('click', () => {
@@ -388,7 +418,7 @@ window.addEventListener('load', () => {
     canvas.addEventListener('touchend', () => { setTimeout(updateDrawButtonState, 50); });
 
     executeBtn.addEventListener('click', async () => {
-        if (!drawingTracker) return;      
+        if (!drawingTracker) return;
 
         const speed = parseFloat(speedInput.value);
         let density = 0;
@@ -437,48 +467,48 @@ window.addEventListener('load', () => {
         }
     });
 
-   markerBtn.addEventListener('click', () => {
-    if (!drawingTracker) return;
+    markerBtn.addEventListener('click', () => {
+        if (!drawingTracker) return;
 
-    toggleButtons.forEach(btn => btn.classList.remove('selected'));
-    selectedShape = null;
-    drawnShapeType = null;
-    updateDrawButtonState();
-
-    drawingTracker.enableMarkerMode(); // enables dot placement
-});
-
-
-confirmMarkersBtn.addEventListener('click', async () => {
-    if (!drawingTracker) return;
-
-    const markers = drawingTracker.getHeatMarkersInVideoSpace();
-
-    confirmMarkersBtn.disabled = true;
-    markerBtn.disabled = true;
-
-    try {
-        await drawingTracker.submitHeatMarkers(markers);
-
-        // Clear the canvas visuals after
-        drawingTracker.clearDrawing();
-
-        // Reset marker mode
-        drawingTracker.disableMarkerMode();
-
-        // Reset any UI buttons that need enabling
-        toggleButtons.forEach(btn => {
-            btn.disabled = false;
-        });
-
-        // Update any other draw button states if needed
+        toggleButtons.forEach(btn => btn.classList.remove('selected'));
+        selectedShape = null;
+        drawnShapeType = null;
         updateDrawButtonState();
-    } catch (e) {
-        console.error(e);
-        confirmMarkersBtn.disabled = false;
-        markerBtn.disabled = false;
-    }
-});
+
+        drawingTracker.enableMarkerMode(); // enables dot placement
+    });
+
+
+    confirmMarkersBtn.addEventListener('click', async () => {
+        if (!drawingTracker) return;
+
+        const markers = drawingTracker.getHeatMarkersInVideoSpace();
+
+        confirmMarkersBtn.disabled = true;
+        markerBtn.disabled = true;
+
+        try {
+            await drawingTracker.submitHeatMarkers(markers);
+
+            // Clear the canvas visuals after
+            drawingTracker.clearDrawing();
+
+            // Reset marker mode
+            drawingTracker.disableMarkerMode();
+
+            // Reset any UI buttons that need enabling
+            toggleButtons.forEach(btn => {
+                btn.disabled = false;
+            });
+
+            // Update any other draw button states if needed
+            updateDrawButtonState();
+        } catch (e) {
+            console.error(e);
+            confirmMarkersBtn.disabled = false;
+            markerBtn.disabled = false;
+        }
+    });
 
 
 
@@ -528,9 +558,8 @@ confirmMarkersBtn.addEventListener('click', async () => {
         await drawingTracker.updateViewSettings(transformedModeSwitch.checked, thermalModeSwitch.checked);
     });
 
-    // --- FIX: Proper Resize Logic ---
     window.addEventListener('resize', () => {
-        // Use Viewport as source of truth. DO NOT manually set canvas.width here.
+        // Use viewport as source of truth. Do not manually set canvas.width
         // Let Fabric handle the sync via the tracker.
         if (drawingTracker) {
             drawingTracker.updateCanvasSize(viewport.offsetWidth, viewport.offsetHeight);

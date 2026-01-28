@@ -163,68 +163,62 @@ pre {
 /* ============================================
    STATUS PANEL
    ============================================ */
+
 #status-panel-right {
-  display: grid;
-  grid-template-columns: auto auto auto auto;
-  grid-template-rows: auto auto;
-  align-content: center;
-  justify-content: end;
-  column-gap: 8px;
-  row-gap: 6px;
-  padding-right: 30px;
-  font-weight: bold;
-  font-size: 18px;
-  color: #f5eff7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #172027; /* Matches your toggle center-box */
+  border: 2px solid #2c343b;
+  border-radius: 18px; 
+  padding: 4px; /* Space between border and buttons */
+  gap: 4px;
+  height: 100%; /* Should fit within the 60px top-panel */
+  max-width: none; 
+  width: auto;
 }
 
-.status-label:nth-child(5),
-.status-label:nth-child(7) {
-  padding-left: 30px; /* Adds extra space before column 3 */
+.mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 20px;
+  height: 100%;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 700;
+  font-size: 13px; /* Slightly smaller for tab look */
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 14px; /* Matches the slider radius */
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background-color: transparent; /* Invisible when not active */
+  color: #e0f2e09c; /* Dimmed text for inactive */
+  fill: #e0f2e09c;
 }
 
-#status-panel-right p {
-  font-weight: bold;
-  font-size: 18px;
-  color: #f5eff7;
-  margin: 0;
-  display: grid;
-  grid-template-columns: auto auto 1fr;
-  gap: 0 8px;
+.mode-btn:hover:not(.active) {
+  background-color: rgba(224, 242, 224, 0.05);
+  color: #e0f2e0;
+  fill: #e0f2e0;
 }
 
-.status-label {
-  text-align: right;
+/* Active State (The Pill) */
+.mode-btn.active {
+  background-color: #e0f2e0; /* High contrast like your slider */
+  color: #0f1419; /* Dark text for readability */
+  fill: #0f1419;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
-.status-label:nth-child(odd) {
-  text-align: right;
+/* Ensure SVGs inside active buttons change color */
+.mode-btn.active svg path {
+  fill: #0f1419;
+  stroke: none; /* Adjust if your SVGs use stroke instead of fill */
 }
 
-.status-value {
-  text-align: left;
-}
-
-.status-laser-on {
-  color: #cb0e00;
-}
-.status-robot-on {
-  color: #fa8500;
-}
-.status-off {
-  color: #70ff57;
-}
-.status-batch {
-  color: #70ff57;
-}
-.status-real-time {
-  color: #fa8500;
-}
-.status-camera-connected {
-  color: #70ff57;
-}
-.status-camera-off {
-  color: #cb0e00;
-}
 
 /* ============================================
    CANVAS & VIDEO
