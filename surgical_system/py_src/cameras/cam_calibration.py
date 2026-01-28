@@ -213,6 +213,7 @@ class CameraCalibration():
         # and they don't have to be a quadrilateral. 
 
         self.M,_ = cv2.findHomography(_imgpts,_objpts)
+        self.M_inv = np.linalg.inv(self.M)
         return self.M
     
     def world_to_pixel(self, world_coords):

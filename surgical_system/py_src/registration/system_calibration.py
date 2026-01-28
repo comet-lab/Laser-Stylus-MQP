@@ -219,6 +219,44 @@ class System_Calibration():
         return H_shifted, (out_w, out_h), (x_min, y_min)
 
 
+
+    def world_to_pixel(self, world_points, cam_type):
+        """
+        Inverse of pixel_to_world for planar (x,y) points.
+
+        Input:
+            world_points: (N,2) or (N,3) array in world meters
+        Output:
+            img_points: (N,2) array in image pixels
+        """
+        
+        cam_cali = self.get_cam_cali(cam_type)
+        H_inv = cam_cali.M_inv
+        pix_Per_M = self.get_cam_obj(cam_type).pix_Per_M
+
+        world_points = np.asarray(world_points, dtype=np.float32)
+        
+        if world_points.ndim == 1:
+            world_points = np.array([world_points])
+        
+        if world_points.shape[1] == 3:
+            pts_m = world_points[:, :2]
+        else:
+            pts_m = world_points
+
+        
+        pts_wp = pts_m * pix_Per_M  # (N,2)
+
+        img_pts = cv2.perspectiveTransform(
+            pts_wp.reshape(-1, 1, 2).astype(np.float32),
+            H_inv
+        ).reshape(-1, 2)
+
+        return img_pts
+        
+        
+        
+
     def pixel_to_world(self, img_points, cam_type, z = 0.0):
         M = self.get_cam_M(cam_type)
         cam_obj = self.get_cam_obj(cam_type)

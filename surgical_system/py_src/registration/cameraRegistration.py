@@ -37,6 +37,9 @@ class Camera_Registration(System_Calibration):
             print("Waiting for camera response...")
             time.sleep(0.5)
             
+        self.traj_points = None
+        self.display_path = False
+            
         
     def run(self): 
         debug = True
@@ -320,6 +323,47 @@ class Camera_Registration(System_Calibration):
         # np.save    (save_dir / "laser_spots.npy",       therm_image_set)
         return combinedImg, therm_img_points, rgb_img_points, obj_Points
     
+    def get_path(self, points):
+        self.traj_points = points
+    
+    def show_path(self, img):
+        
+        path = self.traj_points
+        
+        if path is None or len(path) < 2:
+            return img
+
+        out = img.copy()
+
+        pts = np.asarray(path, dtype=np.int32)
+
+        # Optional: clip to image bounds to avoid weird drawing outside
+        h, w = out.shape[:2]
+        pts[:, 0] = np.clip(pts[:, 0], 0, w - 1)
+        pts[:, 1] = np.clip(pts[:, 1], 0, h - 1)
+
+        pts_i = np.round(pts).astype(np.int32).reshape(-1, 1, 2)
+
+        # Draw polyline
+        cv2.polylines(out, [pts_i], isClosed=False, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
+
+        # Start marker (green circle)
+        p0 = tuple(pts_i[0, 0])
+        cv2.circle(out, p0, 6, (0, 255, 0), -1, lineType=cv2.LINE_AA)
+        
+
+        # End marker (red X)
+        p1 = tuple(pts_i[-1, 0])
+        cv2.drawMarker(out, p1, (0, 0, 255),
+               markerType=cv2.MARKER_TILTED_CROSS,
+               markerSize=14,
+               thickness=2)
+
+
+        return out
+        
+    
+    
     def transformed_view(self, cam_type = "color"):
         # Size of the top-down (bird's-eye) image (e.g., from calibration)
         WINDOW_NAME = "w0w"
@@ -556,7 +600,6 @@ class Camera_Registration(System_Calibration):
             cv2.destroyWindow(window_name)
             self.laser_controller.set_output(0)
         pass 
-
 
     def view_rgbd_therm_heat_overlay(self, transformed_view: bool = True,
                                 alpha: float = 0.45,
@@ -800,7 +843,8 @@ if __name__ == '__main__':
     camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_controller)
     # camera_reg.run()
     rgbd_cam.set_default_setting()
-    camera_reg.view_rgbd_therm_registration()
+    # camera_reg.view_rgbd_therm_registration()
+    camera_reg.live_control_view('color')
     # camera_reg.view_rgbd_therm_heat_overlay()
     # camera_reg.transformed_view()
     # camera_reg.draw_traj()

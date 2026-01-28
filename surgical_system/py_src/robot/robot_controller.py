@@ -221,7 +221,7 @@ class Robot_Controller():
                     target_pose = np.eye(4)
                     target_pose[:3, -1] = target_pos
                     velocity_correction = self.live_control(target_pose, 0.015, 5) #TODO CHANGE MAX SPEED
-                    print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
+                    # print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
                     target_vel += velocity_correction
                     state = self.set_velocity(target_vel, [0, 0, 0]) 
                     

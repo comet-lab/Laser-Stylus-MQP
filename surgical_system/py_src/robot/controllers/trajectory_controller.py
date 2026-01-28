@@ -16,6 +16,8 @@ class TrajectoryController():
         self._laser_on = False
         self._irradiance = 0
         self.debug = debug
+        self.target_position_list = None 
+        self.target_vel_list = None
         
         # self.laser_info = controller_msg.laser_info
         
@@ -138,25 +140,75 @@ class TrajectoryController():
         
         time_step = 0.05
         data_num = int(math.ceil(durations[-1]/time_step)) 
-        actual_vel_list = np.empty((data_num, 3))
+        target_vel_list = np.empty((data_num, 3))
+        target_position_list = np.empty((data_num, 3))
         times = np.linspace(0, durations[-1], data_num)
         for i in range(data_num):
             movement = self.update(times[i])
-            target_vel = (movement['velocity'])
-            actual_vel_list[i] = target_vel
+            target_position = (movement['position'])
+            target_position_list[i] = target_position
+            
+            target_vel= (movement['velocity'])
+            target_vel_list[i] = target_vel
             
         plt.figure(figsize=(6,4))
-        plt.plot(times, actual_vel_list[:, 0], label="actual x")
-        plt.plot(times, actual_vel_list[:, 1], label="actual y")
+        plt.plot(times, target_position_list[:, 0], label="x [m]")
+        plt.plot(times, target_position_list[:, 1], label="y [m]")
         plt.xlabel("Time [s]")
-        plt.ylabel("velcity [m]")
+        plt.ylabel("Position [m]")
         plt.title("Time vs Position (Guess)")
         plt.grid(True)
         plt.legend()
         plt.tight_layout()
-        plt.savefig("trajectory.png")
+        plt.savefig("Position(x,y) trajectory.png")
+        
+        plt.figure(figsize=(6,4))
+        
+        plt.plot(
+            target_position_list[:, 0],
+            target_position_list[:, 1],
+            label="Trajectory",
+        )
+
+        # Start and end points
+        plt.scatter(
+            target_position_list[0, 0],
+            target_position_list[0, 1],
+            c="green",
+            s=60,
+            marker="o",
+            label="Start",
+            zorder=3
+        )
+
+        plt.scatter(
+            target_position_list[-1, 0],
+            target_position_list[-1, 1],
+            c="red",
+            s=60,
+            marker="X",
+            label="Finish",
+            zorder=3
+        )
+        
+        plt.xlabel("x [m]")
+        plt.ylabel("y [m]")
+        plt.title("Position Plot (Guess)")
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig("Position_plot.png", dpi=600)
+        
+        self.target_position_list = target_position_list 
+        self.target_vel_list = target_vel_list
         # plt.show()
         # plt.close(3)
+        
+    def get_path_position(self):
+        return self.target_position_list.copy()
+
+    def get_path_velocity(self):
+        return self.target_vel_list.copy()
 
     def update(self, time):
         self.t = time

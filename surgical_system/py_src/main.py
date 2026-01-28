@@ -153,6 +153,9 @@ async def main():
 
         if control_flow_handler.desired_state.isTransformedViewOn:
             latest = camera_reg.get_transformed_view(latest, cam_type=control_flow_handler.cam_type)
+            
+        if camera_reg.display_path:
+            latest = camera_reg.show_path(latest)
 
         if(type(latest) == type(None)):
             continue

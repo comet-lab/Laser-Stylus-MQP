@@ -35,6 +35,16 @@ class MockCameraRegistration():
             print(pixels)
             print(type(pixels))
             raise Exception("Unkown pixel type")
+        
+    def show_path(self, img):
+        return self.rgbd_cam.get_latest() 
+    
+    def hide_path(self):
+        pass 
+    
+    def get_path(self, points):
+        pass 
+    
 
 
 
