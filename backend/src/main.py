@@ -30,7 +30,7 @@ def health():
 async def execute_fixtures(file: UploadFile = File(...)):
     # Process and save the fixtures mask
     file_content = await file.read()
-    save_directory = "saved_masks/fixtures"
+    save_directory = "saved_masks"
     os.makedirs(save_directory, exist_ok=True)
     file_location = f"{save_directory}/{file.filename}"
     

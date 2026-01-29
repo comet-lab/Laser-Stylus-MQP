@@ -30,12 +30,12 @@ export class DrawingTracker {
     private isErasing: boolean = false;
     private isFixturesDrawing: boolean = false;
     private lastFixturesPoint: { x: number, y: number } | null = null;
-    private fixturesApplied: boolean = false; // Track if fixtures have been applied
+    private fixturesApplied: boolean = false;
 
     // --- CONFIG: Visual Defaults ---
     private readonly SHAPE_DEFAULTS = {
         fill: 'transparent',
-        stroke: '#ff0000',
+        stroke: '#007AFF',
         strokeWidth: 6,
         strokeUniform: true,
         strokeLineCap: 'round' as const,
@@ -84,13 +84,12 @@ export class DrawingTracker {
 
         const brush = new fabric.PencilBrush(this.fCanvas);
         brush.width = 6;
-        brush.color = '#ff0000';
+        brush.color = '#007AFF';
         this.fCanvas.freeDrawingBrush = brush;
 
         this.fCanvas.on('mouse:down', this.onMouseDown.bind(this));
         this.fCanvas.on('mouse:move', this.onMouseMove.bind(this));
         this.fCanvas.on('mouse:up', this.onMouseUp.bind(this));
-
         this.fCanvas.on('path:created', (e: any) => {
             if (e.path) {
                 e.path.set({
@@ -99,7 +98,6 @@ export class DrawingTracker {
                 });
                 e.path.setCoords();
             }
-
             this.hasPlacedShape = true;
             this.fCanvas.isDrawingMode = false;
             this.fCanvas.defaultCursor = 'default';
@@ -112,14 +110,18 @@ export class DrawingTracker {
     private createFixturesCanvas(mainCanvas: HTMLCanvasElement): void {
         this.fixturesCanvas = document.createElement('canvas');
         this.fixturesCanvas.id = 'fixturesCanvas';
+        
+        // Set internal dimensions to match main canvas
         this.fixturesCanvas.width = mainCanvas.width;
         this.fixturesCanvas.height = mainCanvas.height;
-
-        // Apply opacity to the canvas element itself (prevents "dots" at overlaps)
-        this.fixturesCanvas.style.opacity = '0.6'; 
+        
+        // CSS already handles positioning via #fixturesCanvas styles
+        // Just set opacity here (prevents "dots" at overlaps)
+        this.fixturesCanvas.style.opacity = '0.6';
         
         this.fixturesCtx = this.fixturesCanvas.getContext('2d', { willReadFrequently: true });
         
+        // Append to viewport (same parent as main canvas)
         mainCanvas.parentElement?.appendChild(this.fixturesCanvas);
     }
 
@@ -133,7 +135,6 @@ export class DrawingTracker {
     }
 
     // --- Fixtures Mode Methods ---
-
     public enableFixturesMode(): void {
         this.isFixturesMode = true;
         this.disableDrawing();
@@ -195,18 +196,44 @@ export class DrawingTracker {
         }
     }
 
+
+    //Convert client coordinates to canvas coordinates accounting for scaling
+    private getCanvasCoordinates(e: PointerEvent, canvas: HTMLCanvasElement): { x: number, y: number } {
+        const rect = canvas.getBoundingClientRect();
+        
+        // Get the actual canvas internal dimensions
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        
+        // Get the displayed CSS dimensions
+        const displayWidth = rect.width;
+        const displayHeight = rect.height;
+        
+        // Calculate scaling factors
+        const scaleX = canvasWidth / displayWidth;
+        const scaleY = canvasHeight / displayHeight;
+        
+        // Get client coordinates relative to canvas
+        const clientX = e.clientX - rect.left;
+        const clientY = e.clientY - rect.top;
+        
+        // Scale to canvas coordinates
+        const x = clientX * scaleX;
+        const y = clientY * scaleY;
+        
+        return { x, y };
+    }
+
     private onFixturesPointerDown(e: PointerEvent): void {
         if (!this.currentBrushType || !this.fixturesCanvas || !this.fixturesCtx) return;
 
         this.isFixturesDrawing = true;
         this.fixturesCanvas.setPointerCapture(e.pointerId);
 
-        const rect = this.fixturesCanvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
+        const { x, y } = this.getCanvasCoordinates(e, this.fixturesCanvas);
         this.lastFixturesPoint = { x, y };
         this.drawFixturesBrush(x, y);
+
         this.fixturesApplied = false;
         this.onFixturesChange();
     }
@@ -214,10 +241,7 @@ export class DrawingTracker {
     private onFixturesPointerMove(e: PointerEvent): void {
         if (!this.isFixturesDrawing || !this.fixturesCanvas) return;
 
-        const rect = this.fixturesCanvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-
+        const { x, y } = this.getCanvasCoordinates(e, this.fixturesCanvas);
         this.drawFixturesBrush(x, y);
         this.lastFixturesPoint = { x, y };
     }
@@ -236,12 +260,12 @@ export class DrawingTracker {
         // Setup Opacity/Composite
         if (this.isErasing) {
             this.fixturesCtx.globalCompositeOperation = 'destination-out';
-            this.fixturesCtx.fillStyle = 'rgba(255, 0, 0, 1)'; // Opaque for full erasure
-            this.fixturesCtx.strokeStyle = 'rgba(255, 0, 0, 1)';
+            this.fixturesCtx.fillStyle = '#E69F00';
+            this.fixturesCtx.strokeStyle = '#E69F00';
         } else {
             this.fixturesCtx.globalCompositeOperation = 'source-over';
-            this.fixturesCtx.fillStyle = 'rgba(255, 0, 0, 1)'; // Opaque red (alpha handled by canvas CSS)
-            this.fixturesCtx.strokeStyle = 'rgba(255, 0, 0, 1)';
+            this.fixturesCtx.fillStyle = '#E69F00';
+            this.fixturesCtx.strokeStyle = '#E69F00';
         }
 
         if (this.currentBrushType === 'round') {
@@ -268,14 +292,13 @@ export class DrawingTracker {
                 const dx = p2.x - p1.x;
                 const dy = p2.y - p1.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
-                const steps = Math.ceil(distance); // 1 draw per pixel for solid fill
+                const steps = Math.ceil(distance);
 
                 for (let i = 0; i <= steps; i++) {
                     const t = steps === 0 ? 0 : i / steps;
                     const cx = p1.x + (dx * t);
                     const cy = p1.y + (dy * t);
                     
-                    // Draw axis-aligned rectangle (0 rotation)
                     this.fixturesCtx.fillRect(cx - halfSize, cy - halfSize, size, size);
                 }
             } else {
@@ -299,7 +322,6 @@ export class DrawingTracker {
                 return true;
             }
         }
-
         return false;
     }
 
@@ -342,7 +364,6 @@ export class DrawingTracker {
         for (let i = 0; i < fixturesData.data.length; i += 4) {
             const r = fixturesData.data[i];
             const a = fixturesData.data[i + 3];
-
             if (a > 0 && r > 200) {
                 maskData.data[i] = 0;     // R
                 maskData.data[i + 1] = 0; // G
@@ -353,7 +374,7 @@ export class DrawingTracker {
 
         maskCtx.putImageData(maskData, 0, 0);
 
-        const blob = await new Promise<Blob | null>(resolve => 
+        const blob = await new Promise<Blob | null>(resolve =>
             maskCanvas.toBlob(resolve, 'image/png')
         );
         
@@ -373,12 +394,10 @@ export class DrawingTracker {
         }
 
         this.fixturesApplied = true;
-
         return await response.json();
     }
 
     // --- Interaction Handlers ---
-
     private onMouseDown(opt: any) {
         if (this.isMarkerMode) {
             const pointer = this.fCanvas.getScenePoint(opt.e);
@@ -388,7 +407,7 @@ export class DrawingTracker {
                 left: pointer.x,
                 top: pointer.y,
                 radius: 6,
-                fill: '#ff0000',
+                fill: '#007AFF',
                 originX: 'center',
                 originY: 'center',
                 selectable: false,
@@ -445,7 +464,6 @@ export class DrawingTracker {
         const pointer = this.fCanvas.getScenePoint(opt.e);
         const w = Math.abs(pointer.x - this.shapeStartPos.x);
         const h = Math.abs(pointer.y - this.shapeStartPos.y);
-
         const left = Math.min(pointer.x, this.shapeStartPos.x);
         const top = Math.min(pointer.y, this.shapeStartPos.y);
 
@@ -464,6 +482,7 @@ export class DrawingTracker {
     private onMouseUp() {
         if (this.isCreatingShape) {
             this.isCreatingShape = false;
+
             if (this.activeShape) {
                 if (this.activeShape instanceof fabric.Line) {
                     const x1 = this.activeShape.x1 || 0;
@@ -487,7 +506,6 @@ export class DrawingTracker {
     }
 
     // --- Public API ---
-
     public setShapeType(type: ShapeType | null): void {
         if (this.hasPlacedShape && type !== null) {
             return;
@@ -520,12 +538,10 @@ export class DrawingTracker {
         this.fCanvas.isDrawingMode = false;
         this.currentShapeType = null;
         this.fCanvas.discardActiveObject();
-
         this.fCanvas.forEachObject(o => {
             o.selectable = false;
             o.evented = false;
         });
-
         this.fCanvas.requestRenderAll();
         this.fCanvas.defaultCursor = 'default';
     }
@@ -553,12 +569,16 @@ export class DrawingTracker {
             tempCanvas.width = this.fixturesCanvas.width;
             tempCanvas.height = this.fixturesCanvas.height;
             const tempCtx = tempCanvas.getContext('2d');
+
             if (tempCtx) {
                 tempCtx.drawImage(this.fixturesCanvas, 0, 0);
             }
 
+            // Update internal dimensions
             this.fixturesCanvas.width = width;
             this.fixturesCanvas.height = height;
+            
+            // CSS 100% will automatically adjust to match viewport
 
             if (tempCtx) {
                 this.fixturesCtx.drawImage(tempCanvas, 0, 0, width, height);
@@ -627,7 +647,6 @@ export class DrawingTracker {
     // --- Execution & Export Logic ---
     public async executePath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<any> {
         const pixels = this.generatePixelPath();
-
         const videoPixels = pixels.map(p => ({
             x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
             y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
@@ -635,10 +654,11 @@ export class DrawingTracker {
 
         const width = this.fCanvas.getWidth();
         const height = this.fCanvas.getHeight();
+
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = width;
         tempCanvas.height = height;
-        const ctx = tempCanvas.getContext('2d', { 
+        const ctx = tempCanvas.getContext('2d', {
             willReadFrequently: true,
             alpha: false
         });
@@ -661,7 +681,7 @@ export class DrawingTracker {
         } else {
             ctx.strokeStyle = "#000000"; // Black stroke for vector/outline
             ctx.fillStyle = "transparent";
-            ctx.lineWidth = 1; 
+            ctx.lineWidth = 1;
             ctx.lineCap = 'square';
             ctx.lineJoin = 'miter';
         }
@@ -677,12 +697,12 @@ export class DrawingTracker {
                 pathData.forEach((cmd: any) => {
                     const type = cmd[0];
                     switch (type) {
-                        case 'M': 
+                        case 'M':
                             lastX = Math.round(cmd[1]);
                             lastY = Math.round(cmd[2]);
                             ctx.moveTo(lastX + 0.5, lastY + 0.5);
                             break;
-                        case 'L': 
+                        case 'L':
                             const x = Math.round(cmd[1]);
                             const y = Math.round(cmd[2]);
                             ctx.lineTo(x + 0.5, y + 0.5);
@@ -707,15 +727,14 @@ export class DrawingTracker {
                             lastX = cx;
                             lastY = cy;
                             break;
-                        case 'Z': 
-                            ctx.closePath(); 
+                        case 'Z':
+                            ctx.closePath();
                             break;
                     }
                 });
                 
                 if (isFillEnabled) ctx.fill();
                 else ctx.stroke();
-
             } else if (obj instanceof fabric.Rect) {
                 const rect = obj as fabric.Rect;
                 const left = Math.round(rect.left || 0);
@@ -725,7 +744,6 @@ export class DrawingTracker {
                 
                 if (isFillEnabled) ctx.fillRect(left + 0.5, top + 0.5, width, height);
                 else ctx.strokeRect(left + 0.5, top + 0.5, width, height);
-
             } else if (obj instanceof fabric.Triangle) {
                 const triangle = obj as fabric.Triangle;
                 const matrix = triangle.calcTransformMatrix();
@@ -748,7 +766,6 @@ export class DrawingTracker {
                 
                 if (isFillEnabled) ctx.fill();
                 else ctx.stroke();
-
             } else if (obj instanceof fabric.Ellipse) {
                 const ellipse = obj as fabric.Ellipse;
                 const center = ellipse.getCenterPoint();
@@ -757,21 +774,20 @@ export class DrawingTracker {
 
                 ctx.beginPath();
                 ctx.ellipse(
-                    center.x, center.y, 
-                    rx, ry, 
-                    (ellipse.angle || 0) * Math.PI / 180, 
+                    center.x, center.y,
+                    rx, ry,
+                    (ellipse.angle || 0) * Math.PI / 180,
                     0, 2 * Math.PI
                 );
                 
                 if (isFillEnabled) ctx.fill();
                 else ctx.stroke();
-
             } else if (obj instanceof fabric.Line) {
                 const line = obj as fabric.Line;
                 ctx.beginPath();
                 ctx.moveTo(Math.round(line.x1 || 0) + 0.5, Math.round(line.y1 || 0) + 0.5);
                 ctx.lineTo(Math.round(line.x2 || 0) + 0.5, Math.round(line.y2 || 0) + 0.5);
-                ctx.stroke(); 
+                ctx.stroke();
             }
 
             ctx.restore();
@@ -780,6 +796,7 @@ export class DrawingTracker {
         // Ensure binary contrast
         const imageData = ctx.getImageData(0, 0, width, height);
         const data = imageData.data;
+
         for (let i = 0; i < data.length; i += 4) {
             if (data[i] < 255 || data[i+1] < 255 || data[i+2] < 255) {
                 data[i] = 0;
@@ -788,6 +805,7 @@ export class DrawingTracker {
                 data[i+3] = 255;
             }
         }
+
         ctx.putImageData(imageData, 0, 0);
 
         const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
@@ -819,11 +837,11 @@ export class DrawingTracker {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ isTransformedViewOn, isThermalViewOn })
         });
+
         return await response.json();
     }
 
     // --- Internal: Geometry Bridge ---
-
     private generatePixelPath(): Position[] {
         const objects = this.fCanvas.getObjects();
         const pixels: Position[] = [];
@@ -837,6 +855,7 @@ export class DrawingTracker {
                         const type = cmd[0];
                         const x = cmd[1];
                         const y = cmd[2];
+
                         if (type === 'M') {
                             lastX = x; lastY = y;
                         } else if (type === 'L' || type === 'Q') {
@@ -874,8 +893,8 @@ export class DrawingTracker {
                 const rx = ellipse.rx * ellipse.scaleX;
                 const ry = ellipse.ry * ellipse.scaleY;
                 const rotation = (ellipse.angle || 0) * (Math.PI / 180);
-
                 const steps = Math.max(120, Math.floor((rx + ry) * 2));
+
                 let prevX = 0, prevY = 0;
 
                 for (let i = 0; i <= steps; i++) {
@@ -891,21 +910,25 @@ export class DrawingTracker {
                         const gen = Utils.generateLinePixels(prevX, prevY, finalX, finalY);
                         for (const p of gen) pixels.push(p);
                     }
+
                     prevX = finalX;
                     prevY = finalY;
                 }
             }
             else {
                 const coords = obj.getCoords();
+
                 for (let i = 0; i < coords.length; i++) {
                     const start = coords[i];
                     const end = coords[(i + 1) % coords.length];
                     if (obj.type === 'line' && i === coords.length - 1) continue;
+
                     const gen = Utils.generateLinePixels(start.x, start.y, end.x, end.y);
                     for (const p of gen) pixels.push(p);
                 }
             }
         }
+
         return pixels;
     }
 }

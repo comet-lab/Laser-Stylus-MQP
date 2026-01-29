@@ -238,18 +238,13 @@ pre {
   pointer-events: none;
 }
 
-.fabric-canvas-container {
+#canvas {
   position: absolute !important;
   top: 0 !important;
   left: 0 !important;
   width: 100% !important;
   height: 100% !important;
-  z-index: 10;
-}
-
-#canvas {
-  width: 100%;
-  height: 100%;
+  /* This ensures canvas display size matches viewport */
 }
 
 #fixturesCanvas {
@@ -261,12 +256,24 @@ pre {
   z-index: 15;
   pointer-events: none;
   display: none;
+  opacity: 0.6;
 }
 
 #fixturesCanvas.active {
   pointer-events: auto;
   display: block;
 }
+
+/* Make sure both canvases are children of viewport */
+.fabric-canvas-container {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 10;
+}
+
 
 .activeTool {
   outline: 3px solid #6df06d;
