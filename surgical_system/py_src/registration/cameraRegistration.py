@@ -61,13 +61,11 @@ class Camera_Registration(System_Calibration):
         
         self.laser_controller.set_output(False)
         
-        self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder, debug = debug)
-        self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder, debug = debug)
         
-        self.reprojection_test('color', self.rgb_M, gridShape = np.array([2, 2]), laserDuration = .15, \
+        self.reprojection_test('color', self.cam_M['color'], gridShape = np.array([2, 2]), laserDuration = .15, \
                         debug=debug, height=0)
         
-        self.reprojection_test('thermal', self.therm_M, gridShape = np.array([2, 2]), laserDuration = .15, \
+        self.reprojection_test('thermal', self.cam_M['thermal'], gridShape = np.array([2, 2]), laserDuration = .15, \
                         debug=debug, height=0)
         
         self.laser_alignment()
@@ -362,17 +360,16 @@ class Camera_Registration(System_Calibration):
 
         return out
         
-    
+### TESTING FUNCTIONS ###
     
     def transformed_view(self, cam_type = "color"):
         # Size of the top-down (bird's-eye) image (e.g., from calibration)
         WINDOW_NAME = "w0w"
         img = self.get_cam_latest(cam_type)
-        H = self.rgb_M.copy()  # your original homography
 
-        H_shifted, (out_w, out_h) = self.make_positive_homography(H, img.shape)
-
-        warped = cv2.warpPerspective(img, H_shifted, (out_w, out_h))
+        
+        warped = self.cam_transforms[cam_type].warp_image_for_display(img)
+        
 
         selector = ROISelector(warped)
         cv2.namedWindow(WINDOW_NAME)
@@ -395,14 +392,9 @@ class Camera_Registration(System_Calibration):
 
         cv2.destroyAllWindows()
     
-    def get_transformed_view(self, img, cam_type = "color"):
-        if cam_type == "color":
-            warped = cv2.warpPerspective(img, self.rgb_H_shifted, self.rgb_out)
-        else:
-            warped = img
-        return warped
+    
 
-    def live_control_view(self, cam_type, max_vel = 0.05, window_name="Camera", frame_key="color"):
+    def live_control_view(self, cam_type, max_vel = 0.05, window_name="Camera", frame_key="color", warped = True):
         """
         Show a live view from cam_obj and allow the user to click to get pixel locations.
         """
@@ -434,6 +426,7 @@ class Camera_Registration(System_Calibration):
         
         try:
             while True:
+                
                 frame_data = self.get_cam_latest(cam_type)
 
                 # Handle either dict or raw image
@@ -446,14 +439,17 @@ class Camera_Registration(System_Calibration):
                     continue
 
                 disp = frame.copy()
+                
+                if warped:
+                    # Test as if it was the UI 
+                    disp = self.get_transformed_view(disp)
+                    disp = cv2.resize(disp, (1280, 720), interpolation=cv2.INTER_NEAREST)
 
                 if last_point is not None:
                     cv2.circle(disp, last_point, 5, (0, 255, 0), 2)
                     
-                    if cam_type == "thermal" or cam_type == "color":
-                        target_position = self.pixel_to_world(last_point, cam_type)[0]
-                    else:
-                        raise(f"Wrong camera type: {cam_type}")
+                    target_position = self.get_UI_to_world_m(cam_type, last_point, warped)[0]
+
                 
                 if dragging and last_point is not None:
                     target_pose = np.eye(4)
@@ -844,9 +840,9 @@ if __name__ == '__main__':
     # camera_reg.run()
     rgbd_cam.set_default_setting()
     # camera_reg.view_rgbd_therm_registration()
-    camera_reg.live_control_view('color')
+    # camera_reg.transformed_view(cam_type="thermal")
+    camera_reg.live_control_view('color', warped=False)
     # camera_reg.view_rgbd_therm_heat_overlay()
-    # camera_reg.transformed_view()
     # camera_reg.draw_traj()
     therm_cam.deinitialize_cam()
     # camera_reg.live_control_view("color")

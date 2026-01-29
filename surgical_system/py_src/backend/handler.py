@@ -102,11 +102,14 @@ class Handler:
     def _do_create_path(self, path):
         pixels = path
         path = None
-        # pixels = self.cam_reg.moving_average_smooth(pixels, window=5)
-        if self.desired_state.isTransformedViewOn:
-            robot_path = self.cam_reg.world_to_real(pixels, cam_type=self.cam_type, z = self.working_height)
-        else:
-            robot_path = self.cam_reg.pixel_to_world(pixels, cam_type=self.cam_type, z = self.working_height)
+        
+        warped_view = self.desired_state.isTransformedViewOn
+        robot_path = self.get_UI_to_world_m(
+                self.cam_type, 
+                pixels, 
+                warped_view, 
+                z = self.working_height)
+            
         speed = self.desired_state.speed if self.desired_state.speed != None else 0.01 # m/s
         traj = self.robot_controller.create_custom_trajectory(robot_path, speed)
         return traj
@@ -115,7 +118,9 @@ class Handler:
         
         target_positions = traj.get_path_position()
         if self.desired_state.isTransformedViewOn:
-            pixels = self.cam_reg.real_to_world(target_positions, self.cam_type)
+            display_w, display_h= 1280.0, 720.0
+            pixels = self.cam_reg.real_to_world(target_positions, self.cam_type, 
+                                                display_w = display_w, display_h = display_h)
         else:
             pixels = self.cam_reg.world_to_pixel(target_positions, self.cam_type)
         self.cam_reg.get_path(pixels)
@@ -127,8 +132,9 @@ class Handler:
         # TODO convert path from List
         if self.show_path:
             self._do_show_path(traj)
-            
-        self.robot_controller.run_trajectory(traj, blocking=False, laser_on=self.desired_state.isLaserOn)
+        
+        # TODO uncomment controller 
+        # self.robot_controller.run_trajectory(traj, blocking=False, laser_on=self.desired_state.isLaserOn)
         
     def _do_hold_pose(self):
         current_pose, current_vel = self.robot_controller.get_current_state()
@@ -148,10 +154,17 @@ class Handler:
             self._do_hold_pose()
         else:
             pixel = np.array([[self.desired_state.x, self.desired_state.y]])
-            if self.desired_state.isTransformedViewOn:
-                target_world_point = self.cam_reg.world_to_real(pixel, cam_type=self.cam_type, z=self.working_height)[0]
-            else:
-                target_world_point = self.cam_reg.pixel_to_world(pixel, cam_type=self.cam_type, z=self.working_height)[0]
+            
+            warped_view = self.desired_state.isTransformedViewOn
+            target_world_point = self.get_UI_to_world_m(
+                self.cam_type, 
+                pixel, 
+                warped_view, 
+                z = self.working_height)[0]
+            # if self.desired_state.isTransformedViewOn:
+            #      self.cam_reg.world_to_real(pixel, cam_type=self.cam_type, z=self.working_height)[0]
+            # else:
+            #     target_world_point = self.cam_reg.pixel_to_world(pixel, cam_type=self.cam_type, z=self.working_height)[0]
             target_pose = np.eye(4)
             
             target_pose[:3, -1] = target_world_point
