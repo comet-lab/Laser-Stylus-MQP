@@ -50,7 +50,7 @@ class Handler:
         '''
         # Return mask, gradient field
         # TODO keep virtual fixture in robot schema, not handlers
-        virtual_fixture = np.zeros((720, 1280))
+        virtual_fixture = np.zeros((1280, 720))
 
         cv2.rectangle(virtual_fixture, (0,0), (400,200), color=1, thickness=-1)
         cv2.ellipse(virtual_fixture, center=(900,250), axes=(160,150), color=1, thickness=-1, angle=0, startAngle=0, endAngle=180)
@@ -80,6 +80,12 @@ class Handler:
             self.cam_type = "thermal"
         else:
             self.cam_type = "color"
+        x = int(self.desired_state.x) if self.desired_state.x is not None else None
+        y = int(self.desired_state.y) if self.desired_state.y is not None else None
+        if(x is not None and y is not None):
+            print(x, y, self.virtual_fixture[x, y], int(self.virtual_fixture[x, y]) == 1)
+            if(int(self.virtual_fixture[x, y]) == 1):
+                self.desired_state.isLaserOn = False
             
     def _read_raster(self):
         data_str = self.desired_state.raster_mask
@@ -189,12 +195,7 @@ class Handler:
         if(self.desired_state.isRobotOn != self.prev_robot_on):
             self._do_hold_pose() 
 
-        if(self.desired_state.isRobotOn):
-            # TODO interrupt trajectory?            
-            # TODO if inside virtual fixture, turn laser off
-            if(self.virtual_fixture[self.robot_controller.get_current_state()[0]]):
-                self.desired_state.isLaserOn = False
-
+        if(self.desired_state.isRobotOn):          
             
             # print("loop",
             # "raster?", self.desired_state.raster_mask is not None,
