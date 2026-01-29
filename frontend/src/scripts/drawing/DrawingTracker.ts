@@ -26,7 +26,7 @@ export class DrawingTracker {
     private fixturesCanvas: HTMLCanvasElement | null = null;
     private fixturesCtx: CanvasRenderingContext2D | null = null;
     private currentBrushType: 'round' | 'square' | null = null;
-    private currentBrushSize: number = 15;
+    private currentBrushSize: number = 50;
     private isErasing: boolean = false;
     private isFixturesDrawing: boolean = false;
     private lastFixturesPoint: { x: number, y: number } | null = null;
