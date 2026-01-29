@@ -10,7 +10,7 @@ declare global {
 
 window.addEventListener('load', () => {
     // --- 1. Get DOM Elements ---
-    const viewport = document.getElementById('viewport') as HTMLElement; // NEW: Parent container
+    const viewport = document.getElementById('viewport') as HTMLElement;
     const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
     const settingsPopup = document.getElementById('settingsPopup') as HTMLElement;
     const overlay = document.getElementById('overlay') as HTMLElement;
@@ -52,6 +52,20 @@ window.addEventListener('load', () => {
     const rasterBtnB = document.getElementById('rasterB') as HTMLButtonElement;
     const rasterDensityInput = document.getElementById('densityRaster') as HTMLInputElement;
 
+    // Fixtures Mode Elements
+    const fixturesTools = document.getElementById('fixtures-tools') as HTMLElement;
+    const drawingTools = document.getElementById('drawing-tools') as HTMLElement;
+    const roundBrushBtn = document.getElementById('roundBrushBtn') as HTMLButtonElement;
+    const squareBrushBtn = document.getElementById('squareBrushBtn') as HTMLButtonElement;
+    const brushSizeSlider = document.getElementById('brushSizeSlider') as HTMLInputElement;
+    const clearBoundaryBtn = document.getElementById('clearBoundaryBtn') as HTMLButtonElement;
+    const applyFixturesBtn = document.getElementById('applyFixturesBtn') as HTMLButtonElement;
+    const fixturesUiElements = document.querySelectorAll('.fixtures-ui-only');
+    const drawingUiElements = document.querySelectorAll('.drawing-ui-only');
+
+    // NOTE: Eraser button should be in HTML as third button in fixtures-tools div
+    const eraserBrushBtn = document.getElementById('eraserBtn') as HTMLButtonElement;
+
     // --- 2. State Variables ---
     let laserConfirmationTimeout: number | null = null;
     let robotConfirmationTimeout: number | null = null;
@@ -64,6 +78,12 @@ window.addEventListener('load', () => {
     let isRealTimeDrawing = false;
     let latestRealTimePos: { x: number, y: number } | null = null;
     const wsHandler = new WebSocketHandler(null);
+
+    // Fixtures Mode State
+    type CurrentMode = 'drawing' | 'thermal' | 'fixtures';
+    let currentMode: CurrentMode = 'drawing';
+    let selectedBrushType: 'round' | 'square' | null = null;
+    let isEraserActive = false;
 
     function updateDrawButtonState() {
         const hasShape = drawnShapeType !== null;
@@ -82,6 +102,27 @@ window.addEventListener('load', () => {
             lineBtn.disabled = (drawnShapeType !== 'line');
         } else {
             toggleButtons.forEach(btn => btn.disabled = false);
+        }
+    }
+
+    function updateFixturesButtonState() {
+        const hasFixtures = drawingTracker?.hasFixtures() ?? false;
+        const canApply = drawingTracker?.canApplyFixtures() ?? false;
+
+        clearBoundaryBtn.disabled = !hasFixtures;
+        applyFixturesBtn.disabled = !canApply; // Only enable if can apply
+
+        // Brush buttons logic - can switch between them freely
+        if (hasFixtures) {
+            // When fixtures exist, can still select any brush to draw more or erase
+            roundBrushBtn.disabled = false;
+            squareBrushBtn.disabled = false;
+            eraserBrushBtn.disabled = false;
+        } else {
+            // No fixtures - can select drawing brushes but not eraser
+            roundBrushBtn.disabled = false;
+            squareBrushBtn.disabled = false;
+            eraserBrushBtn.disabled = true; // Can't erase nothing
         }
     }
 
@@ -135,25 +176,16 @@ window.addEventListener('load', () => {
 
     function syncUiToState(state: Partial<WebSocketMessage>) {
         if (state.x !== undefined && state.y !== undefined) {
-            // Get the current dimensions of the viewport/canvas container
             const containerWidth = viewport.offsetWidth;
             const containerHeight = viewport.offsetHeight;
-
-            // Get the intrinsic resolution of the video stream
             const videoWidth = video.videoWidth;
             const videoHeight = video.videoHeight;
 
             if (videoWidth > 0 && videoHeight > 0) {
-                // Calculate the position scaled to the UI dimensions
-                // Formula: (RobotPixel / VideoResolution) * ContainerSize
                 const cssLeft = (state.x / videoWidth) * containerWidth;
                 const cssTop = (state.y / videoHeight) * containerHeight;
-
-                // Update the marker position
                 robotMarker.style.left = `${cssLeft}px`;
                 robotMarker.style.top = `${cssTop}px`;
-
-                // Ensure it's visible if it was hidden
                 robotMarker.style.display = 'block';
             }
         }
@@ -205,7 +237,6 @@ window.addEventListener('load', () => {
 
     video.muted = true;
     video.autoplay = true;
-    // Set initial size based on Viewport, not window innerWidth directly
     canvas.width = viewport.offsetWidth;
     canvas.height = viewport.offsetHeight;
     setMessage("Loading stream");
@@ -231,10 +262,14 @@ window.addEventListener('load', () => {
                             drawnShapeType = selectedShape;
                             updateDrawButtonState();
                         }
+                    },
+                    () => {
+                        updateFixturesButtonState();
                     }
                 );
 
                 updateDrawButtonState();
+                updateFixturesButtonState();
             }
         },
     });
@@ -304,40 +339,242 @@ window.addEventListener('load', () => {
     };
     processingModeSwitch.addEventListener('change', toggleMode);
 
-
     const modeButtons = document.querySelectorAll('.mode-btn');
 
     modeButtons.forEach(btn => {
         btn.addEventListener('click', () => {
-            // 1. Remove active class from all buttons
             modeButtons.forEach(b => b.classList.remove('active'));
-
-            // 2. Add active class to clicked button
             btn.classList.add('active');
-
-            // 3. Trigger Mode-Specific Logic
-            const mode = btn.id; // drawingBtn, thermalBtn, or fixturesBtn
+            const mode = btn.id;
             switchMode(mode);
         });
     });
 
-    // Set default active mode
     document.getElementById('drawingBtn')?.classList.add('active');
 
     function switchMode(modeId: string) {
         console.log("Switching to mode:", modeId);
 
-        // Example Logic for your Fabric.js canvas:
+        // 1. Cleanup Logic (Leaving a mode)
+        if (currentMode === 'fixtures' && modeId !== 'fixturesBtn') {
+            // If we leave fixtures mode and they aren't applied yet, clear them
+            if (drawingTracker && drawingTracker.canApplyFixtures()) {
+                drawingTracker.clearFixtures();
+
+                // Reset fixture UI state
+                selectedBrushType = null;
+                isEraserActive = false;
+                roundBrushBtn.classList.remove('selected');
+                squareBrushBtn.classList.remove('selected');
+                eraserBrushBtn.classList.remove('selected');
+            }
+        }
+
+        // 2. Switching Logic
         if (modeId === 'fixturesBtn') {
-            // Enable "No-Go Zone" drawing mode
-            // canvas.isDrawingMode = true;
-            // setDrawingColor('red'); 
+            currentMode = 'fixtures';
+
+            drawingTools.classList.add('hidden');
+            fixturesTools.classList.remove('hidden');
+
+            drawingUiElements.forEach(el => el.classList.add('hidden'));
+            fixturesUiElements.forEach(el => el.classList.remove('hidden'));
+
+            // Disable drawing interactions, but keep the shape visible
+            drawingTracker?.disableDrawing();
+
+            drawingTracker?.enableFixturesMode();
+            updateFixturesButtonState();
+
         } else if (modeId === 'thermalBtn') {
-            // Enable point-marker placement
-        } else {
-            // Normal Batch/Real-time drawing
+            currentMode = 'thermal';
+
+            drawingTools.classList.remove('hidden');
+            fixturesTools.classList.add('hidden');
+            drawingUiElements.forEach(el => el.classList.remove('hidden'));
+            fixturesUiElements.forEach(el => el.classList.add('hidden'));
+
+            drawingTracker?.disableFixturesMode();
+            drawingTracker?.disableDrawing();
+
+            if (drawingTracker?.hasFixtures()) {
+                drawingTracker?.showFixtures();
+            }
+
+            // In thermal mode, we see the shape but can't interact
+            updateDrawButtonState();
+
+        } else { // drawing mode
+            currentMode = 'drawing';
+
+            drawingTools.classList.remove('hidden');
+            fixturesTools.classList.add('hidden');
+            drawingUiElements.forEach(el => el.classList.remove('hidden'));
+            fixturesUiElements.forEach(el => el.classList.add('hidden'));
+
+            drawingTracker?.disableFixturesMode();
+
+            if (drawingTracker?.hasFixtures()) {
+                drawingTracker?.showFixtures();
+            }
+
+            // --- STATE RESTORATION ---
+            // 1. If a shape is already drawn/placed
+            if (drawnShapeType) {
+                // Ensure tracker is disabled (can't draw new shape)
+                drawingTracker?.disableDrawing();
+
+                // Re-highlight the correct tool button
+                toggleButtons.forEach(btn => btn.classList.remove('selected'));
+                if (drawnShapeType === 'freehand') penBtn.classList.add('selected');
+                else if (drawnShapeType === 'square') squareBtn.classList.add('selected');
+                else if (drawnShapeType === 'circle') circleBtn.classList.add('selected');
+                else if (drawnShapeType === 'triangle') triangleBtn.classList.add('selected');
+                else if (drawnShapeType === 'line') lineBtn.classList.add('selected');
+
+            }
+            // 2. If no shape is drawn, but a tool was selected previously
+            else if (selectedShape) {
+                drawingTracker?.setShapeType(selectedShape);
+                drawingTracker?.enableDrawing();
+
+                // Re-highlight the selected tool
+                toggleButtons.forEach(btn => btn.classList.remove('selected'));
+                if (selectedShape === 'freehand') penBtn.classList.add('selected');
+                else if (selectedShape === 'square') squareBtn.classList.add('selected');
+                else if (selectedShape === 'circle') circleBtn.classList.add('selected');
+                else if (selectedShape === 'triangle') triangleBtn.classList.add('selected');
+                else if (selectedShape === 'line') lineBtn.classList.add('selected');
+            }
+            // 3. No shape, no tool selected
+            else {
+                drawingTracker?.disableDrawing();
+                toggleButtons.forEach(btn => btn.classList.remove('selected'));
+            }
+
+            updateDrawButtonState();
         }
     }
+
+    // Fixtures Mode - Brush Selection
+    function handleBrushSelection(brushType: 'round' | 'square') {
+        if (roundBrushBtn.disabled && brushType === 'round') return;
+        if (squareBrushBtn.disabled && brushType === 'square') return;
+
+        const isAlreadySelected = selectedBrushType === brushType;
+
+        if (isAlreadySelected) {
+            // Deselect
+            if (brushType === 'round') {
+                roundBrushBtn.classList.remove('selected');
+            } else {
+                squareBrushBtn.classList.remove('selected');
+            }
+            selectedBrushType = null;
+            isEraserActive = false;
+            drawingTracker?.disableFixturesBrush();
+        } else {
+            // Select new brush
+            roundBrushBtn.classList.remove('selected');
+            squareBrushBtn.classList.remove('selected');
+            eraserBrushBtn.classList.remove('selected');
+
+            if (brushType === 'round') {
+                roundBrushBtn.classList.add('selected');
+            } else {
+                squareBrushBtn.classList.add('selected');
+            }
+
+            selectedBrushType = brushType;
+            isEraserActive = false;
+
+            const brushSize = parseInt(brushSizeSlider.value);
+            drawingTracker?.setFixturesBrush(brushType, brushSize, false);
+        }
+
+        updateFixturesButtonState();
+    }
+
+    function handleEraserSelection() {
+        if (eraserBrushBtn.disabled) return;
+
+        const isAlreadySelected = isEraserActive;
+
+        if (isAlreadySelected) {
+            // Deselect eraser
+            eraserBrushBtn.classList.remove('selected');
+            selectedBrushType = null;
+            isEraserActive = false;
+            drawingTracker?.disableFixturesBrush();
+        } else {
+            // Select eraser (use round brush shape for eraser)
+            roundBrushBtn.classList.remove('selected');
+            squareBrushBtn.classList.remove('selected');
+            eraserBrushBtn.classList.add('selected');
+
+            selectedBrushType = 'round'; // Eraser uses round shape
+            isEraserActive = true;
+
+            const brushSize = parseInt(brushSizeSlider.value);
+            drawingTracker?.setFixturesBrush('round', brushSize, true);
+        }
+
+        updateFixturesButtonState();
+    }
+
+    roundBrushBtn.addEventListener('click', () => handleBrushSelection('round'));
+    squareBrushBtn.addEventListener('click', () => handleBrushSelection('square'));
+    eraserBrushBtn.addEventListener('click', () => handleEraserSelection());
+
+    brushSizeSlider.addEventListener('input', () => {
+        if (selectedBrushType && drawingTracker) {
+            const brushSize = parseInt(brushSizeSlider.value);
+            drawingTracker.setFixturesBrush(selectedBrushType, brushSize, isEraserActive);
+        }
+    });
+
+    clearBoundaryBtn.addEventListener('click', () => {
+        drawingTracker?.clearFixtures();
+
+        // Disable the brush in the tracker
+        drawingTracker?.disableFixturesBrush();
+
+        // Reset local state and UI
+        selectedBrushType = null;
+        isEraserActive = false;
+        roundBrushBtn.classList.remove('selected');
+        squareBrushBtn.classList.remove('selected');
+        eraserBrushBtn.classList.remove('selected');
+
+        updateFixturesButtonState();
+    });
+
+    applyFixturesBtn.addEventListener('click', async () => {
+        if (!drawingTracker) return;
+
+        applyFixturesBtn.disabled = true;
+        clearBoundaryBtn.disabled = true;
+
+        try {
+            await drawingTracker.executeFixtures();
+
+            // Disable the brush in the tracker after applying
+            drawingTracker.disableFixturesBrush();
+
+            // Reset local state and UI
+            selectedBrushType = null;
+            isEraserActive = false;
+            roundBrushBtn.classList.remove('selected');
+            squareBrushBtn.classList.remove('selected');
+            eraserBrushBtn.classList.remove('selected');
+
+            updateFixturesButtonState();
+        } catch (e) {
+            console.error(e);
+            applyFixturesBtn.disabled = false;
+            clearBoundaryBtn.disabled = false;
+        }
+    });
 
     // Laser/Robot Toggle Logic
     laserBtn.addEventListener('click', () => {
@@ -424,7 +661,6 @@ window.addEventListener('load', () => {
         let density = 0;
         if (fillEnabled) {
             density = parseFloat(rasterDensityInput.value);
-
         }
         if (isNaN(speed) || speed <= 0) {
             alert("Invalid speed");
@@ -435,25 +671,14 @@ window.addEventListener('load', () => {
         prepareBtn.disabled = true;
 
         try {
-            // Execute the path
             await drawingTracker.executePath(speed, String(selectedRasterPattern), density, fillEnabled);
-
-            // Clear the canvas (visuals only)
             drawingTracker.clearDrawing();
-
-            // Reset only the drawn state (so Execute becomes disabled until you draw again)
             drawnShapeType = null;
-
-            // Do not remove 'selected' class and do not set selectedShape to null.
-            // We want the current tool to remain active.
             toggleButtons.forEach(btn => {
-                btn.disabled = false; // Just ensure they aren't disabled
+                btn.disabled = false;
             });
-
-            // Update state to disable action buttons (Clear/Execute) but keep tool buttons ready
             updateDrawButtonState();
 
-            // Force tracker to remain in drawing mode for the currently selected shape
             if (selectedShape) {
                 drawingTracker.setShapeType(selectedShape);
                 drawingTracker.enableDrawing();
@@ -475,9 +700,8 @@ window.addEventListener('load', () => {
         drawnShapeType = null;
         updateDrawButtonState();
 
-        drawingTracker.enableMarkerMode(); // enables dot placement
+        drawingTracker.enableMarkerMode();
     });
-
 
     confirmMarkersBtn.addEventListener('click', async () => {
         if (!drawingTracker) return;
@@ -489,19 +713,11 @@ window.addEventListener('load', () => {
 
         try {
             await drawingTracker.submitHeatMarkers(markers);
-
-            // Clear the canvas visuals after
             drawingTracker.clearDrawing();
-
-            // Reset marker mode
             drawingTracker.disableMarkerMode();
-
-            // Reset any UI buttons that need enabling
             toggleButtons.forEach(btn => {
                 btn.disabled = false;
             });
-
-            // Update any other draw button states if needed
             updateDrawButtonState();
         } catch (e) {
             console.error(e);
@@ -510,20 +726,11 @@ window.addEventListener('load', () => {
         }
     });
 
-
-
-
     clearBtn.addEventListener('click', () => {
-        // Clear visuals
         drawingTracker?.clearDrawing();
-
-        // Reset drawn state
         drawnShapeType = null;
-
-        // Update buttons (Disables Clear/Execute, Enables Tools)
         updateDrawButtonState();
 
-        // Ensure the tracker knows we are still trying to draw with the currently selected shape
         if (drawingTracker && selectedShape) {
             drawingTracker.setShapeType(selectedShape);
             drawingTracker.enableDrawing();
@@ -559,8 +766,6 @@ window.addEventListener('load', () => {
     });
 
     window.addEventListener('resize', () => {
-        // Use viewport as source of truth. Do not manually set canvas.width
-        // Let Fabric handle the sync via the tracker.
         if (drawingTracker) {
             drawingTracker.updateCanvasSize(viewport.offsetWidth, viewport.offsetHeight);
         }

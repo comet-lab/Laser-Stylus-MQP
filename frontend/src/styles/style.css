@@ -7,267 +7,273 @@
 @import url('./preparePage.css');
 
 /* ============================================
-   GLOBAL STYLES
+   GLOBAL STYLES & UTILITIES
    ============================================ */
-
-/* Added global reset and explicit height/width.
-   In Standards Mode, percentage heights on children (like #top-panel's 7%)
-   require the parent (body/html) to have an explicit height.
-*/
 * {
-  box-sizing: border-box;
+    box-sizing: border-box;
 }
 
-body, html {
-  margin: 0 !important;
-  padding: 0 !important;
-  height: 100%;
-  width: 100%;
+body,
+html {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 100%;
+    width: 100%;
+    touch-action: none;
 }
 
 body {
-  font-family: 'IBM Plex Sans', sans-serif;
-  font-weight: 400;
-  background-color: #000000;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 400;
+    background-color: #000000;
 }
 
 #app {
-  max-width: 680px;
+    max-width: 680px;
 }
 
 button {
-  background-color: lightgray;
-  border-radius: 8px;
-  border-width: 2px;
-  padding: 0.5rem 1rem;
-  font-size: 1rem;
-  cursor: pointer;
+    background-color: lightgray;
+    border-radius: 8px;
+    border-width: 2px;
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    cursor: pointer;
 }
 
 pre {
-  background: #f7f7f8;
-  padding: 1rem;
-  border-radius: 6px;
-  margin-top: 1rem;
-  white-space: pre-wrap;
+    background: #f7f7f8;
+    padding: 1rem;
+    border-radius: 6px;
+    margin-top: 1rem;
+    white-space: pre-wrap;
+}
+
+.hidden,
+.hidden-mode {
+    display: none !important;
 }
 
 /* ============================================
    TOP PANEL
    ============================================ */
 #top-panel {
-  height: 60px;
-  flex-shrink: 0;
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-  background-color: #0f1419;
-  gap: 10px;
+    height: 60px;
+    flex-shrink: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    background-color: #0f1419;
+    gap: 10px;
 }
 
-/* --- Status Panels --- */
 .status-message {
-  display: flex;
-  height: 100%;
-  background-color: #151b21;
-  color: #e0f2e0;
-  border-radius: 16px;
+    display: flex;
+    height: 100%;
+    background-color: #151b21;
+    color: #e0f2e0;
+    border-radius: 16px;
 }
 
 #status-panel-left {
-  justify-content: flex-start;
-  align-items: center;
-  padding-left: 5px;
-  padding-right: 5px;
-  flex-grow: 1;
-  gap: 12px;
+    justify-content: flex-start;
+    align-items: center;
+    padding-left: 5px;
+    padding-right: 5px;
+    flex-grow: 1;
+    gap: 12px;
+    border: 2px solid #2c343b;
+}
+
+.mode-specific-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    height: 100%;
+}
+
+#status-panel-right {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #172027;
+    border: 2px solid #2c343b;
+    border-radius: 18px;
+    padding: 4px;
+    gap: 4px;
+    height: 100%;
+    max-width: none;
+    width: auto;
 }
 
 /* ============================================
    LEFT PANEL & CONTROLS
    ============================================ */
 #left-panel {
-  height: calc(100% - 60px);
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  width: 65.5px;
-  flex-shrink: 0;
-  background-color: #0f1419;
+    height: calc(100% - 60px);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 65.5px;
+    flex-shrink: 0;
+    background-color: #0f1419;
 }
 
 #top-icon-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  margin-top: 0.2vw;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: 0.2vw;
 }
 
 #main-section-wrapper {
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 #middle-icon-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  margin-top: auto;
-  margin-bottom: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: auto;
+    margin-bottom: auto;
 }
 
-.icon-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 90%;
-  aspect-ratio: 1 / 1;
-  border-radius: 12px;
-  border: none;
-  background-color: #2c343b;
-  color: #e0f2e0;
-  border: 3px solid transparent;
-  transition: all 0.15s ease-out;
-}
-.icon-btn:hover {
-  filter: brightness(110%);
-}
-.icon-btn.selected,
-.icon-btn:active {
-  background-color: #455256;
-  border-color: #e0f2e0;
-  box-shadow: inset 2px 2px 8px rgba(0, 0, 0, 0.5);
+#settings-icon-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 0.2vw;
 }
 
-/* Disabled state for shape buttons */
-.icon-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-  filter: grayscale(50%);
-  pointer-events: none;
-  box-shadow: none;
-  border-color: transparent;
-}
-
-.icon-btn-stroke {
-  stroke: #e0f2e0;
-}
-.icon-btn-fill {
-  fill: #e0f2e0;
+.tool-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
 }
 
 /* ============================================
-   STATUS PANEL
+   SLIDERS (VERTICAL & HORIZONTAL)
    ============================================ */
-
-#status-panel-right {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #172027; /* Matches your toggle center-box */
-  border: 2px solid #2c343b;
-  border-radius: 18px; 
-  padding: 4px; /* Space between border and buttons */
-  gap: 4px;
-  height: 100%; /* Should fit within the 60px top-panel */
-  max-width: none; 
-  width: auto;
+.brush-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    width: 100%;
 }
 
-.mode-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 0 20px;
-  height: 100%;
-  font-family: 'IBM Plex Sans', sans-serif;
-  font-weight: 700;
-  font-size: 13px; /* Slightly smaller for tab look */
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  border: none;
-  border-radius: 14px; /* Matches the slider radius */
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background-color: transparent; /* Invisible when not active */
-  color: #e0f2e09c; /* Dimmed text for inactive */
-  fill: #e0f2e09c;
+.brush-label {
+    color: #e0f2e0;
+    font-size: 0.8rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
-.mode-btn:hover:not(.active) {
-  background-color: rgba(224, 242, 224, 0.05);
-  color: #e0f2e0;
-  fill: #e0f2e0;
+.vertical-slider-container {
+    height: 180px; /* Taller container to fit rotated slider */
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
-/* Active State (The Pill) */
-.mode-btn.active {
-  background-color: #e0f2e0; /* High contrast like your slider */
-  color: #0f1419; /* Dark text for readability */
-  fill: #0f1419;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+.styled-range {
+    -webkit-appearance: none;
+    appearance: none;
+    background: #2c343b;
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
 }
 
-/* Ensure SVGs inside active buttons change color */
-.mode-btn.active svg path {
-  fill: #0f1419;
-  stroke: none; /* Adjust if your SVGs use stroke instead of fill */
+.styled-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #e0f2e0;
+    cursor: pointer;
+    border: 2px solid #2c343b;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
 }
 
+.vertical-range {
+    width: 160px; /* Length of the slider */
+    height: 6px; /* Thickness */
+    transform: rotate(-90deg);
+    transform-origin: center;
+    margin: 0;
+}
 
 /* ============================================
-   CANVAS & VIDEO
+   CANVAS & VIDEO VIEWPORT
    ============================================ */
 #viewport {
-  position: absolute;
-  top: 60px; /* Below Top Panel */
-  left: 65.5px; /* Right of Left Panel */
-  width: calc(100% - 65.5px);
-  height: calc(100% - 60px);
-  overflow: hidden;
-  background-color: #000;
+    position: absolute;
+    top: 60px;
+    left: 65.5px;
+    width: calc(100% - 65.5px);
+    height: calc(100% - 60px);
+    overflow: hidden;
+    background-color: #000;
 }
 
 #video {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: fill; /* Stretches video to match canvas coordinate system */
-  z-index: 1;
-  pointer-events: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+    z-index: 1;
+    pointer-events: none;
 }
 
-/* Fabric.js wraps #canvas in a div, so style that not the canvas directly
-*/
 .fabric-canvas-container {
-  position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  z-index: 10; /* Above video */
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 10;
 }
 
-/* Ensure the inner canvas element fills the wrapper */
 #canvas {
-  width: 100%;
-  height: 100%;
+    width: 100%;
+    height: 100%;
 }
 
-/* for the different tools on the left side */
+#fixturesCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 15;
+    pointer-events: none;
+    display: none;
+}
+
+#fixturesCanvas.active {
+    pointer-events: auto;
+    display: block;
+}
+
 .activeTool {
-  outline: 3px solid #6df06d;
-  border-radius: 6px;
+    outline: 3px solid #6df06d;
+    border-radius: 6px;
 }
 
-/* Styles for the circular robot marker */
 #robot-marker {
     position: absolute;
     width: 24px;
@@ -278,12 +284,6 @@ pre {
     pointer-events: none;
     z-index: 999;
     display: none;
-    transform: translate(-50%, -50%); 
+    transform: translate(-50%, -50%);
     transition: left 0.1s linear, top 0.1s linear;
-}
-
-
-/* Code to allow for drawing on the tablet */
-html, body {
-  touch-action: none;
 }
