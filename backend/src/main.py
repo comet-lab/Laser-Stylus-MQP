@@ -37,6 +37,7 @@ async def submit_path(request: dict):
     
     print(f"Received path with {len(pixels)} pixels")
     manager.desired_state.path = pixels
+    print("BROADCASTING")
     await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
     
     return {
@@ -56,6 +57,7 @@ async def submit_settings(request: Request):
     manager.desired_state.speed = float(speed)
 
     print(f"Received settings: raster_type={raster_type}, speed={speed}")
+    print("BROADCASTING")
     await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
     
     return {
@@ -78,6 +80,7 @@ async def submit_settings(request: Request):
     manager.desired_state.isThermalViewOn = isThermalViewOn
 
     print(f"Received settings: tranformed view on? {isTransformedViewOn}, thermal view on? {isThermalViewOn}")
+    print("BROADCASTING")
     await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
     
     return {
@@ -115,6 +118,7 @@ async def submit_raster_mask(file: UploadFile):
     
     manager.desired_state.raster_mask = encoded_utf8
     print("Sending raster")
+    print("BROADCASTING")
     await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
     
     return {"filename": file.filename, "saved_at": file_location}

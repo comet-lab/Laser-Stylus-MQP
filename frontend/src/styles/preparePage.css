@@ -3,10 +3,10 @@
     z-index: 101;
     top: 10%;
     right: 3%;
-    width: 30vw;
-    height: 40vh;
+    width: fit-content;
+    height: fit-content;
     display: none;
-    background-color: #0f1419ba;
+    background-color: #0f1419e1;
     border-radius: 16px;
     border: 2px solid #2c343b;
     color: #e0f2e0;

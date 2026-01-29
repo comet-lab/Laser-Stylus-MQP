@@ -10,6 +10,7 @@ from datetime import datetime as dt
 from scipy.spatial.transform import Rotation
 from robot.robot import RobotSchema
 from dataclasses import dataclass, asdict
+import matplotlib.pyplot as plt
 
 # Classes
 mock_robot = os.getenv("MOCK_ROBOT", "0") == "1"
@@ -42,14 +43,15 @@ async def main():
     # Create FrankaNode object for controlling robot
     robot_controller = Robot_Controller() if not mock_robot else MockRobotController()
     home_pose = robot_controller.load_home_pose()
-    start_pos = np.array([0,0,0.35]) # [m,m,m]
+    start_pos = np.array([0,0,0.1]) # [m,m,m]
     start_pose = np.array([[1.0, 0, 0, start_pos[0]],
                             [0,1,0,start_pos[1]],
                             [0,0,1,start_pos[2]],
                             [0,0,0,1]])
     robot_controller.go_to_pose(start_pose@home_pose,1) # Send robot to start position
+
     desired_state = RobotSchema()
-    await asyncio.sleep(2)
+    await asyncio.sleep(2) # ?
     
     ##################################################################################
     #----------------------------------- Cam Config ---------------------------------#
@@ -63,15 +65,15 @@ async def main():
     # free beam laser spot.
     therm_cam = None
     rgbd_cam = None
-    cam_type = "color"
     
     if(not mock_robot):
         therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frame_rate="Rate50Hz",focal_distance=0.2)
         rgbd_cam = RGBD_Cam() #Runs a thread internally
-        # rgbd_cam.set_default_setting() # Auto-exposure
+        rgbd_cam.set_default_setting() # Auto-exposure
     else:
-        therm_cam = MockCamera(cam_type=cam_type)
-        rgbd_cam = MockCamera(cam_type=cam_type)
+        therm_cam = MockCamera(cam_type="thermal")
+        rgbd_cam = MockCamera(cam_type="color")
+        
 
     
     ##################################################################################
@@ -81,8 +83,7 @@ async def main():
     laser_obj = None
     if(not mock_robot):
         laser_obj = Laser_Arduino()  # controls whether laser is on or off
-        laser_on = False
-        laser_obj.set_output(laser_on)
+        laser_obj.set_output(False)
     else:
         laser_obj = MockLaser()
         
@@ -94,7 +95,7 @@ async def main():
         camera_reg = MockCameraRegistration(therm_cam, rgbd_cam, robot_controller, laser_obj)
     print("Starting Streams ")
     b = Broadcast(mocking=mock_robot)
-    print(f"Broadcast connection status: {b.connect()}")
+    print(f"Broadcast connection status: {b.connected}")
     
     # def camera_broadcast_fn():
     #     while True:
@@ -137,6 +138,7 @@ async def main():
     #----------------------------- Camera Calibration -------------------------------#
     ##################################################################################
     
+    
     if camera_calibration:
         pass
 
@@ -147,15 +149,24 @@ async def main():
         await control_flow_handler.main_loop()            
             
         # Camera frame publishing
-        latest = camera_reg.get_cam_latest(cam_type=cam_type)
+        latest = camera_reg.get_cam_latest(cam_type=control_flow_handler.cam_type)
+        
         if isinstance(latest, dict):
-            latest = latest.get(cam_type, None)
+            latest = latest.get(control_flow_handler.cam_type, None)
+
+        if control_flow_handler.desired_state.isTransformedViewOn:
+            latest = camera_reg.get_transformed_view(latest, cam_type=control_flow_handler.cam_type)
+
         if(type(latest) == type(None)):
             continue
+
+        if latest.shape != (1280, 720):
+            latest = cv2.resize(latest, (1280, 720), interpolation=cv2.INTER_NEAREST)
+
         if(b.connected):
             b.publish_frame(latest)
         else:
-            b.connect()
+            b.connect(latest)
             print('connecting...')
             time.sleep(2)
   
