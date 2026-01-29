@@ -36,26 +36,35 @@
           <input type="number" id="speedInput" class="styled-input" value="10" step="10" min="1" max="100"
             placeholder="e.g. 10">
         </div>
-        <div class="fill-option-container">
-          <label class="fill-checkbox-label">
-            <input type="checkbox" id="fillCheckbox">
-            Fill Shape
-          </label>
-        </div>
 
-        <div id="rasterPatternContainer" class="raster-pattern hidden">
-          <p>Select Raster Pattern:</p>
-          <button id="rasterA" class="raster-btn">Line Raster</button>
-          <button id="rasterB" class="raster-btn">Spiral Raster</button>
-          <br>
-          <br>
-          <label for="densityRaster" class="input-label-density">Density of Raster:</label>
-          <div class="input-wrapper">
-            <input type="number" id="densityRaster" class="styled-input-density" value="0.5" step="0.1" min="0.1"
-              max="1" placeholder="e.g. 0.5">
+        <div class="fill-accordion-container">
+
+          <button id="fillAccordionToggle" class="fill-accordion-toggle">
+            <span class="fill-toggle-text">Fill Shape</span>
+            <div class="fill-toggle-icon">
+              <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1.41 0.589996L6 5.17L10.59 0.589996L12 2L6 8L0 2L1.41 0.589996Z" fill="currentColor" />
+              </svg>
+            </div>
+          </button>
+
+          <div id="fillSettingsPanel" class="fill-settings-panel">
+            <div class="fill-settings-inner">
+
+              <p class="fill-setting-label">Raster Pattern:</p>
+              <div class="segment-control">
+                <button id="rasterA" class="segment-btn active">Line</button>
+                <button id="rasterB" class="segment-btn">Spiral</button>
+              </div>
+
+              <div class="density-wrapper">
+                <label for="densityRaster" class="fill-setting-label">Density:</label>
+                <input type="number" id="densityRaster" class="styled-input-density" value="0.5" step="0.1" min="0.1"
+                  max="1" placeholder="0.5">
+              </div>
+            </div>
           </div>
         </div>
-
       </div>
 
       <div id="bottomButtons">
@@ -304,14 +313,14 @@
                 d="M14.015 0.585L18.965 5.525C19.745 6.315 19.745 7.575 18.965 8.365L9.775 17.555C9.02343 18.3037 8.00583 18.724 6.945 18.724C5.88417 18.724 4.86657 18.3037 4.115 17.555L0.585 14.025C-0.195 13.235 -0.195 11.975 0.585 11.185L11.185 0.585C11.975 -0.195 13.235 -0.195 14.015 0.585ZM1.995 12.605L5.535 16.135C6.315 16.925 7.575 16.925 8.365 16.135L11.895 12.605L6.945 7.655L1.995 12.605Z" />
             </svg>
           </button>
-          
+
           <div class="brush-container">
             <span class="brush-label">Size</span>
             <div class="vertical-slider-container">
               <input type="range" id="brushSizeSlider" min="1" max="100" value="15" class="styled-range vertical-range">
             </div>
           </div>
-          
+
         </div>
       </div>
 

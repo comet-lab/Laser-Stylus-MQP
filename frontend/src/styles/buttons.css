@@ -1,4 +1,8 @@
-/* --- Laser Toggle Component --- */
+/* ============================================
+   TOGGLE SWITCH COMPONENTS
+   ============================================ */
+
+/* --- Laser Toggle --- */
 #laser-toggle-container {
   position: relative;
   display: flex;
@@ -95,7 +99,7 @@
   right: 15px;
 }
 
-/* Laser Active State */
+/* Active State */
 #laser-toggle-container.active #laser-slider {
   left: calc(100% - 43px);
   background-color: #fff6f8;
@@ -119,7 +123,7 @@
   color: #fff6f8;
 }
 
-/* --- Robot Toggle Component --- */
+/* --- Robot Toggle --- */
 #robot-toggle-container {
   position: relative;
   display: flex;
@@ -215,7 +219,7 @@
   right: 15px;
 }
 
-/* Laser Active State */
+/* Active State */
 #robot-toggle-container.active #robot-slider {
   left: calc(100% - 43px);
   background-color: #f2f1e0;
@@ -239,102 +243,101 @@
   color: #f2f1e0;
 }
 
-
 /* ============================================
-   Assorted buttons
+   ICON & MODE BUTTONS
    ============================================ */
 .icon-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 90%;
-    aspect-ratio: 1 / 1;
-    border-radius: 12px;
-    border: none;
-    background-color: #2c343b;
-    color: #e0f2e0;
-    border: 3px solid transparent;
-    transition: all 0.15s ease-out;
-    cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 90%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  border: none;
+  background-color: #2c343b;
+  color: #e0f2e0;
+  border: 3px solid transparent;
+  transition: all 0.15s ease-out;
+  cursor: pointer;
 }
 
 .icon-btn:hover {
-    filter: brightness(110%);
+  filter: brightness(110%);
 }
 
 .icon-btn.selected,
 .icon-btn:active {
-    background-color: #455256;
-    border-color: #e0f2e0;
-    box-shadow: inset 2px 2px 8px rgba(0, 0, 0, 0.5);
+  background-color: #455256;
+  border-color: #e0f2e0;
+  box-shadow: inset 2px 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .icon-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-    filter: grayscale(50%);
-    pointer-events: none;
-    box-shadow: none;
-    border-color: transparent;
+  opacity: 0.3;
+  cursor: not-allowed;
+  filter: grayscale(50%);
+  pointer-events: none;
+  box-shadow: none;
+  border-color: transparent;
 }
 
 .icon-btn-stroke {
-    stroke: #e0f2e0;
+  stroke: #e0f2e0;
 }
 
 .icon-btn-fill {
-    fill: #e0f2e0;
+  fill: #e0f2e0;
 }
 
 .mode-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 0 20px;
-    height: 100%;
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-weight: 700;
-    font-size: 13px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    border: none;
-    border-radius: 14px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    background-color: transparent;
-    color: #e0f2e09c;
-    fill: #e0f2e09c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 20px;
+  height: 100%;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background-color: transparent;
+  color: #e0f2e09c;
+  fill: #e0f2e09c;
 }
 
 .mode-btn:hover:not(.active) {
-    background-color: rgba(224, 242, 224, 0.05);
-    color: #e0f2e0;
-    fill: #e0f2e0;
+  background-color: rgba(224, 242, 224, 0.05);
+  color: #e0f2e0;
+  fill: #e0f2e0;
 }
 
 .mode-btn.active {
-    background-color: #e0f2e0;
-    color: #0f1419;
-    fill: #0f1419;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  background-color: #e0f2e0;
+  color: #0f1419;
+  fill: #0f1419;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .mode-btn.active svg path,
 .mode-btn.active svg circle,
 .mode-btn.active svg rect {
-    fill: #0f1419;
-    stroke: none;
+  fill: #0f1419;
+  stroke: none;
 }
 
 #settingsBtn {
-    transition: all 0.08s ease-out;
-    fill: #e0f2e0;
+  transition: all 0.08s ease-out;
+  fill: #e0f2e0;
 }
 
-/* ACTION BUTTONS FOR DRAWING */
-
-/* --- Action Buttons --- */
+/* ============================================
+   ACTION BUTTONS (DRAWING/PREPARE/EXECUTE)
+   ============================================ */
 .action-btn {
   display: flex;
   align-items: center;
@@ -355,7 +358,7 @@
   fill: #e0f2e0;
   border: 2px solid transparent;
   height: 86%;
-  width: auto;
+  width: fit-content;
   flex-shrink: 0;
 }
 
@@ -388,6 +391,7 @@
   background-color: #1a4d6b;
   color: #e0f2e0;
   fill: #e0f2e0;
+  width: fit-content;
 }
 
 .action-btn-prepare:hover:not(:disabled) {
@@ -407,14 +411,6 @@
 .btn-text {
   line-height: 1;
 }
-
-.action-btn {
-  width: fit-content;
-}
-.action-btn-prepare {
-  width: fit-content;
-}
-
 
 .action-btn-execute {
   background-color: #cb0e00;

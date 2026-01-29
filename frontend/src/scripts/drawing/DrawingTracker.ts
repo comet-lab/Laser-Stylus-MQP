@@ -106,7 +106,6 @@ export class DrawingTracker {
             this.onShapeComplete();
         });
 
-        // Create fixtures canvas overlay
         this.createFixturesCanvas(canvas);
     }
 
@@ -121,7 +120,6 @@ export class DrawingTracker {
         
         this.fixturesCtx = this.fixturesCanvas.getContext('2d', { willReadFrequently: true });
         
-        // Insert after the main canvas
         mainCanvas.parentElement?.appendChild(this.fixturesCanvas);
     }
 
@@ -247,7 +245,7 @@ export class DrawingTracker {
         }
 
         if (this.currentBrushType === 'round') {
-            // --- ROUND BRUSH: Use efficient Path Stroking ---
+            // Round Brush Logic
             this.fixturesCtx.lineWidth = this.currentBrushSize;
             this.fixturesCtx.lineCap = 'round';
             this.fixturesCtx.lineJoin = 'round';
@@ -259,8 +257,7 @@ export class DrawingTracker {
                 this.fixturesCtx.stroke();
             }
         } else {
-            // --- SQUARE BRUSH: Use Interpolated Rect Filling (Static Rotation) ---
-            // This guarantees the square face does not rotate with direction
+            // Square Brush Logic
             const size = this.currentBrushSize;
             const halfSize = size / 2;
 
@@ -770,8 +767,6 @@ export class DrawingTracker {
                 else ctx.stroke();
 
             } else if (obj instanceof fabric.Line) {
-                // Lines cannot be filled in the traditional sense, so we always stroke them 
-                // unless you want them ignored in raster mode. Assuming stroke for lines:
                 const line = obj as fabric.Line;
                 ctx.beginPath();
                 ctx.moveTo(Math.round(line.x1 || 0) + 0.5, Math.round(line.y1 || 0) + 0.5);
@@ -782,11 +777,10 @@ export class DrawingTracker {
             ctx.restore();
         });
 
-        // Ensure binary contrast (safeguard)
+        // Ensure binary contrast
         const imageData = ctx.getImageData(0, 0, width, height);
         const data = imageData.data;
         for (let i = 0; i < data.length; i += 4) {
-            // If pixel is not white, make it black
             if (data[i] < 255 || data[i+1] < 255 || data[i+2] < 255) {
                 data[i] = 0;
                 data[i+1] = 0;
