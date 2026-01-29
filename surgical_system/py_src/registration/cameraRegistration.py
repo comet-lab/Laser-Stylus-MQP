@@ -391,10 +391,8 @@ class Camera_Registration(System_Calibration):
                 break
 
         cv2.destroyAllWindows()
-    
-    
 
-    def live_control_view(self, cam_type, max_vel = 0.05, window_name="Camera", frame_key="color", warped = True):
+    def live_control_view(self, cam_type, max_vel = 0.05, window_name="Camera", frame_key="color", warped = True, tracking = True):
         """
         Show a live view from cam_obj and allow the user to click to get pixel locations.
         """
@@ -444,10 +442,15 @@ class Camera_Registration(System_Calibration):
                     # Test as if it was the UI 
                     disp = self.get_transformed_view(disp)
                     disp = cv2.resize(disp, (1280, 720), interpolation=cv2.INTER_NEAREST)
+                    
+                if tracking:
+                    curr_position = self.robot_controller.current_robot_to_world_position()
+                    current_pixel_location = self.get_world_m_to_UI(cam_type, curr_position, warped)[0]
+                    current_pixel_location = np.asarray(current_pixel_location, dtype=np.int16)
+                    cv2.circle(disp, current_pixel_location, 5, (255, 0, 0), 2)
 
                 if last_point is not None:
                     cv2.circle(disp, last_point, 5, (0, 255, 0), 2)
-                    
                     target_position = self.get_UI_to_world_m(cam_type, last_point, warped)[0]
 
                 
@@ -841,7 +844,7 @@ if __name__ == '__main__':
     rgbd_cam.set_default_setting()
     # camera_reg.view_rgbd_therm_registration()
     # camera_reg.transformed_view(cam_type="thermal")
-    camera_reg.live_control_view('color', warped=False)
+    camera_reg.live_control_view('color', warped=True, tracking=True)
     # camera_reg.view_rgbd_therm_heat_overlay()
     # camera_reg.draw_traj()
     therm_cam.deinitialize_cam()

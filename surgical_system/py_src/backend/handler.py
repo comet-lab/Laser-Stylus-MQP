@@ -79,16 +79,13 @@ class Handler:
         fig.savefig("test.png")
         return path
         
-    
     def _do_current_position(self):
+        warped = self.desired_state.isTransformedViewOn
         curr_position = self.robot_controller.current_robot_to_world_position()
-        
-        if self.desired_state.isTransformedViewOn:
-            pixel = self.cam_reg.real_to_world(curr_position, self.cam_type)[0]
-        else:
-            pixel = self.cam_reg.world_to_pixel(curr_position, self.cam_type)[0]
+        current_pixel_location = self.get_world_m_to_UI(self.cam_type, curr_position, warped)[0]
+        current_pixel_location = np.asarray(current_pixel_location, dtype=np.int16)
             
-        self.desired_state.laserX, self.desired_state.laserY = pixel
+        self.desired_state.laserX, self.desired_state.laserY = current_pixel_location
     
     def _do_current_thermal_info(self):
         pass
@@ -104,7 +101,7 @@ class Handler:
         path = None
         
         warped_view = self.desired_state.isTransformedViewOn
-        robot_path = self.get_UI_to_world_m(
+        robot_path = self.cam_reg.get_UI_to_world_m(
                 self.cam_type, 
                 pixels, 
                 warped_view, 
@@ -115,14 +112,10 @@ class Handler:
         return traj
     
     def _do_show_path(self, traj):
-        
         target_positions = traj.get_path_position()
-        if self.desired_state.isTransformedViewOn:
-            display_w, display_h= 1280.0, 720.0
-            pixels = self.cam_reg.real_to_world(target_positions, self.cam_type, 
-                                                display_w = display_w, display_h = display_h)
-        else:
-            pixels = self.cam_reg.world_to_pixel(target_positions, self.cam_type)
+        warped = self.desired_state.isTransformedViewOn
+        pixels = self.cam_reg.get_world_m_to_UI(self.cam_type, target_positions, warped)
+        pixels = np.asarray(pixels, dtype=np.int16)
         self.cam_reg.get_path(pixels)
         self.cam_reg.display_path = True
     
@@ -134,7 +127,7 @@ class Handler:
             self._do_show_path(traj)
         
         # TODO uncomment controller 
-        # self.robot_controller.run_trajectory(traj, blocking=False, laser_on=self.desired_state.isLaserOn)
+        self.robot_controller.run_trajectory(traj, blocking=False, laser_on=self.desired_state.isLaserOn)
         
     def _do_hold_pose(self):
         current_pose, current_vel = self.robot_controller.get_current_state()
@@ -156,17 +149,13 @@ class Handler:
             pixel = np.array([[self.desired_state.x, self.desired_state.y]])
             
             warped_view = self.desired_state.isTransformedViewOn
-            target_world_point = self.get_UI_to_world_m(
+            target_world_point = self.cam_reg.get_UI_to_world_m(
                 self.cam_type, 
                 pixel, 
                 warped_view, 
                 z = self.working_height)[0]
-            # if self.desired_state.isTransformedViewOn:
-            #      self.cam_reg.world_to_real(pixel, cam_type=self.cam_type, z=self.working_height)[0]
-            # else:
-            #     target_world_point = self.cam_reg.pixel_to_world(pixel, cam_type=self.cam_type, z=self.working_height)[0]
+    
             target_pose = np.eye(4)
-            
             target_pose[:3, -1] = target_world_point
             target_vel = self.robot_controller.live_control(target_pose, 0.05)
             self.robot_controller.set_velocity(target_vel, np.zeros(3))
@@ -182,7 +171,7 @@ class Handler:
             self._do_hold_pose() 
             
         # print(self.desired_state.heat_markers)
-        self._do_current_position()
+        # self._do_current_position()
 
         if(self.desired_state.isRobotOn):
             # TODO interrupt trajectory?

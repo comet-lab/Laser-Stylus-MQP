@@ -72,15 +72,17 @@ class System_Calibration():
     
     def get_UI_to_world_m(self, cam_type, points, warped, z = 0):
         if warped:
-            return self.get_warped_UI_to_world_m(cam_type, points, z = 0)
+            return self.cam_transforms[cam_type].disp_px_to_world_m(points, z = z)
         else:
-            return self.get_original_img_to_world_m(cam_type, points, z = 0)
-    
-    def get_warped_UI_to_world_m(self, cam_type, points, z = 0):
-        return self.cam_transforms[cam_type].disp_px_to_world_m(points, z = 0)
-    
-    def get_original_img_to_world_m(self, cam_type, points, z = 0):
-        return self.cam_transforms[cam_type].img_px_to_world_m(points, z = 0)
+            return self.cam_transforms[cam_type].img_px_to_world_m(points, z = z)
+        
+    def get_world_m_to_UI(self, cam_type, world_points, warped):
+        if warped:
+            return self.cam_transforms[cam_type].world_m_to_disp_px(world_points)
+        else:
+            return self.cam_transforms[cam_type].world_m_to_img_px(world_points)
+
+    # --- --- #
     
     def reprojection_test(self, cam_type, M, gridShape = np.array([2, 6]),
                          laserDuration = .15, debug=False, height = 0.001):
