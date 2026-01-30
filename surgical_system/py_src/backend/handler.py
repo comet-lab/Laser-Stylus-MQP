@@ -85,7 +85,8 @@ class Handler:
         x = int(self.desired_state.x) if self.desired_state.x is not None else None
         y = int(self.desired_state.y) if self.desired_state.y is not None else None
         if(x is not None and y is not None):
-            print(x, y, self.virtual_fixture[x, y], int(self.virtual_fixture[x, y]) == 1)
+            is_valid_location = int(self.virtual_fixture[x, y]) != 1
+            # print("VF: ", x, y, self.virtual_fixture[x, y], "Valid " if is_valid_location else "Not Valid")
             if(int(self.virtual_fixture[x, y]) == 1):
                 self.desired_state.isLaserOn = False
             
@@ -118,7 +119,15 @@ class Handler:
         self.desired_state.laserX, self.desired_state.laserY = current_pixel_location
     
     def _do_current_thermal_info(self):
-        pass
+        
+        if self.desired_state.heat_markers != None:
+            temps = np.zeros(len(self.desired_state.heat_markers))
+            markers = np.array([[pixel['x'], pixel['y']] for pixel in self.desired_state.heat_markers])
+            self.cam_reg.get_UI_to_world_m(
+                "thermal", 
+                markers, 
+                self.desired_state.isTransformedViewOn, 
+                z = self.working_height)
     
     def _read_path(self):
         # TODO determine cam type from desired state
@@ -202,7 +211,8 @@ class Handler:
         
         if(self.desired_state.isRobotOn != self.prev_robot_on):
             self._do_hold_pose() 
-            
+        
+        self._do_current_thermal_info()
         # print(self.desired_state.heat_markers)
         # self._do_current_position()
 

@@ -69,6 +69,12 @@ class System_Calibration():
     def get_transformed_view(self, img, cam_type = "color"):
         return self.cam_transforms[cam_type].warp_image_for_display(img)
     
+    # --- UI Thermal <--> UI RGB
+    def get
+    
+    
+    
+    # --- UI <--> world_m
     
     def get_UI_to_world_m(self, cam_type, points, warped, z = 0):
         if warped:
