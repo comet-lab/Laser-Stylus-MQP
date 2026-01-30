@@ -324,7 +324,7 @@ class Camera_Registration(System_Calibration):
     def get_path(self, points):
         self.traj_points = points
     
-    def show_path(self, img):
+    def show_path(self, img, alpha=0.5):
         
         path = self.traj_points
         
@@ -332,6 +332,7 @@ class Camera_Registration(System_Calibration):
             return img
 
         out = img.copy()
+        overlay = img.copy()
 
         pts = np.asarray(path, dtype=np.int32)
 
@@ -343,22 +344,42 @@ class Camera_Registration(System_Calibration):
         pts_i = np.round(pts).astype(np.int32).reshape(-1, 1, 2)
 
         # Draw polyline
-        cv2.polylines(out, [pts_i], isClosed=False, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
+        YELLOW = (0, 255, 255)
+        GREEN = (0, 255, 0)
+        BLACK = (0, 0, 0)
+        cv2.polylines(overlay, [pts_i], isClosed=False, color=GREEN, thickness=1, lineType=cv2.LINE_AA)
 
         # Start marker (green circle)
         p0 = tuple(pts_i[0, 0])
-        cv2.circle(out, p0, 6, (0, 255, 0), -1, lineType=cv2.LINE_AA)
+        cv2.circle(overlay, p0, 3, (0, 255, 0), -1, lineType=cv2.LINE_AA)
         
 
         # End marker (red X)
         p1 = tuple(pts_i[-1, 0])
-        cv2.drawMarker(out, p1, (0, 0, 255),
+        cv2.drawMarker(overlay, p1, (0, 0, 255),
                markerType=cv2.MARKER_TILTED_CROSS,
-               markerSize=14,
+               markerSize=5,
                thickness=2)
+        
+           
+        
+        cv2.arrowedLine(
+            overlay,
+            tuple(pts_i[0, 0]),
+            tuple(pts_i[30, 0]),
+            BLACK,
+            1, #  thickness,
+            cv2.LINE_AA,  
+            0, # Shift 
+            0.5 # Tip Length
+        )
+    
+        # ---- Alpha blend overlay onto original ----
+        cv2.addWeighted(overlay, alpha, out, 1 - alpha, 0, out)
 
 
         return out
+    
         
 ### TESTING FUNCTIONS ###
     
