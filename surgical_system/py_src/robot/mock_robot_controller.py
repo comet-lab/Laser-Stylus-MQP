@@ -32,7 +32,8 @@ class MockRobotController():
         homePosition = np.array([[0.5275],[0.0893],[0.1985]])
         homePose = np.concatenate((rotM,homePosition),axis=1)
         homePose = np.concatenate((homePose,[[0,0,0,1]]),axis=0)
-        return homePose
+        # return homePose
+        return np.eye(4)
     
     def set_velocity(self, lin_vel, ang_vel):
         return
