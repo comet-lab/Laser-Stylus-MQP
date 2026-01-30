@@ -65,7 +65,11 @@ window.addEventListener('load', () => {
     const applyFixturesBtn = document.getElementById('applyFixturesBtn') as HTMLButtonElement;
     const fixturesUiElements = document.querySelectorAll('.fixtures-ui-only');
     const drawingUiElements = document.querySelectorAll('.drawing-ui-only');
+    const thermalUiElements = document.querySelectorAll('.thermal-ui');
     const eraserBrushBtn = document.getElementById('eraserBtn') as HTMLButtonElement;
+
+    // heat display stuff
+    const averageHeatDisplay = document.getElementById('average-heat-display') as HTMLElement;
 
     // --- 2. State Variables ---
     let laserConfirmationTimeout: number | null = null;
@@ -76,6 +80,7 @@ window.addEventListener('load', () => {
     let drawingTracker: DrawingTracker | null = null;
     let isRealTimeDrawing = false;
     let latestRealTimePos: { x: number, y: number } | null = null;
+    let thermalMarkers: {x: number, y: number} | null = null;
     const wsHandler = new WebSocketHandler(null);
 
     // Fill State
@@ -374,6 +379,7 @@ window.addEventListener('load', () => {
             currentMode = 'fixtures';
             drawingTools.classList.add('hidden');
             fixturesTools.classList.remove('hidden');
+            thermalUiElements.forEach(el => el.classList.add('hidden'));
             drawingUiElements.forEach(el => el.classList.add('hidden'));
             fixturesUiElements.forEach(el => el.classList.remove('hidden'));
             drawingTracker?.disableDrawing();
@@ -382,16 +388,17 @@ window.addEventListener('load', () => {
 
         } else if (modeId === 'thermalBtn') {
             currentMode = 'thermal';
-            drawingTools.classList.remove('hidden');
+            drawingTools.classList.add('hidden');
             fixturesTools.classList.add('hidden');
-            drawingUiElements.forEach(el => el.classList.remove('hidden'));
+            drawingUiElements.forEach(el => el.classList.add('hidden'));
             fixturesUiElements.forEach(el => el.classList.add('hidden'));
             drawingTracker?.disableFixturesMode();
             drawingTracker?.disableDrawing();
             if (drawingTracker?.hasFixtures()) {
                 drawingTracker?.showFixtures();
             }
-            updateDrawButtonState();
+            thermalUiElements.forEach(el => el.classList.remove('hidden'));
+            //updateThermalButtonState();
 
         } else { // drawing mode
             currentMode = 'drawing';
@@ -399,6 +406,7 @@ window.addEventListener('load', () => {
             fixturesTools.classList.add('hidden');
             drawingUiElements.forEach(el => el.classList.remove('hidden'));
             fixturesUiElements.forEach(el => el.classList.add('hidden'));
+            thermalUiElements.forEach(el => el.classList.add('hidden'));
             drawingTracker?.disableFixturesMode();
 
             if (drawingTracker?.hasFixtures()) {
@@ -640,14 +648,51 @@ window.addEventListener('load', () => {
         }
     });
 
-    markerBtn.addEventListener('click', () => {
-        if (!drawingTracker) return;
-        toggleButtons.forEach(btn => btn.classList.remove('selected'));
-        selectedShape = null;
-        drawnShapeType = null;
-        updateDrawButtonState();
-        drawingTracker.enableMarkerMode();
-    });
+    
+    /////////////////////////////////////////////
+    //         HEAT SETTINGS
+    /////////////////////////////////////////////
+
+    function updateAverageHeat(heat) {
+    if (!averageHeatDisplay) return; // safety check
+    if (heat === null || heat === undefined || isNaN(heat)) {
+        averageHeatDisplay.textContent = 'N/A';
+    } else {
+        averageHeatDisplay.textContent = `${heat.toFixed(1)}°C`; 
+    }
+}
+    // NEED TO UPDATE ONCE DETERMINING HOW BACKEND IS SENDING
+    async function fetchAverageHeat() {
+    try {
+        const response = await fetch('/api/average-heat'); // your endpoint
+        const data = await response.json();
+        
+        // Assuming backend returns { averageHeat: 42 }
+        updateAverageHeat(data.averageHeat);
+    } catch (err) {
+        console.error('Error fetching average heat:', err);
+        updateAverageHeat(null);
+    }
+}
+
+
+// Marker button click
+markerBtn.addEventListener('click', () => {
+    if (!drawingTracker) return;
+
+    // Deselect any shape tools
+    toggleButtons.forEach(btn => btn.classList.remove('selected'));
+    selectedShape = null;
+    drawnShapeType = null;
+    updateDrawButtonState();
+
+    // Enable marker mode in drawingTracker
+    drawingTracker.enableMarkerMode();
+
+    // Reset the thermal marker list if in thermal mode
+   
+});
+    
 
     confirmMarkersBtn.addEventListener('click', async () => {
         if (!drawingTracker) return;
@@ -657,7 +702,6 @@ window.addEventListener('load', () => {
 
         try {
             await drawingTracker.submitHeatMarkers(markers);
-            drawingTracker.clearDrawing();
             drawingTracker.disableMarkerMode();
             toggleButtons.forEach(btn => {
                 btn.disabled = false;

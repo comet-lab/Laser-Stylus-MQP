@@ -66,6 +66,7 @@
           </div>
         </div>
       </div>
+    
 
       <div id="bottomButtons">
         <button id="prepareCancelBtn" class="action-btn action-btn-cancel">
@@ -193,6 +194,9 @@
         </span>
         <span class="btn-text">CLEAR BOUNDARY</span>
       </button>
+       <div id="average-heat-container"  class="thermal-ui hidden" style="margin-bottom:10px; font-weight:bold; color:#ff4500;">
+    Average Heat: <span id="average-heat-display">0°C</span>
+      </div>
       <button id="applyFixturesBtn" class="action-btn action-btn-prepare fixtures-ui-only hidden" disabled>
         <svg width="22" height="22" viewBox="0 0 26 26" fill="none" stroke="currentColor"
           xmlns="http://www.w3.org/2000/svg">
@@ -279,19 +283,20 @@
               <path d="M1.5 24.5L24.5 1.5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </button>
-          <button id="markerBtn" class="icon-btn icon-btn-stroke batch-ui">
+          
+        </div>
+        <button id="markerBtn" class="icon-btn icon-btn-stroke thermal-ui hidden">
             <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M13 3 C9.5 3 7 5.6 7 8.9 C7 13.2 13 23 13 23 C13 23 19 13.2 19 8.9 C19 5.6 16.5 3 13 3Z"
                 stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </button>
 
-          <button id="confirmMarkersBtn" class="icon-btn icon-btn-stroke batch-ui">
+          <button id="confirmMarkersBtn" class="icon-btn icon-btn-stroke thermal-ui hidden">
             <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M1.5 13L9.5 21L24.5 5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </button>
-        </div>
 
         <div id="fixtures-tools" class="tool-group hidden">
           <button id="roundBrushBtn" class="icon-btn icon-btn-fill">
