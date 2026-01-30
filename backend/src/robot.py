@@ -11,6 +11,7 @@ class RobotSchema:
     rz: float = None
     laserX: float = None
     laserY: float = None
+    averageHeat: float = None
     beamWaist: float = None
     isLaserOn: bool = None
     isRobotOn: bool = None

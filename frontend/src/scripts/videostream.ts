@@ -7,6 +7,31 @@ declare global {
         MediaMTXWebRTCReader: any;
     }
 }
+// makes a web socket so we can retrieve info from the robot
+const ws = new WebSocket(`ws://${window.location.hostname}:443/ws/ui`); 
+
+ws.onopen = () => {
+    console.log("Connected to UI websocket");
+};
+
+ws.onmessage = (event) => {
+    try {
+        const data = JSON.parse(event.data);
+
+        // Update average heat if present
+        if (data.averageHeat !== undefined && data.averageHeat !== null) {
+            updateAverageHeat(data.averageHeat);
+        }
+        // we can add more fields if needed
+        // should look into this for hte green point 
+    } catch (err) {
+        console.error("Failed to parse websocket message:", err);
+    }
+};
+
+ws.onclose = () => {
+    console.warn("UI websocket connection closed");
+};
 
 window.addEventListener('load', () => {
     // --- 1. Get DOM Elements ---
@@ -653,7 +678,7 @@ window.addEventListener('load', () => {
     //         HEAT SETTINGS
     /////////////////////////////////////////////
 
-    function updateAverageHeat(heat) {
+   function updateAverageHeat(heat) {
     if (!averageHeatDisplay) return; // safety check
     if (heat === null || heat === undefined || isNaN(heat)) {
         averageHeatDisplay.textContent = 'N/A';
@@ -661,6 +686,7 @@ window.addEventListener('load', () => {
         averageHeatDisplay.textContent = `${heat.toFixed(1)}°C`; 
     }
 }
+
     // NEED TO UPDATE ONCE DETERMINING HOW BACKEND IS SENDING
     async function fetchAverageHeat() {
     try {
