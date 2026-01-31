@@ -39,7 +39,14 @@ class Camera_Registration(System_Calibration):
             
         self.traj_points = None
         self.display_path = False
-            
+    
+    @staticmethod
+    def circle_perimeter_pixels(center, r, num_pts=360):
+            cx, cy = center
+            theta = np.linspace(0, 2*np.pi, num_pts, endpoint=False)
+            xs = cx + r * np.cos(theta)
+            ys = cy + r * np.sin(theta)
+            return np.stack([xs, ys], axis=1).astype(np.float16)
         
     def run(self): 
         debug = True
@@ -459,6 +466,24 @@ class Camera_Registration(System_Calibration):
             return disp, finite, vmin, vmax
         return disp, None, None, None
     
+    
+    def tracking_display(self, disp, cam_type = 'color', warped = True):
+        curr_position = self.robot_controller.current_robot_to_world_position()
+        current_pixel_location = self.get_world_m_to_UI(cam_type, curr_position, warped)[0]
+        current_pixel_location = np.asarray(current_pixel_location, dtype=np.int16)
+        beam_waist = self.laser_controller.get_beam_width(curr_position[-1]) 
+
+        laser_points = self.circle_perimeter_pixels(curr_position[:2], beam_waist/2.0)
+        laser_pixels = self.get_world_m_to_UI(cam_type, laser_points, warped).astype(np.int16)
+
+        xs = laser_pixels[:, 0]
+        ys = laser_pixels[:, 1]
+        h, w = disp.shape[:2]
+        valid = (xs >= 0) & (xs < w) & (ys >= 0) & (ys < h)
+        disp[ys[valid], xs[valid]] = (0, 255, 0)
+        
+        cv2.circle(disp, current_pixel_location, 5, (255, 0, 0), 2)
+        return disp
 ### TESTING FUNCTIONS ###
     
     def transformed_view(self, cam_type = "color"):
@@ -489,7 +514,7 @@ class Camera_Registration(System_Calibration):
                 break
 
         cv2.destroyAllWindows()
-
+        
     def live_control_view(self, cam_type, max_vel = 0.05, window_name="Camera", frame_key="color", warped = True, tracking = True):
         """
         Show a live view from cam_obj and allow the user to click to get pixel locations.
@@ -516,13 +541,6 @@ class Camera_Registration(System_Calibration):
                 dragging = False
                 last_point = np.array([x, y])
                 # print(f"Released at pixel: (x={x}, y={y})")
-
-        def circle_perimeter_pixels(center, r, num_pts=360):
-            cx, cy = center
-            theta = np.linspace(0, 2*np.pi, num_pts, endpoint=False)
-            xs = cx + r * np.cos(theta)
-            ys = cy + r * np.sin(theta)
-            return np.stack([xs, ys], axis=1).astype(np.float16)
 
         cv2.namedWindow(window_name)
         cv2.setMouseCallback(window_name, on_mouse)
@@ -555,8 +573,7 @@ class Camera_Registration(System_Calibration):
                     current_pixel_location = self.get_world_m_to_UI(cam_type, curr_position, warped)[0]
                     current_pixel_location = np.asarray(current_pixel_location, dtype=np.int16)
                     beam_waist = self.laser_controller.get_beam_width(curr_position[-1]) 
-                    print(beam_waist)
-                    # FWHM = self.laser_controller.get_FWHM(beam_waist)
+
                     laser_points = circle_perimeter_pixels(curr_position[:2], beam_waist/2.0)
                     laser_pixels = self.get_world_m_to_UI(cam_type, laser_points, warped).astype(np.int16)
 

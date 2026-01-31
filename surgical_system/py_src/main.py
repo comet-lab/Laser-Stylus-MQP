@@ -162,6 +162,8 @@ async def main():
 
         if camera_reg.display_path:
             latest = camera_reg.show_path(latest)
+        
+        latest = camera_reg.tracking_display(latest, warped=control_flow_handler.desired_state.isTransformedViewOn)
             
         if(b.connected):
             b.publish_frame(latest)

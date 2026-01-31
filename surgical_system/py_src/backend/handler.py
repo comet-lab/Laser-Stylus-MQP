@@ -45,7 +45,7 @@ class Handler:
         )
         asyncio.create_task(backend_connection.connect_to_websocket())
         
-    def generate_virtual_fixture(self, img = np.zeros((1280, 720))):
+    def generate_virtual_fixture(self, img = np.zeros((720, 1280), dtype=np.uint8)):
         '''
         Returns:
         Virtual fixture mask (not allowed @ true)
