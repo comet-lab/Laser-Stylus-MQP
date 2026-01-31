@@ -81,9 +81,9 @@ class System_Calibration():
     def get_UI_to_thermal(self, points, warped):
         if warped:
             world_pixel = self.cam_transforms['color'].disp_px_to_world_m(points)
-            return self.cam_transforms['thermal'].world_m_to_img_px(world_pixel)[0, :2].astype('int32')
+            return self.cam_transforms['thermal'].world_m_to_img_px(world_pixel).astype('int32')
         else:
-            return self.cam_transforms['rgb_thermal'].img_px_to_world_m(points)[0, :2].astype('int32')
+            return self.cam_transforms['rgb_thermal'].img_px_to_world_m(points).astype('int32')
     
     
     

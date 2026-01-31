@@ -716,7 +716,7 @@ class Camera_Registration(System_Calibration):
                 disp = cv2.resize(disp, (1280, 720), interpolation=cv2.INTER_NEAREST)
                 
                 if mouse_pos is not None:
-                    pixel_loc = self.get_UI_to_thermal(mouse_pos, transformed_view)
+                    pixel_loc = self.get_UI_to_thermal(mouse_pos, transformed_view)[0]
                     
                     # print(f"Pixel Location {world_loc}")
                     if 0 <= pixel_loc[0] < therm_w and 0 <= pixel_loc[1] < therm_h:

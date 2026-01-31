@@ -137,15 +137,33 @@ class Handler:
         self.desired_state.laserX, self.desired_state.laserY = current_pixel_location
     
     def _do_current_thermal_info(self):
-        
         if self.desired_state.heat_markers != None:
             temps = np.zeros(len(self.desired_state.heat_markers))
             markers = np.array([[pixel['x'], pixel['y']] for pixel in self.desired_state.heat_markers])
-            self.cam_reg.get_UI_to_world_m(
-                "thermal", 
-                markers, 
-                self.desired_state.isTransformedViewOn, 
-                z = self.working_height)
+            # print("[Temperature Markers] Marker Locations: ", markers)
+            warped_view = self.desired_state.isTransformedViewOn
+            pixel_loc = self.cam_reg.get_UI_to_thermal(markers, warped_view)
+            therm_img = self.cam_reg.get_cam_latest('thermal')
+            # print("[Temperature Markers] Pixel locations: ", pixel_loc)
+
+            xs = pixel_loc[:, 0]
+            ys = pixel_loc[:, 1]
+
+            h, w = therm_img.shape[:2]
+
+            valid = (xs >= 0) & (xs < w) & (ys >= 0) & (ys < h)
+
+            temps = np.full(len(pixel_loc), np.nan, dtype=np.float32)
+            temps[valid] = therm_img[ys[valid], xs[valid]]
+            
+            for i, marker in enumerate(self.desired_state.heat_markers):
+                if valid[i]:
+                    self.desired_state.heat_markers[i]["temp"] = float(therm_img[ys[i], xs[i]])
+                else:
+                    marker["temp"] = None
+            # print("[Temperature Markers] Temps: ", self.desired_state.heat_markers)
+
+            
     
     def _read_path(self):
         # TODO determine cam type from desired state
@@ -229,7 +247,7 @@ class Handler:
         if(self.desired_state.isRobotOn != self.prev_robot_on):
             self._do_hold_pose() 
         
-        # self._do_current_thermal_info()
+        self._do_current_thermal_info()
         # print(self.desired_state.heat_markers)
         self._do_current_position()
 
