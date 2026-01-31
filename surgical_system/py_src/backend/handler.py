@@ -81,14 +81,7 @@ class Handler:
         self.last_update_time = time.time()
         data = json.loads(msg)
         self.desired_state.update(data)
-        
-        x = int(self.desired_state.x) if self.desired_state.x is not None else None
-        y = int(self.desired_state.y) if self.desired_state.y is not None else None
-        if(x is not None and y is not None):
-            self.vf_valid_flag = self.virtual_fixture[y, x] # 1 is valid
-            # print("VF: ", x, y, self.virtual_fixture[y, x], "Valid " if self.vf_valid_flag else "Not Valid")
-            if(self.vf_valid_flag):
-                self.desired_state.isLaserOn = False
+                
             
     def _read_raster(self):
         data_str = self.desired_state.raster_mask
@@ -120,22 +113,27 @@ class Handler:
         self.virtual_fixture, self.dx, self.dy, self.distance_field = self.generate_virtual_fixture(img=gray)
         # cv2.imwrite("Virtural Fixtures.png", (self.virtual_fixture.astype(np.uint8)) * 255)
         
+    def _track_virtual_fixtures(self, pixel):
+        x, y = pixel
+        if(x is not None and y is not None):
+            self.vf_valid_flag = self.virtual_fixture[y, x] # 1 is valid
+            # print(f"[Virtual Fixtures]: {'Valid' if self.vf_valid_flag else 'Not Valid'} Position")
+            laser_on = self.desired_state.isLaserOn and self.vf_valid_flag
+            
+            self.laser_obj.vf_valid_flag = self.vf_valid_flag # should be handle on its own, double precaution
+            self.laser_obj.set_output(laser_on)
+            
     def _do_current_position(self):
         now = time.time()
-        if now - self._last_pose_ui < 1/50:  # 50 Hz
+        if now - self._last_pose_ui < 1/75.0:  # 75 Hz
             return
         self._last_pose_ui = now
     
         warped = self.desired_state.isTransformedViewOn
         curr_position = self.robot_controller.current_robot_to_world_position()
         current_pixel_location = self.cam_reg.get_world_m_to_UI(self.cam_type, curr_position, warped)[0].astype(np.int16)
-        x, y = current_pixel_location
-        if(x is not None and y is not None):
-            self.vf_valid_flag = self.virtual_fixture[y, x] # 1 is valid
-            print(f"[Virtual Fixtures]: {'Valid' if self.vf_valid_flag else 'Not Valid'} Position")
-            # if(self.vf_valid_flag):
-            #     self.desired_state.isLaserOn = False
-            
+        
+        self._track_virtual_fixtures(current_pixel_location)
         self.desired_state.laserX, self.desired_state.laserY = current_pixel_location
     
     def _do_current_thermal_info(self):
@@ -198,7 +196,7 @@ class Handler:
         self.desired_state.x = None
         self.desired_state.y = None
             
-        self.laser_obj.set_output(False)
+        # self.laser_obj.set_output(False)
 
     def _do_live_control(self):
         # If no new message in 200ms, stop
@@ -222,7 +220,6 @@ class Handler:
             
             self.robot_controller.set_velocity(target_vel, np.zeros(3))
 
-            self.laser_obj.set_output(self.desired_state.isLaserOn)
     
 
     async def main_loop(self):

@@ -15,6 +15,7 @@ class Laser_Arduino:
         self.MESSAGE_LENGTH = 2
         self.START_BYTE = b'A'
         self.port.port = port
+        self.vf_valid_flag = False
         try:
             self.port.close()
             self.port.open()
@@ -41,7 +42,9 @@ class Laser_Arduino:
             raise Exception
 
     def set_output(self, laser_on):
-        self._write(1, laser_on)
+        on = laser_on and self.vf_valid_flag
+        # print("[Laser State]: ", on)
+        self._write(1, on)
 
     def get_laser_state(self):
         self.port.reset_input_buffer()
