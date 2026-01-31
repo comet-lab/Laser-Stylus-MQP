@@ -18,8 +18,7 @@ export class DrawingTracker {
 
     // Heat marker mode
     private isMarkerMode: boolean = false;
-    private markerPoints: Position[] = [];
-    private markerObjects: fabric.Object[] = [];
+    private markerObjects: fabric.Group[] = []; // Using Groups for complex markers
 
     // Fixtures mode
     private isFixturesMode: boolean = false;
@@ -110,17 +109,17 @@ export class DrawingTracker {
     private createFixturesCanvas(mainCanvas: HTMLCanvasElement): void {
         this.fixturesCanvas = document.createElement('canvas');
         this.fixturesCanvas.id = 'fixturesCanvas';
-        
+
         // Set internal dimensions to match main canvas
         this.fixturesCanvas.width = mainCanvas.width;
         this.fixturesCanvas.height = mainCanvas.height;
-        
+
         // CSS already handles positioning via #fixturesCanvas styles
         // Just set opacity here (prevents "dots" at overlaps)
         this.fixturesCanvas.style.opacity = '0.6';
-        
+
         this.fixturesCtx = this.fixturesCanvas.getContext('2d', { willReadFrequently: true });
-        
+
         // Append to viewport (same parent as main canvas)
         mainCanvas.parentElement?.appendChild(this.fixturesCanvas);
     }
@@ -138,7 +137,7 @@ export class DrawingTracker {
     public enableFixturesMode(): void {
         this.isFixturesMode = true;
         this.disableDrawing();
-        
+
         if (this.fixturesCanvas) {
             this.fixturesCanvas.classList.add('active');
             this.fixturesCanvas.style.pointerEvents = 'auto';
@@ -148,7 +147,7 @@ export class DrawingTracker {
     public disableFixturesMode(): void {
         this.isFixturesMode = false;
         this.disableFixturesBrush();
-        
+
         if (this.fixturesCanvas) {
             if (this.hasFixtures()) {
                 this.fixturesCanvas.classList.add('active');
@@ -186,7 +185,7 @@ export class DrawingTracker {
 
     public disableFixturesBrush(): void {
         this.currentBrushType = null;
-        
+
         if (this.fixturesCanvas) {
             this.fixturesCanvas.style.cursor = 'default';
             this.fixturesCanvas.onpointerdown = null;
@@ -200,27 +199,27 @@ export class DrawingTracker {
     //Convert client coordinates to canvas coordinates accounting for scaling
     private getCanvasCoordinates(e: PointerEvent, canvas: HTMLCanvasElement): { x: number, y: number } {
         const rect = canvas.getBoundingClientRect();
-        
+
         // Get the actual canvas internal dimensions
         const canvasWidth = canvas.width;
         const canvasHeight = canvas.height;
-        
+
         // Get the displayed CSS dimensions
         const displayWidth = rect.width;
         const displayHeight = rect.height;
-        
+
         // Calculate scaling factors
         const scaleX = canvasWidth / displayWidth;
         const scaleY = canvasHeight / displayHeight;
-        
+
         // Get client coordinates relative to canvas
         const clientX = e.clientX - rect.left;
         const clientY = e.clientY - rect.top;
-        
+
         // Scale to canvas coordinates
         const x = clientX * scaleX;
         const y = clientY * scaleY;
-        
+
         return { x, y };
     }
 
@@ -248,7 +247,7 @@ export class DrawingTracker {
 
     private onFixturesPointerUp(e: PointerEvent): void {
         if (!this.fixturesCanvas) return;
-        
+
         this.isFixturesDrawing = false;
         this.lastFixturesPoint = null;
         this.fixturesCanvas.releasePointerCapture(e.pointerId);
@@ -288,7 +287,7 @@ export class DrawingTracker {
             if (this.lastFixturesPoint) {
                 const p1 = this.lastFixturesPoint;
                 const p2 = { x, y };
-                
+
                 const dx = p2.x - p1.x;
                 const dy = p2.y - p1.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
@@ -298,7 +297,7 @@ export class DrawingTracker {
                     const t = steps === 0 ? 0 : i / steps;
                     const cx = p1.x + (dx * t);
                     const cy = p1.y + (dy * t);
-                    
+
                     this.fixturesCtx.fillRect(cx - halfSize, cy - halfSize, size, size);
                 }
             } else {
@@ -334,14 +333,14 @@ export class DrawingTracker {
 
         this.fixturesCtx.clearRect(0, 0, this.fixturesCanvas.width, this.fixturesCanvas.height);
         this.fixturesApplied = false;
-        
+
         if (!this.isFixturesMode) {
             this.fixturesCanvas.classList.remove('active');
         } else {
             this.fixturesCanvas.classList.add('active');
             this.fixturesCanvas.style.pointerEvents = 'auto';
         }
-        
+
         this.onFixturesChange();
     }
 
@@ -352,7 +351,7 @@ export class DrawingTracker {
         maskCanvas.width = this.fixturesCanvas.width;
         maskCanvas.height = this.fixturesCanvas.height;
         const maskCtx = maskCanvas.getContext('2d');
-        
+
         if (!maskCtx) throw new Error("Could not create mask context");
 
         maskCtx.fillStyle = '#ffffff';
@@ -377,7 +376,7 @@ export class DrawingTracker {
         const blob = await new Promise<Blob | null>(resolve =>
             maskCanvas.toBlob(resolve, 'image/png')
         );
-        
+
         if (!blob) throw new Error("Failed to generate fixtures blob");
 
         const formData = new FormData();
@@ -385,6 +384,7 @@ export class DrawingTracker {
 
         const response = await fetch(`${this.apiBaseUrl}/api/fixtures`, {
             method: 'POST',
+            // headers: { 'Content-Type': 'multipart/form-data' }, // Fetch adds this automatically with boundary
             body: formData
         });
 
@@ -398,28 +398,42 @@ export class DrawingTracker {
     }
 
     // --- Interaction Handlers ---
-    private onMouseDown(opt: any) {
+    private async onMouseDown(opt: any) {
         if (this.isMarkerMode) {
             const pointer = this.fCanvas.getScenePoint(opt.e);
-            this.markerPoints.push({ x: pointer.x, y: pointer.y });
+            
+            // Check if we clicked the Close button (the "X") of any existing marker
+            if (opt.target && opt.target.type === 'group' && opt.target._isMarker) {
+                 // The target is the group. 
+                 // Fabric hit testing usually returns the group.
+                 // We need to check coordinates relative to the group to see if we hit the "X".
+                 const group = opt.target as fabric.Group;
+                 const groupCenter = group.getCenterPoint();
+                 // X button is roughly top-right relative to group center based on logic below
+                 // Simple logic: if mouse is in top-right quadrant of the bounding box
+                 const clickRelX = pointer.x - groupCenter.x;
+                 const clickRelY = pointer.y - groupCenter.y;
 
-            const dot = new fabric.Circle({
-                left: pointer.x,
-                top: pointer.y,
-                radius: 6,
-                fill: '#007AFF',
-                originX: 'center',
-                originY: 'center',
-                selectable: false,
-                evented: false
-            });
+                 // The X button is at x: 25, y: -25 (relative)
+                 // Hit radius approx 10px
+                 const distToX = Math.sqrt(Math.pow(clickRelX - 25, 2) + Math.pow(clickRelY + 25, 2));
 
-            this.fCanvas.add(dot);
-            this.markerObjects.push(dot);
-            this.fCanvas.requestRenderAll();
+                 if (distToX < 15) {
+                     // Clicked the X - remove marker
+                     this.removeMarker(group);
+                     await this.submitHeatMarkers(this.getHeatMarkersInVideoSpace());
+                     return;
+                 }
+                 // If not clicking X, do nothing (selects marker, which is fine)
+                 return;
+            }
+
+            // Otherwise, add a new marker
+            this.addHeatMarker(pointer.x, pointer.y);
+            await this.submitHeatMarkers(this.getHeatMarkersInVideoSpace());
             return;
         }
-        
+
         if (this.hasPlacedShape) return;
         if (!this.currentShapeType || this.currentShapeType === 'freehand') return;
         if (opt.target) return;
@@ -527,6 +541,11 @@ export class DrawingTracker {
         this.fCanvas.clear();
         this.activeShape = null;
         this.hasPlacedShape = false;
+        // Markers are separate now, do not clear markers here unless explicitly requested
+        // Re-add markers if they exist in memory but were cleared from canvas? 
+        // No, current logic separates marker mode clearing.
+        // If we want clearDrawing to clear markers too, we'd empty the list.
+        // For now, clearDrawing handles the "Path" mode.
 
         if (this.currentShapeType === 'freehand') {
             this.fCanvas.isDrawingMode = true;
@@ -539,8 +558,10 @@ export class DrawingTracker {
         this.currentShapeType = null;
         this.fCanvas.discardActiveObject();
         this.fCanvas.forEachObject(o => {
-            o.selectable = false;
-            o.evented = false;
+            if (!(o as any)._isMarker) {
+                o.selectable = false;
+                o.evented = false;
+            }
         });
         this.fCanvas.requestRenderAll();
         this.fCanvas.defaultCursor = 'default';
@@ -548,8 +569,10 @@ export class DrawingTracker {
 
     public enableDrawing(): void {
         this.fCanvas.forEachObject(o => {
-            o.selectable = true;
-            o.evented = true;
+            if (!(o as any)._isMarker) {
+                o.selectable = true;
+                o.evented = true;
+            }
         });
     }
 
@@ -558,12 +581,12 @@ export class DrawingTracker {
     }
 
     public hasShape(): boolean {
-        return this.hasPlacedShape || this.fCanvas.getObjects().length > 0;
+        return this.hasPlacedShape || this.fCanvas.getObjects().some(o => !(o as any)._isMarker);
     }
 
     public updateCanvasSize(width: number, height: number): void {
         this.fCanvas.setDimensions({ width, height });
-        
+
         if (this.fixturesCanvas && this.fixturesCtx) {
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = this.fixturesCanvas.width;
@@ -577,7 +600,7 @@ export class DrawingTracker {
             // Update internal dimensions
             this.fixturesCanvas.width = width;
             this.fixturesCanvas.height = height;
-            
+
             // CSS 100% will automatically adjust to match viewport
 
             if (tempCtx) {
@@ -588,48 +611,167 @@ export class DrawingTracker {
 
     public render(): void {
         this.fCanvas.renderAll();
-        
+
         if (this.hasFixtures() && this.fixturesCanvas && !this.fixturesCanvas.classList.contains('active')) {
             this.fixturesCanvas.classList.add('active');
         }
     }
 
-    // Heat marker methods
+    // --- Heat marker methods ---
     public enableMarkerMode(): void {
         this.clearDrawing();
         this.disableDrawing();
         this.isMarkerMode = true;
-        this.markerPoints = [];
-        this.markerObjects = [];
         this.fCanvas.defaultCursor = 'crosshair';
+        
+        // Ensure markers are selectable so we can click them
+        this.markerObjects.forEach(m => {
+            m.selectable = true;
+            m.evented = true;
+            m.hoverCursor = 'pointer';
+        });
     }
 
     public disableMarkerMode(): void {
         this.isMarkerMode = false;
         this.fCanvas.defaultCursor = 'default';
+        this.markerObjects.forEach(m => {
+            m.selectable = false;
+            m.evented = false;
+        });
     }
 
-    public getHeatMarkers(): Position[] {
-        return this.markerPoints;
+    private addHeatMarker(x: number, y: number): void {
+        // 1. Triangle pointing down
+        const arrow = new fabric.Triangle({
+            width: 15,
+            height: 15,
+            fill: '#ff4500',
+            left: 0,
+            top: 20, // Offset so tip is at (0, 35) relative to group center
+            originX: 'center',
+            originY: 'top',
+            flipY: true
+        });
+
+        // 2. Background Box for Text
+        const box = new fabric.Rect({
+            fill: 'rgba(0,0,0,0.7)',
+            width: 60,
+            height: 25,
+            rx: 4,
+            ry: 4,
+            left: 0,
+            top: -5,
+            originX: 'center',
+            originY: 'bottom'
+        });
+
+        // 3. Text Element (Temperature)
+        const text = new fabric.Text('...', {
+            fontSize: 14,
+            fill: '#ffffff',
+            fontFamily: 'IBM Plex Sans',
+            left: 0,
+            top: -10,
+            originX: 'center',
+            originY: 'bottom'
+        });
+
+        // 4. Close/Delete Button (Small Circle + X)
+        const closeCircle = new fabric.Circle({
+            radius: 8,
+            fill: '#ff0000',
+            left: 25, // Top right corner of box
+            top: -25,
+            originX: 'center',
+            originY: 'center'
+        });
+        
+        const closeText = new fabric.Text('×', {
+            fontSize: 14,
+            fill: '#ffffff',
+            left: 25,
+            top: -26, // minor adjustment for vertical alignment
+            originX: 'center',
+            originY: 'center',
+            fontFamily: 'Arial'
+        });
+
+        // Group them
+        const group = new fabric.Group([arrow, box, text, closeCircle, closeText], {
+            left: x,
+            top: y - 35, // Adjust so arrow tip lands near click
+            originX: 'center',
+            originY: 'center',
+            selectable: true,
+            hasControls: false,
+            hasBorders: false,
+            lockMovementX: true,
+            lockMovementY: true,
+            hoverCursor: 'default' // We handle click logic manually
+        });
+
+        // Custom property to identify markers
+        (group as any)._isMarker = true;
+        (group as any)._textObj = text; // Keep ref to update text later
+        (group as any)._tipX = x; // Store actual coordinate
+        (group as any)._tipY = y;
+
+        this.fCanvas.add(group);
+        this.markerObjects.push(group);
+        this.fCanvas.requestRenderAll();
+    }
+
+    private removeMarker(markerGroup: fabric.Group): void {
+        this.fCanvas.remove(markerGroup);
+        this.markerObjects = this.markerObjects.filter(m => m !== markerGroup);
+        this.fCanvas.requestRenderAll();
+    }
+
+    public clearMarkers(): void {
+        this.markerObjects.forEach(m => this.fCanvas.remove(m));
+        this.markerObjects = [];
+        this.fCanvas.requestRenderAll();
     }
 
     public getHeatMarkersInVideoSpace(): Position[] {
-        return this.markerPoints.map(p => ({
-            x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
-            y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
-        }));
+        return this.markerObjects.map(m => {
+            const tipX = (m as any)._tipX;
+            const tipY = (m as any)._tipY;
+            return {
+                x: (tipX / this.fCanvas.getWidth()) * this.video.videoWidth,
+                y: (tipY / this.fCanvas.getHeight()) * this.video.videoHeight
+            };
+        });
+    }
+
+    public updateMarkerTemperatures(markersData: {x: number, y: number, temp?: number}[]): void {
+        // Simple matching strategy: Match by index if count is same, or try to match by coordinates?
+        // Since the markers are interactive, index matching is risky if the array order changes on backend.
+        // However, usually backend returns list in same order received.
+        // A better way is to attach a UUID, but for this snippet we'll use index if lengths match.
+        
+        if (markersData.length !== this.markerObjects.length) {
+            // Re-sync? For now, just ignore or try partial update
+            return; 
+        }
+
+        this.markerObjects.forEach((markerGroup, index) => {
+             const data = markersData[index];
+             if (data && data.temp !== undefined) {
+                 const textObj = (markerGroup as any)._textObj as fabric.Text;
+                 textObj.set('text', `${data.temp.toFixed(1)}°`);
+             }
+        });
+        this.fCanvas.requestRenderAll();
     }
 
     public async submitHeatMarkers(markers: Position[]): Promise<any> {
         if (!this.apiBaseUrl) throw new Error("API base URL not set");
 
-        const videoMarkers = markers.map(p => ({
-            x: p.x,
-            y: p.y
-        }));
-
         const formData = new FormData();
-        formData.append('markers', JSON.stringify(videoMarkers));
+        formData.append('markers', JSON.stringify(markers));
 
         const response = await fetch(`${this.apiBaseUrl}/api/heat_markers`, {
             method: 'POST',
@@ -687,6 +829,8 @@ export class DrawingTracker {
         }
 
         this.fCanvas.getObjects().forEach(obj => {
+            if ((obj as any)._isMarker) return; // Skip markers in execution path
+
             ctx.save();
 
             if (obj instanceof fabric.Path) {
@@ -732,7 +876,7 @@ export class DrawingTracker {
                             break;
                     }
                 });
-                
+
                 if (isFillEnabled) ctx.fill();
                 else ctx.stroke();
             } else if (obj instanceof fabric.Rect) {
@@ -741,7 +885,7 @@ export class DrawingTracker {
                 const top = Math.round(rect.top || 0);
                 const width = Math.round((rect.width || 0) * (rect.scaleX || 1));
                 const height = Math.round((rect.height || 0) * (rect.scaleY || 1));
-                
+
                 if (isFillEnabled) ctx.fillRect(left + 0.5, top + 0.5, width, height);
                 else ctx.strokeRect(left + 0.5, top + 0.5, width, height);
             } else if (obj instanceof fabric.Triangle) {
@@ -763,7 +907,7 @@ export class DrawingTracker {
                 ctx.lineTo(Math.round(vertices[1].x) + 0.5, Math.round(vertices[1].y) + 0.5);
                 ctx.lineTo(Math.round(vertices[2].x) + 0.5, Math.round(vertices[2].y) + 0.5);
                 ctx.closePath();
-                
+
                 if (isFillEnabled) ctx.fill();
                 else ctx.stroke();
             } else if (obj instanceof fabric.Ellipse) {
@@ -779,7 +923,7 @@ export class DrawingTracker {
                     (ellipse.angle || 0) * Math.PI / 180,
                     0, 2 * Math.PI
                 );
-                
+
                 if (isFillEnabled) ctx.fill();
                 else ctx.stroke();
             } else if (obj instanceof fabric.Line) {
@@ -798,11 +942,11 @@ export class DrawingTracker {
         const data = imageData.data;
 
         for (let i = 0; i < data.length; i += 4) {
-            if (data[i] < 255 || data[i+1] < 255 || data[i+2] < 255) {
+            if (data[i] < 255 || data[i + 1] < 255 || data[i + 2] < 255) {
                 data[i] = 0;
-                data[i+1] = 0;
-                data[i+2] = 0;
-                data[i+3] = 255;
+                data[i + 1] = 0;
+                data[i + 2] = 0;
+                data[i + 3] = 255;
             }
         }
 
@@ -831,13 +975,12 @@ export class DrawingTracker {
         return await response.json();
     }
 
-    public async updateViewSettings(isTransformedViewOn: boolean, isThermalViewOn: boolean): Promise<any> {
+    public async updateViewSettings(isTransformedViewOn: boolean, isThermalViewOn: boolean = false): Promise<any> {
         const response = await fetch(`${this.apiBaseUrl}/api/view_settings`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ isTransformedViewOn, isThermalViewOn })
         });
-
         return await response.json();
     }
 
@@ -847,6 +990,8 @@ export class DrawingTracker {
         const pixels: Position[] = [];
 
         for (const obj of objects) {
+            if ((obj as any)._isMarker) continue;
+
             if (obj instanceof fabric.Path) {
                 const pathObj = obj as any;
                 if (pathObj.path) {

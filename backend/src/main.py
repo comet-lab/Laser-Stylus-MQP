@@ -115,6 +115,8 @@ async def submit_heat_markers(markers: str = Form(...)):
         raise HTTPException(status_code=400, detail="Invalid markers format")
 
     manager.desired_state.heat_markers = markers_list
+    
+    # Broadcast to robot so it knows where to measure
     await manager.broadcast_to_group(
         group=manager.robot_connections,
         state=manager.desired_state

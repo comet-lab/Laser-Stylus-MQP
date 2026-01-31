@@ -66,7 +66,7 @@
           </div>
         </div>
       </div>
-    
+
 
       <div id="bottomButtons">
         <button id="prepareCancelBtn" class="action-btn action-btn-cancel">
@@ -137,17 +137,6 @@
               <span class="switch-label">On</span>
             </div>
           </div>
-          <div class="setting-item">
-            <span class="setting-label">Thermal/RGB</span>
-            <div class="switch-container">
-              <span class="switch-label">RGB</span>
-              <label class="toggle-switch">
-                <input type="checkbox" id="thermal-rgb-view">
-                <span class="slider round"></span>
-              </label>
-              <span class="switch-label">Thermal</span>
-            </div>
-          </div>
           <button id="save-view" class="btn-text" data-state="ready">SAVE</button>
         </div>
         <div id="laser-settings" class="settings-panel">
@@ -178,13 +167,7 @@
         </span>
         <span class="btn-text">CLEAR PATH</span>
       </button>
-      <button id="prepareBtn" class="action-btn action-btn-prepare batch-ui drawing-ui-only" disabled>
-        <svg width="20" height="12" viewBox="0 0 20 12" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M1 12C0.716667 12 0.479333 11.904 0.288 11.712C0.0966668 11.52 0.000666667 11.2827 0 11V1C0 0.71667 0.0960001 0.479337 0.288 0.288004C0.48 0.0966702 0.717333 0.000670115 1 3.44827e-06C1.28267 -0.000663218 1.52033 0.0953369 1.713 0.288004C1.90567 0.48067 2.00133 0.718003 2 1V11C2 11.2833 1.904 11.521 1.712 11.713C1.52 11.905 1.28267 12.0007 1 12ZM16.175 7H5C4.71667 7 4.47933 6.904 4.288 6.712C4.09667 6.52 4.00067 6.28267 4 6C3.99933 5.71734 4.09533 5.48 4.288 5.288C4.48067 5.096 4.718 5 5 5H16.175L13.3 2.1C13.1167 1.91667 13.0207 1.68767 13.012 1.413C13.0033 1.13834 13.0993 0.90067 13.3 0.700003C13.4833 0.51667 13.7167 0.425004 14 0.425004C14.2833 0.425004 14.5167 0.51667 14.7 0.700003L19.3 5.3C19.4 5.4 19.471 5.50834 19.513 5.625C19.555 5.74167 19.5757 5.86667 19.575 6C19.5743 6.13334 19.5537 6.25834 19.513 6.375C19.4723 6.49167 19.4013 6.6 19.3 6.7L14.7 11.3C14.5167 11.4833 14.2877 11.575 14.013 11.575C13.7383 11.575 13.5007 11.4833 13.3 11.3C13.1 11.1 13 10.8627 13 10.588C13 10.3133 13.1 10.0757 13.3 9.875L16.175 7Z" />
-        </svg>
-        <span class="btn-text">PREPARE PATH</span>
-      </button>
+
       <button id="clearBoundaryBtn" class="action-btn fixtures-ui-only hidden" disabled>
         <span class="btn-icon">
           <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
@@ -194,9 +177,25 @@
         </span>
         <span class="btn-text">CLEAR BOUNDARY</span>
       </button>
-       <div id="average-heat-container"  class="thermal-ui hidden" style="margin-bottom:10px; font-weight:bold; color:#ff4500;">
-    Average Heat: <span id="average-heat-display">0°C</span>
-      </div>
+
+      <button id="clearMarkersBtn" class="action-btn thermal-ui hidden">
+        <span class="btn-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M11.0273 0.6625L9.62418 2.06562L13.9336 6.375L15.3367 4.97188C15.7617 4.55 15.9992 3.975 15.9992 3.375C15.9992 2.775 15.7617 2.2 15.3367 1.77813L14.2211 0.6625C13.7992 0.2375 13.2242 0 12.6242 0C12.0242 0 11.4492 0.2375 11.0273 0.6625ZM8.56481 3.125L1.83981 9.84688C1.50543 10.1813 1.26168 10.6 1.13356 11.0562L0.0273051 15.05C-0.0445699 15.3094 0.0273051 15.5906 0.221055 15.7812C0.414805 15.9719 0.69293 16.0469 0.952305 15.975L4.94605 14.8656C5.4023 14.7375 5.81793 14.4969 6.15543 14.1594L12.8742 7.43437L8.56481 3.125Z" />
+          </svg>
+        </span>
+        <span class="btn-text">CLEAR MARKERS</span>
+      </button>
+
+      <button id="prepareBtn" class="action-btn action-btn-prepare batch-ui drawing-ui-only" disabled>
+        <svg width="20" height="12" viewBox="0 0 20 12" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M1 12C0.716667 12 0.479333 11.904 0.288 11.712C0.0966668 11.52 0.000666667 11.2827 0 11V1C0 0.71667 0.0960001 0.479337 0.288 0.288004C0.48 0.0966702 0.717333 0.000670115 1 3.44827e-06C1.28267 -0.000663218 1.52033 0.0953369 1.713 0.288004C1.90567 0.48067 2.00133 0.718003 2 1V11C2 11.2833 1.904 11.521 1.712 11.713C1.52 11.905 1.28267 12.0007 1 12ZM16.175 7H5C4.71667 7 4.47933 6.904 4.288 6.712C4.09667 6.52 4.00067 6.28267 4 6C3.99933 5.71734 4.09533 5.48 4.288 5.288C4.48067 5.096 4.718 5 5 5H16.175L13.3 2.1C13.1167 1.91667 13.0207 1.68767 13.012 1.413C13.0033 1.13834 13.0993 0.90067 13.3 0.700003C13.4833 0.51667 13.7167 0.425004 14 0.425004C14.2833 0.425004 14.5167 0.51667 14.7 0.700003L19.3 5.3C19.4 5.4 19.471 5.50834 19.513 5.625C19.555 5.74167 19.5757 5.86667 19.575 6C19.5743 6.13334 19.5537 6.25834 19.513 6.375C19.4723 6.49167 19.4013 6.6 19.3 6.7L14.7 11.3C14.5167 11.4833 14.2877 11.575 14.013 11.575C13.7383 11.575 13.5007 11.4833 13.3 11.3C13.1 11.1 13 10.8627 13 10.588C13 10.3133 13.1 10.0757 13.3 9.875L16.175 7Z" />
+        </svg>
+        <span class="btn-text">PREPARE PATH</span>
+      </button>
+
       <button id="applyFixturesBtn" class="action-btn action-btn-prepare fixtures-ui-only hidden" disabled>
         <svg width="22" height="22" viewBox="0 0 26 26" fill="none" stroke="currentColor"
           xmlns="http://www.w3.org/2000/svg">
@@ -204,6 +203,11 @@
         </svg>
         <span class="btn-text">APPLY FIXTURES</span>
       </button>
+
+      <div id="average-heat-container" class="thermal-ui hidden"
+        style="margin-left: 20px; font-weight:bold; color:#ff4500;">
+        Average Heat: <span id="average-heat-display">0°C</span>
+      </div>
     </div>
 
     <div id="status-panel-right" class="status-message">
@@ -283,20 +287,16 @@
               <path d="M1.5 24.5L24.5 1.5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </button>
-          
         </div>
-        <button id="markerBtn" class="icon-btn icon-btn-stroke thermal-ui hidden">
+
+        <div id="thermal-tools" class="tool-group hidden">
+          <button id="markerBtn" class="icon-btn icon-btn-stroke">
             <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M13 3 C9.5 3 7 5.6 7 8.9 C7 13.2 13 23 13 23 C13 23 19 13.2 19 8.9 C19 5.6 16.5 3 13 3Z"
                 stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </button>
-
-          <button id="confirmMarkersBtn" class="icon-btn icon-btn-stroke thermal-ui hidden">
-            <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M1.5 13L9.5 21L24.5 5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </button>
+        </div>
 
         <div id="fixtures-tools" class="tool-group hidden">
           <button id="roundBrushBtn" class="icon-btn icon-btn-fill">
@@ -322,7 +322,8 @@
           <div class="brush-container">
             <span class="brush-label">Size</span>
             <div class="vertical-slider-container">
-              <input type="range" id="brushSizeSlider" min="20" max="300" value="70" class="styled-range vertical-range">
+              <input type="range" id="brushSizeSlider" min="20" max="300" value="70"
+                class="styled-range vertical-range">
             </div>
           </div>
 
