@@ -517,8 +517,17 @@ class Camera_Registration(System_Calibration):
                 last_point = np.array([x, y])
                 # print(f"Released at pixel: (x={x}, y={y})")
 
+        def circle_perimeter_pixels(center, r, num_pts=360):
+            cx, cy = center
+            theta = np.linspace(0, 2*np.pi, num_pts, endpoint=False)
+            xs = cx + r * np.cos(theta)
+            ys = cy + r * np.sin(theta)
+            return np.stack([xs, ys], axis=1).astype(np.float16)
+
         cv2.namedWindow(window_name)
         cv2.setMouseCallback(window_name, on_mouse)
+        
+        working_height = 0
         
         try:
             while True:
@@ -545,11 +554,23 @@ class Camera_Registration(System_Calibration):
                     curr_position = self.robot_controller.current_robot_to_world_position()
                     current_pixel_location = self.get_world_m_to_UI(cam_type, curr_position, warped)[0]
                     current_pixel_location = np.asarray(current_pixel_location, dtype=np.int16)
+                    beam_waist = self.laser_controller.get_beam_width(curr_position[-1]) 
+                    print(beam_waist)
+                    # FWHM = self.laser_controller.get_FWHM(beam_waist)
+                    laser_points = circle_perimeter_pixels(curr_position[:2], beam_waist/2.0)
+                    laser_pixels = self.get_world_m_to_UI(cam_type, laser_points, warped).astype(np.int16)
+
+                    xs = laser_pixels[:, 0]
+                    ys = laser_pixels[:, 1]
+                    h, w = disp.shape[:2]
+                    valid = (xs >= 0) & (xs < w) & (ys >= 0) & (ys < h)
+                    disp[ys[valid], xs[valid]] = (0, 255, 0)
+                    
                     cv2.circle(disp, current_pixel_location, 5, (255, 0, 0), 2)
 
                 if last_point is not None:
                     cv2.circle(disp, last_point, 5, (0, 255, 0), 2)
-                    target_position = self.get_UI_to_world_m(cam_type, last_point, warped)[0]
+                    target_position = self.get_UI_to_world_m(cam_type, last_point, warped, z = working_height)[0]
 
                 
                 if dragging and last_point is not None:
@@ -566,15 +587,40 @@ class Camera_Registration(System_Calibration):
                         self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
                     else:
                         robot_controller.go_to_pose(current_pose, blocking=False)
-                    # print("stop")
-
-                
-                cv2.imshow(window_name, disp)
 
                 # Press 'q' or ESC to quit
                 key = cv2.waitKey(1) & 0xFF
-                if key == ord('q') or key == 27:
+                if key == ord('q') or key == 27:  # q or ESC
                     break
+                elif key == 82:  # Up arrow
+                    working_height += 0.005
+                elif key == 84:  # Down arrow
+                    working_height -= 0.005
+                    
+                # ----- UI text overlay -----
+                x0, y0 = 15, 25
+                line_h = 22
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                scale = 0.55
+                color = (255, 255, 255)
+                thickness = 1
+
+                cv2.putText(disp, "Controls:", (x0, y0),
+                            font, scale, color, thickness, cv2.LINE_AA)
+
+                cv2.putText(disp, "Up Arrow    : Increase working height (+0.01 m)",
+                            (x0, y0 + line_h),
+                            font, scale, color, thickness, cv2.LINE_AA)
+
+                cv2.putText(disp, "Down Arrow  : Decrease working height (-0.01 m)",
+                            (x0, y0 + 2*line_h),
+                            font, scale, color, thickness, cv2.LINE_AA)
+
+                cv2.putText(disp, "q / ESC     : Quit",
+                            (x0, y0 + 3*line_h),
+                            font, scale, color, thickness, cv2.LINE_AA)
+                    
+                cv2.imshow(window_name, disp)
 
         finally:
             cv2.destroyWindow(window_name)
@@ -813,8 +859,9 @@ class Camera_Registration(System_Calibration):
 
         finally:
             cv2.destroyWindow(window_name)
-        
-        
+    
+    
+    
 if __name__ == '__main__':
     ##################################################################################
     #-------------------------------- Laser Config ----------------------------------#
@@ -866,8 +913,8 @@ if __name__ == '__main__':
     rgbd_cam.set_default_setting()
     # camera_reg.view_rgbd_therm_registration()
     # camera_reg.transformed_view(cam_type="thermal")
-    # camera_reg.live_control_view('color', warped=True, tracking=True)
-    camera_reg.view_rgbd_therm_heat_overlay()
+    camera_reg.live_control_view('color', warped=True, tracking=True)
+    # camera_reg.view_rgbd_therm_heat_overlay()
     # camera_reg.draw_traj()
     therm_cam.deinitialize_cam()
     # camera_reg.live_control_view("color")
