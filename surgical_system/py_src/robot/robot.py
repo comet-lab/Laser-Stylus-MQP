@@ -21,6 +21,7 @@ class RobotSchema:
     pathEvent: str = None
     raster_mask: str = None
     raster_type: str = None
+    fixtures_mask: str = None
     speed: float = None
     path: List[Dict[str, float]] = None
     heat_markers: List[Dict[str, float]] = None

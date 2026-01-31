@@ -45,7 +45,7 @@ class System_Calibration():
         self.cam_M['color'] = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder)
         print("[System Calibration] Thermal Camera to robot calibration info:")
         self.cam_M['thermal'] = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder)
-        self.world_therm_M = np.linalg.inv(self.cam_M['thermal']).astype(np.float32)
+        # self.world_therm_M = np.linalg.inv(self.cam_M['thermal']).astype(np.float32)
         
         img_points = CameraCalibration.load_pts(self.directory +  self.rgb_cali_folder + "laser_spots.csv")
         obj_points = CameraCalibration.load_pts(self.directory + self.therm_cali_folder  + "laser_spots.csv")
@@ -62,6 +62,14 @@ class System_Calibration():
                 pix_per_m = cam_obj.pix_Per_M,
                 display_size = (cam_obj.height, cam_obj.width),
             )
+        
+        cam_obj = self.get_cam_obj(cam)
+        self.cam_transforms["rgb_thermal"] = Display_World_Transform( \
+                H = self.rgbd_therm_M,
+                img_shape = (cam_obj.height, cam_obj.width),
+                pix_per_m = 1,
+                display_size = (cam_obj.height, cam_obj.width),
+            )
 
         self.home_pose = robot_controller.get_home_pose()
     
@@ -70,7 +78,12 @@ class System_Calibration():
         return self.cam_transforms[cam_type].warp_image_for_display(img)
     
     # --- UI Thermal <--> UI RGB
-    def get
+    def get_UI_to_thermal(self, points, warped):
+        if warped:
+            world_pixel = self.cam_transforms['color'].disp_px_to_world_m(points)
+            return self.cam_transforms['thermal'].world_m_to_img_px(world_pixel)[0, :2].astype('int32')
+        else:
+            return self.cam_transforms['rgb_thermal'].img_px_to_world_m(points)[0, :2].astype('int32')
     
     
     

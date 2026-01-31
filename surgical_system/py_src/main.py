@@ -169,6 +169,8 @@ async def main():
             b.connect(latest)
             print('connecting...')
             time.sleep(2)
+        
+        await asyncio.sleep(0.005)
   
 
 if __name__ == "__main__":

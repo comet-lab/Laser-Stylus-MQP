@@ -19,8 +19,8 @@ class RobotSchema:
     isThermalViewOn: bool = None
     pathEvent: str = None
     raster_mask: str = None
-    fixtures_mask: str = None
     raster_type: str = None
+    fixtures_mask: str = None
     speed: float = None
     path: list[dict[str, float]] = None
     heat_markers: list[dict[str, float]] = None

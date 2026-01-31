@@ -22,9 +22,11 @@ class Display_World_Transform:
         self.pix_per_m = float(pix_per_m)
         self.display_h, self.display_w= map(float, display_size)
 
-        self.H = np.asarray(H, dtype=np.float32)
-        if self.H.shape != (3, 3):
+        if H.shape != (3, 3):
             raise ValueError(f"H must be 3x3, got {H.shape}")
+        
+        self.H = np.asarray(H, dtype=np.float32)
+
 
         self._build_positive_homography(self.H, img_shape)
         self._build_display_scaling()
@@ -128,36 +130,36 @@ class Display_World_Transform:
         """
         return cv2.warpPerspective(img, self.H_display, (self.out_w, self.out_h), flags=interpolation)
 
-    def img_px_to_warped_disp_px(self, img_pts) -> np.ndarray:
-        """
-        Map points in original image pixels -> warped display pixels.
-        """
-        pts = self._as_pts2(img_pts)
-        return self._persp(pts, self.H_display)
+    # def img_px_to_warped_disp_px(self, img_pts) -> np.ndarray:
+    #     """
+    #     Map points in original image pixels -> warped display pixels.
+    #     """
+    #     pts = self._as_pts2(img_pts)
+    #     return self._persp(pts, self.H_display)
 
-    def warped_disp_px_to_img_px(self, warped_pts) -> np.ndarray:
-        """
-        Inverse mapping: warped display pixels -> original image pixels.
-        """
-        pts = self._as_pts2(warped_pts)
-        Hinv = np.linalg.inv(self.H_display).astype(np.float32)
-        return self._persp(pts, Hinv)
+    # def warped_disp_px_to_img_px(self, warped_pts) -> np.ndarray:
+    #     """
+    #     Inverse mapping: warped display pixels -> original image pixels.
+    #     """
+    #     pts = self._as_pts2(warped_pts)
+    #     Hinv = np.linalg.inv(self.H_display).astype(np.float32)
+    #     return self._persp(pts, Hinv)
 
     # ---- Display <-> warped-display scaling ----
 
-    def disp_px_to_warped_disp_px(self, disp_pts) -> np.ndarray:
-        """
-        UI/display pixels -> warped display pixels (scaled to match out_w/out_h).
-        """
-        pts = self._as_pts2(disp_pts)
-        return self._persp(pts, self.S_disp2warp)
+    # def disp_px_to_warped_disp_px(self, disp_pts) -> np.ndarray:
+    #     """
+    #     UI/display pixels -> warped display pixels (scaled to match out_w/out_h).
+    #     """
+    #     pts = self._as_pts2(disp_pts)
+    #     return self._persp(pts, self.S_disp2warp)
 
-    def warped_disp_px_to_disp_px(self, warped_pts) -> np.ndarray:
-        """
-        Warped display pixels -> UI/display pixels.
-        """
-        pts = self._as_pts2(warped_pts)
-        return self._persp(pts, self.S_warp2disp)
+    # def warped_disp_px_to_disp_px(self, warped_pts) -> np.ndarray:
+    #     """
+    #     Warped display pixels -> UI/display pixels.
+    #     """
+    #     pts = self._as_pts2(warped_pts)
+    #     return self._persp(pts, self.S_warp2disp)
 
     # ---- Display pixels <-> world meters ----
 

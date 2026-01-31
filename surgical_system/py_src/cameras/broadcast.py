@@ -32,10 +32,10 @@ class Broadcast:
     
     def publish_frame(self, frame):
         # force BGR24 and contiguous memory
-        if frame.shape[2] == 4:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
-        elif frame.shape[2] == 1:
-            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+        # if frame.shape[2] == 4:
+        #     frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+        # elif frame.shape[2] == 1:
+        #     frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
         # frame = cv2.resize(frame, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
         frame = np.ascontiguousarray(frame)
         if not self.connected or self.process == None:
@@ -58,7 +58,8 @@ class Broadcast:
             '-pix_fmt', 'bgr24',
             '-s', f'{width}x{height}',
             # '-r', '24', # framerate
-            '-re', # framerate
+            #'-re',
+            "-r", "50",# framerate
             '-i', '-',  # Read input from stdin pipe
             '-c:v', 'libx264',  # Video codec H.264
             '-preset', 'ultrafast',

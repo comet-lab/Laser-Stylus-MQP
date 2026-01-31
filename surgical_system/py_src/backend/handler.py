@@ -27,8 +27,11 @@ class Handler:
         self.prev_robot_on = False
         self.working_height = 0.0
         self.show_path = True
+        
+        self._last_pose_ui = 0.0
 
         self.virtual_fixture, self.dx, self.dy, self.distance_field = self.generate_virtual_fixture()
+        self.vf_valid_flag = None
         
         initial_pose, _ = robot_controller.get_current_state()
         desired_state.update(asdict(RobotSchema.from_pose(initial_pose@np.linalg.inv(self.home_tf))))
@@ -42,7 +45,7 @@ class Handler:
         )
         asyncio.create_task(backend_connection.connect_to_websocket())
         
-    def generate_virtual_fixture(self):
+    def generate_virtual_fixture(self, img = np.zeros((1280, 720))):
         '''
         Returns:
         Virtual fixture mask (not allowed @ true)
@@ -52,17 +55,17 @@ class Handler:
         '''
         # Return mask, gradient field
         # TODO keep virtual fixture in robot schema, not handlers
-        virtual_fixture = np.zeros((1280, 720))
+        virtual_fixture = img
 
-        cv2.rectangle(virtual_fixture, (0,0), (400,200), color=1, thickness=-1)
-        cv2.ellipse(virtual_fixture, center=(900,250), axes=(160,150), color=1, thickness=-1, angle=0, startAngle=0, endAngle=180)
+        # cv2.rectangle(virtual_fixture, (0,0), (400,200), color=1, thickness=-1)
+        # cv2.ellipse(virtual_fixture, center=(900,250), axes=(160,150), color=1, thickness=-1, angle=0, startAngle=0, endAngle=180)
         
         inverted_virtual_fixture = ~(virtual_fixture.astype(bool))
         distance_field = cv2.distanceTransform(inverted_virtual_fixture.astype(np.uint8), cv2.DIST_L2, 5)
         distance_field = cv2.GaussianBlur(distance_field, (0,0), 10)
         dx, dy = cv2.Sobel(distance_field, cv2.CV_32F, 1, 0, ksize=3), cv2.Sobel(distance_field, cv2.CV_32F, 0, 1, ksize=3)
         
-        return virtual_fixture, dx, dy, distance_field
+        return inverted_virtual_fixture, dx, dy, distance_field
 
     def _input_downtime(self):  
         return time.time() - self.last_update_time
@@ -78,16 +81,13 @@ class Handler:
         self.last_update_time = time.time()
         data = json.loads(msg)
         self.desired_state.update(data)
-        if(self.desired_state.isThermalViewOn):
-            self.cam_type = "thermal"
-        else:
-            self.cam_type = "color"
+        
         x = int(self.desired_state.x) if self.desired_state.x is not None else None
         y = int(self.desired_state.y) if self.desired_state.y is not None else None
         if(x is not None and y is not None):
-            is_valid_location = int(self.virtual_fixture[x, y]) != 1
-            # print("VF: ", x, y, self.virtual_fixture[x, y], "Valid " if is_valid_location else "Not Valid")
-            if(int(self.virtual_fixture[x, y]) == 1):
+            self.vf_valid_flag = self.virtual_fixture[y, x] # 1 is valid
+            # print("VF: ", x, y, self.virtual_fixture[y, x], "Valid " if self.vf_valid_flag else "Not Valid")
+            if(self.vf_valid_flag):
                 self.desired_state.isLaserOn = False
             
     def _read_raster(self):
@@ -107,14 +107,34 @@ class Handler:
             ys_plot = [p[1] for p in path]
             ax.plot(xs, ys_plot, linewidth=1)  # default color
         ax.set_axis_off()
-        fig.savefig("test.png")
+        fig.savefig("raster path.png")
         return path
+    
+    def _read_fixtures(self):
+        data_str = self.desired_state.fixtures_mask
+        image_bytes = base64.b64decode(data_str)
+        numpy_array = np.frombuffer(image_bytes, np.uint8)
+        img = cv2.imdecode(numpy_array, cv2.IMREAD_UNCHANGED)
+        img = cv2.resize(img, (1280, 720))
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        self.virtual_fixture, self.dx, self.dy, self.distance_field = self.generate_virtual_fixture(img=gray)
+        # cv2.imwrite("Virtural Fixtures.png", (self.virtual_fixture.astype(np.uint8)) * 255)
         
     def _do_current_position(self):
+        now = time.time()
+        if now - self._last_pose_ui < 1/50:  # 50 Hz
+            return
+        self._last_pose_ui = now
+    
         warped = self.desired_state.isTransformedViewOn
         curr_position = self.robot_controller.current_robot_to_world_position()
-        current_pixel_location = self.get_world_m_to_UI(self.cam_type, curr_position, warped)[0]
-        current_pixel_location = np.asarray(current_pixel_location, dtype=np.int16)
+        current_pixel_location = self.cam_reg.get_world_m_to_UI(self.cam_type, curr_position, warped)[0].astype(np.int16)
+        x, y = current_pixel_location
+        if(x is not None and y is not None):
+            self.vf_valid_flag = self.virtual_fixture[y, x] # 1 is valid
+            print(f"[Virtual Fixtures]: {'Valid' if self.vf_valid_flag else 'Not Valid'} Position")
+            # if(self.vf_valid_flag):
+            #     self.desired_state.isLaserOn = False
             
         self.desired_state.laserX, self.desired_state.laserY = current_pixel_location
     
@@ -212,9 +232,9 @@ class Handler:
         if(self.desired_state.isRobotOn != self.prev_robot_on):
             self._do_hold_pose() 
         
-        self._do_current_thermal_info()
+        # self._do_current_thermal_info()
         # print(self.desired_state.heat_markers)
-        # self._do_current_position()
+        self._do_current_position()
 
         if(self.desired_state.isRobotOn):          
             
@@ -223,6 +243,12 @@ class Handler:
             # "path?", self.desired_state.path is not None,
             # "Path event?", self.desired_state.pathEvent,
             # "traj_running?", self.robot_controller.is_trajectory_running())
+            
+            
+            if(self.desired_state.fixtures_mask is not None):
+                self._read_fixtures()
+                self.desired_state.fixtures_mask = None
+                
             
             # TODO, always recieving raster_mask 
             if(self.desired_state.raster_mask is not None
