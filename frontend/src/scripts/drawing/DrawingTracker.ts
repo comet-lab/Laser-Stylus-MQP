@@ -309,6 +309,35 @@ export class DrawingTracker {
         this.onFixturesChange();
     }
 
+    public async clearFixturesOnServer(): Promise<void> {
+        const width = this.fixturesCanvas?.width ?? 640;
+        const height = this.fixturesCanvas?.height ?? 480;
+
+        const blankCanvas = document.createElement('canvas');
+        blankCanvas.width = width;
+        blankCanvas.height = height;
+        const ctx = blankCanvas.getContext('2d');
+        if (!ctx) throw new Error("Could not create blank canvas context");
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+
+        const blob = await new Promise<Blob | null>(resolve => blankCanvas.toBlob(resolve, 'image/png'));
+        if (!blob) throw new Error("Failed to generate blank fixtures blob");
+
+        const formData = new FormData();
+        formData.append('file', blob, 'fixtures.png');
+
+        const response = await fetch(`${this.apiBaseUrl}/api/fixtures`, {
+            method: 'POST',
+            body: formData
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "Failed to clear fixtures on server");
+        }
+    }
+
     public async executeFixtures(): Promise<any> {
         if (!this.fixturesCanvas || !this.fixturesCtx) throw new Error("Fixtures canvas not initialized");
         const maskCanvas = document.createElement('canvas');
@@ -634,7 +663,7 @@ export class DrawingTracker {
         const arrow = new fabric.Triangle({
             width: 20,
             height: 20,
-            fill: 'rgba(0,0,0,0.7)',
+            fill: '#151b21B3',
             stroke: '#e0f2e0',
             strokeWidth: 2,
             left: 0,
@@ -644,7 +673,7 @@ export class DrawingTracker {
             flipY: true
         });
         const box = new fabric.Rect({
-            fill: 'rgba(0,0,0,0.7)',
+            fill: '#151b21B3',
             width: 70,
             height: 25,
             stroke: '#e0f2e0',
@@ -670,7 +699,7 @@ export class DrawingTracker {
             height: 20,
             rx: 4,
             ry: 4,
-            fill: 'rgba(0,0,0,0.7)',
+            fill: '#151b21B3',
             strokeWidth: 2,
             left: 46,
             top: 6.5,
@@ -790,7 +819,7 @@ export class DrawingTracker {
         const formData = new FormData();
         formData.append('speed', (Number(speed) / 1000).toString());
         if (isFillEnabled) {
-        formData.append('raster_type', raster_type);
+            formData.append('raster_type', raster_type);
         }
         formData.append('density', density.toString());
         formData.append('pixels', JSON.stringify(videoPixels));

@@ -57,7 +57,7 @@ window.addEventListener('load', () => {
     // Fixtures Mode Elements
     const fixturesTools = document.getElementById('fixtures-tools') as HTMLElement;
     const drawingTools = document.getElementById('drawing-tools') as HTMLElement;
-    const thermalTools = document.getElementById('thermal-tools') as HTMLElement; 
+    const thermalTools = document.getElementById('thermal-tools') as HTMLElement;
     const roundBrushBtn = document.getElementById('roundBrushBtn') as HTMLButtonElement;
     const squareBrushBtn = document.getElementById('squareBrushBtn') as HTMLButtonElement;
     const brushSizeSlider = document.getElementById('brushSizeSlider') as HTMLInputElement;
@@ -108,7 +108,7 @@ window.addEventListener('load', () => {
             circleBtn.disabled = (drawnShapeType !== 'circle');
             triangleBtn.disabled = (drawnShapeType !== 'triangle');
             lineBtn.disabled = (drawnShapeType !== 'line');
-            markerBtn.disabled = true; 
+            markerBtn.disabled = true;
         } else {
             toggleButtons.forEach(btn => btn.disabled = false);
         }
@@ -404,7 +404,7 @@ window.addEventListener('load', () => {
         if (modeId === 'fixturesBtn') {
             currentMode = 'fixtures';
             drawingTools.classList.add('hidden');
-            thermalTools.classList.add('hidden'); 
+            thermalTools.classList.add('hidden');
             fixturesTools.classList.remove('hidden');
 
             thermalUiElements.forEach(el => el.classList.add('hidden'));
@@ -417,11 +417,11 @@ window.addEventListener('load', () => {
 
         } else if (modeId === 'thermalBtn') {
             currentMode = 'thermal';
-            drawingTools.classList.add('hidden'); 
-            thermalTools.classList.remove('hidden'); 
+            drawingTools.classList.add('hidden');
+            thermalTools.classList.remove('hidden');
             fixturesTools.classList.add('hidden');
 
-            drawingUiElements.forEach(el => el.classList.add('hidden')); 
+            drawingUiElements.forEach(el => el.classList.add('hidden'));
             fixturesUiElements.forEach(el => el.classList.add('hidden'));
 
             drawingTracker?.disableFixturesMode();
@@ -429,7 +429,7 @@ window.addEventListener('load', () => {
             if (drawingTracker?.hasFixtures()) {
                 drawingTracker?.showFixtures();
             }
-            thermalUiElements.forEach(el => el.classList.remove('hidden')); 
+            thermalUiElements.forEach(el => el.classList.remove('hidden'));
 
             // Re-apply selection state if we came back to this mode
             if (selectedShape === 'marker') {
@@ -440,7 +440,7 @@ window.addEventListener('load', () => {
         } else { // drawing mode
             currentMode = 'drawing';
             drawingTools.classList.remove('hidden');
-            thermalTools.classList.add('hidden'); 
+            thermalTools.classList.add('hidden');
             fixturesTools.classList.add('hidden');
 
             drawingUiElements.forEach(el => el.classList.remove('hidden'));
@@ -542,9 +542,18 @@ window.addEventListener('load', () => {
         }
     });
 
-    clearBoundaryBtn.addEventListener('click', () => {
-        drawingTracker?.clearFixtures();
-        drawingTracker?.disableFixturesBrush();
+    clearBoundaryBtn.addEventListener('click', async () => {
+        if (!drawingTracker) return;
+        clearBoundaryBtn.disabled = true;
+
+        try {
+            drawingTracker.clearFixtures();
+            await drawingTracker.clearFixturesOnServer();
+        } catch (e) {
+            console.error(e);
+        }
+
+        drawingTracker.disableFixturesBrush();
         selectedBrushType = null;
         isEraserActive = false;
         roundBrushBtn.classList.remove('selected');
