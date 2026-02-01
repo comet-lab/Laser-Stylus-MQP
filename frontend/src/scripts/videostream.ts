@@ -57,7 +57,7 @@ window.addEventListener('load', () => {
     // Fixtures Mode Elements
     const fixturesTools = document.getElementById('fixtures-tools') as HTMLElement;
     const drawingTools = document.getElementById('drawing-tools') as HTMLElement;
-    const thermalTools = document.getElementById('thermal-tools') as HTMLElement; // NEW
+    const thermalTools = document.getElementById('thermal-tools') as HTMLElement; 
     const roundBrushBtn = document.getElementById('roundBrushBtn') as HTMLButtonElement;
     const squareBrushBtn = document.getElementById('squareBrushBtn') as HTMLButtonElement;
     const brushSizeSlider = document.getElementById('brushSizeSlider') as HTMLInputElement;
@@ -108,7 +108,7 @@ window.addEventListener('load', () => {
             circleBtn.disabled = (drawnShapeType !== 'circle');
             triangleBtn.disabled = (drawnShapeType !== 'triangle');
             lineBtn.disabled = (drawnShapeType !== 'line');
-            markerBtn.disabled = true; // markers disabled when shape drawn
+            markerBtn.disabled = true; 
         } else {
             toggleButtons.forEach(btn => btn.disabled = false);
         }
@@ -130,6 +130,12 @@ window.addEventListener('load', () => {
             squareBrushBtn.disabled = false;
             eraserBrushBtn.disabled = true;
         }
+    }
+
+    function updateThermalButtonState() {
+        if (!drawingTracker) return;
+        const hasMarkers = drawingTracker.hasMarkers();
+        clearMarkersBtn.disabled = !hasMarkers;
     }
 
     const openSettings = (): void => {
@@ -183,7 +189,6 @@ window.addEventListener('load', () => {
     function getLocalLaserState(): boolean { return laserBtn.classList.contains('active'); }
     function getLocalRobotState(): boolean { return robotBtn.classList.contains('active'); }
 
-    // Updated Sync Function
     function syncUiToState(state: Partial<WebSocketMessage>) {
         // Coordinate/Marker Sync
         if (state.x !== undefined && state.y !== undefined) {
@@ -201,18 +206,14 @@ window.addEventListener('load', () => {
             }
         }
 
-        // Average Heat Sync
         if (state.averageHeat !== undefined) {
             updateAverageHeat(state.averageHeat);
         }
 
-        // Update Markers based on incoming data (if backend sends back temps)
         if (state.heat_markers && drawingTracker) {
-            // This allows the UI to update the temperatures displayed on the markers
             drawingTracker.updateMarkerTemperatures(state.heat_markers);
         }
 
-        // Laser & Robot Confirmation Logic
         if (state.isLaserOn !== undefined) {
             syncToggleState(laserBtn, !!state.isLaserOn, laserConfirmationTimeout);
         }
@@ -221,10 +222,6 @@ window.addEventListener('load', () => {
         }
     }
 
-    /**
-     * Syncs a toggle button's UI with the incoming state from the server,
-     * but only if we aren't currently waiting for a manual confirmation timeout.
-     */
     function syncToggleState(
         btn: HTMLElement,
         incomingState: boolean,
@@ -286,11 +283,16 @@ window.addEventListener('load', () => {
                     },
                     () => {
                         updateFixturesButtonState();
+                    },
+                    () => {
+                        // On markers change
+                        updateThermalButtonState();
                     }
                 );
 
                 updateDrawButtonState();
                 updateFixturesButtonState();
+                updateThermalButtonState();
             }
         },
     });
@@ -393,10 +395,16 @@ window.addEventListener('load', () => {
             markerBtn.classList.remove('selected');
         }
 
+        // Logic to Hide/Show markers based on Mode
+        if (modeId === 'thermalBtn') {
+            drawingTracker?.showMarkers();
+            updateThermalButtonState();
+        }
+
         if (modeId === 'fixturesBtn') {
             currentMode = 'fixtures';
             drawingTools.classList.add('hidden');
-            thermalTools.classList.add('hidden'); // Hide thermal
+            thermalTools.classList.add('hidden'); 
             fixturesTools.classList.remove('hidden');
 
             thermalUiElements.forEach(el => el.classList.add('hidden'));
@@ -409,11 +417,11 @@ window.addEventListener('load', () => {
 
         } else if (modeId === 'thermalBtn') {
             currentMode = 'thermal';
-            drawingTools.classList.add('hidden'); // Hide drawing shapes
-            thermalTools.classList.remove('hidden'); // Show only marker tool
+            drawingTools.classList.add('hidden'); 
+            thermalTools.classList.remove('hidden'); 
             fixturesTools.classList.add('hidden');
 
-            drawingUiElements.forEach(el => el.classList.add('hidden')); // Hides Clear Path etc
+            drawingUiElements.forEach(el => el.classList.add('hidden')); 
             fixturesUiElements.forEach(el => el.classList.add('hidden'));
 
             drawingTracker?.disableFixturesMode();
@@ -421,7 +429,7 @@ window.addEventListener('load', () => {
             if (drawingTracker?.hasFixtures()) {
                 drawingTracker?.showFixtures();
             }
-            thermalUiElements.forEach(el => el.classList.remove('hidden')); // Shows Clear Marker + Heat
+            thermalUiElements.forEach(el => el.classList.remove('hidden')); 
 
             // Re-apply selection state if we came back to this mode
             if (selectedShape === 'marker') {
@@ -431,8 +439,8 @@ window.addEventListener('load', () => {
 
         } else { // drawing mode
             currentMode = 'drawing';
-            drawingTools.classList.remove('hidden'); // Show drawing shapes
-            thermalTools.classList.add('hidden'); // Hide marker tool
+            drawingTools.classList.remove('hidden');
+            thermalTools.classList.add('hidden'); 
             fixturesTools.classList.add('hidden');
 
             drawingUiElements.forEach(el => el.classList.remove('hidden'));
@@ -627,7 +635,6 @@ window.addEventListener('load', () => {
             } else {
                 if (drawingTracker) {
                     if (shape === 'marker') {
-                        // Special handling for Marker Mode
                         drawingTracker.enableMarkerMode();
                     } else {
                         drawingTracker.setShapeType(shape);
@@ -688,9 +695,9 @@ window.addEventListener('load', () => {
     });
 
 
-    /////////////////////////////////////////////
-    //          HEAT SETTINGS
-    /////////////////////////////////////////////
+    // /////////////////////////////////////////////
+    //           HEAT SETTINGS
+    // /////////////////////////////////////////////
 
     function updateAverageHeat(heat: number | null | undefined) {
         if (!averageHeatDisplay) return; // safety check
@@ -700,10 +707,6 @@ window.addEventListener('load', () => {
             averageHeatDisplay.textContent = `${heat.toFixed(1)}°C`;
         }
     }
-
-    // Auto-update heat markers when added/removed (replacing Confirm button)
-    // This logic is moved inside DrawingTracker's logic via internal event, 
-    // but the clear button handles the bulk removal.
 
     clearMarkersBtn.addEventListener('click', async () => {
         if (drawingTracker) {
@@ -743,7 +746,6 @@ window.addEventListener('load', () => {
 
     saveView.addEventListener('click', async () => {
         if (!drawingTracker) return;
-        // We only send the Transformed View setting now
         await drawingTracker.updateViewSettings(transformedModeSwitch.checked, false);
     });
 
