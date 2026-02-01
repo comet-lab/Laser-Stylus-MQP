@@ -359,7 +359,7 @@ export class DrawingTracker {
                 const clickRelY = pointer.y - groupCenter.y;
 
                 const closeBoxObj = group.getObjects()[3];
-                
+
                 const distToX = Math.sqrt(
                     Math.pow(clickRelX - closeBoxObj.left, 2) +
                     Math.pow(clickRelY - closeBoxObj.top, 2)
@@ -780,156 +780,155 @@ export class DrawingTracker {
 
     // --- Execution & Export Logic ---
     public async executePath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<any> {
+        // 1. Always generate the vector path (pixels)
         const pixels = this.generatePixelPath();
         const videoPixels = pixels.map(p => ({
             x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
             y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
         }));
 
-        const width = this.fCanvas.getWidth();
-        const height = this.fCanvas.getHeight();
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = width;
-        tempCanvas.height = height;
-        const ctx = tempCanvas.getContext('2d', { willReadFrequently: true, alpha: false });
-        if (!ctx) throw new Error("Could not create temp context");
-
-        ctx.imageSmoothingEnabled = false;
-        (ctx as any).mozImageSmoothingEnabled = false;
-        (ctx as any).webkitImageSmoothingEnabled = false;
-        (ctx as any).msImageSmoothingEnabled = false;
-
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, width, height);
-
-        if (isFillEnabled) {
-            ctx.fillStyle = "#000000";
-            ctx.strokeStyle = "transparent";
-        } else {
-            ctx.strokeStyle = "#000000";
-            ctx.fillStyle = "transparent";
-            ctx.lineWidth = 1;
-            ctx.lineCap = 'square';
-            ctx.lineJoin = 'miter';
-        }
-
-        this.fCanvas.getObjects().forEach(obj => {
-            if ((obj as any)._isMarker) return; // Skip markers
-            ctx.save();
-            if (obj instanceof fabric.Path) {
-                ctx.beginPath();
-                const pathData = (obj as any).path;
-                let lastX = 0, lastY = 0;
-                pathData.forEach((cmd: any) => {
-                    const type = cmd[0];
-                    switch (type) {
-                        case 'M':
-                            lastX = Math.round(cmd[1]);
-                            lastY = Math.round(cmd[2]);
-                            ctx.moveTo(lastX + 0.5, lastY + 0.5);
-                            break;
-                        case 'L':
-                            const x = Math.round(cmd[1]);
-                            const y = Math.round(cmd[2]);
-                            ctx.lineTo(x + 0.5, y + 0.5);
-                            lastX = x;
-                            lastY = y;
-                            break;
-                        case 'Q':
-                            const qx = Math.round(cmd[3]);
-                            const qy = Math.round(cmd[4]);
-                            ctx.quadraticCurveTo(Math.round(cmd[1]) + 0.5, Math.round(cmd[2]) + 0.5, qx + 0.5, qy + 0.5);
-                            lastX = qx;
-                            lastY = qy;
-                            break;
-                        case 'C':
-                            const cx = Math.round(cmd[5]);
-                            const cy = Math.round(cmd[6]);
-                            ctx.bezierCurveTo(
-                                Math.round(cmd[1]) + 0.5, Math.round(cmd[2]) + 0.5,
-                                Math.round(cmd[3]) + 0.5, Math.round(cmd[4]) + 0.5,
-                                cx + 0.5, cy + 0.5
-                            );
-                            lastX = cx;
-                            lastY = cy;
-                            break;
-                        case 'Z':
-                            ctx.closePath();
-                            break;
-                    }
-                });
-                if (isFillEnabled) ctx.fill();
-                else ctx.stroke();
-            } else if (obj instanceof fabric.Rect) {
-                const rect = obj as fabric.Rect;
-                const left = Math.round(rect.left || 0);
-                const top = Math.round(rect.top || 0);
-                const width = Math.round((rect.width || 0) * (rect.scaleX || 1));
-                const height = Math.round((rect.height || 0) * (rect.scaleY || 1));
-                if (isFillEnabled) ctx.fillRect(left + 0.5, top + 0.5, width, height);
-                else ctx.strokeRect(left + 0.5, top + 0.5, width, height);
-            } else if (obj instanceof fabric.Triangle) {
-                const triangle = obj as fabric.Triangle;
-                const matrix = triangle.calcTransformMatrix();
-                const w = triangle.width;
-                const h = triangle.height;
-                const localPoints = [
-                    new fabric.Point(0, -h / 2),
-                    new fabric.Point(w / 2, h / 2),
-                    new fabric.Point(-w / 2, h / 2)
-                ];
-                const vertices = localPoints.map(p => p.transform(matrix));
-                ctx.beginPath();
-                ctx.moveTo(Math.round(vertices[0].x) + 0.5, Math.round(vertices[0].y) + 0.5);
-                ctx.lineTo(Math.round(vertices[1].x) + 0.5, Math.round(vertices[1].y) + 0.5);
-                ctx.lineTo(Math.round(vertices[2].x) + 0.5, Math.round(vertices[2].y) + 0.5);
-                ctx.closePath();
-                if (isFillEnabled) ctx.fill();
-                else ctx.stroke();
-            } else if (obj instanceof fabric.Ellipse) {
-                const ellipse = obj as fabric.Ellipse;
-                const center = ellipse.getCenterPoint();
-                const rx = Math.round(ellipse.rx * ellipse.scaleX);
-                const ry = Math.round(ellipse.ry * ellipse.scaleY);
-                ctx.beginPath();
-                ctx.ellipse(
-                    center.x, center.y,
-                    rx, ry,
-                    (ellipse.angle || 0) * Math.PI / 180,
-                    0, 2 * Math.PI
-                );
-                if (isFillEnabled) ctx.fill();
-                else ctx.stroke();
-            } else if (obj instanceof fabric.Line) {
-                const line = obj as fabric.Line;
-                ctx.beginPath();
-                ctx.moveTo(Math.round(line.x1 || 0) + 0.5, Math.round(line.y1 || 0) + 0.5);
-                ctx.lineTo(Math.round(line.x2 || 0) + 0.5, Math.round(line.y2 || 0) + 0.5);
-                ctx.stroke();
-            }
-            ctx.restore();
-        });
-
-        const imageData = ctx.getImageData(0, 0, width, height);
-        const data = imageData.data;
-        for (let i = 0; i < data.length; i += 4) {
-            if (data[i] < 255 || data[i + 1] < 255 || data[i + 2] < 255) {
-                data[i] = 0;
-                data[i + 1] = 0;
-                data[i + 2] = 0;
-                data[i + 3] = 255;
-            }
-        }
-        ctx.putImageData(imageData, 0, 0);
-
-        const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
-        if (!blob) throw new Error("Failed to generate image blob");
         const formData = new FormData();
         formData.append('speed', (Number(speed) / 1000).toString());
+        if (isFillEnabled) {
         formData.append('raster_type', raster_type);
+        }
         formData.append('density', density.toString());
         formData.append('pixels', JSON.stringify(videoPixels));
-        formData.append('file', blob, 'path.png');
+        formData.append('is_fill', isFillEnabled.toString());
+
+        // 2. Only generate raster image if fill is enabled
+        if (isFillEnabled) {
+            const width = this.fCanvas.getWidth();
+            const height = this.fCanvas.getHeight();
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const ctx = tempCanvas.getContext('2d', { willReadFrequently: true, alpha: false });
+            if (!ctx) throw new Error("Could not create temp context");
+
+            ctx.imageSmoothingEnabled = false;
+            (ctx as any).mozImageSmoothingEnabled = false;
+            (ctx as any).webkitImageSmoothingEnabled = false;
+            (ctx as any).msImageSmoothingEnabled = false;
+
+            // White background
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, width, height);
+
+            // Black fill for shapes
+            ctx.fillStyle = "#000000";
+            ctx.strokeStyle = "transparent";
+
+            this.fCanvas.getObjects().forEach(obj => {
+                if ((obj as any)._isMarker) return; // Skip markers
+                ctx.save();
+                if (obj instanceof fabric.Path) {
+                    ctx.beginPath();
+                    const pathData = (obj as any).path;
+                    let lastX = 0, lastY = 0;
+                    pathData.forEach((cmd: any) => {
+                        const type = cmd[0];
+                        switch (type) {
+                            case 'M':
+                                lastX = Math.round(cmd[1]);
+                                lastY = Math.round(cmd[2]);
+                                ctx.moveTo(lastX + 0.5, lastY + 0.5);
+                                break;
+                            case 'L':
+                                const x = Math.round(cmd[1]);
+                                const y = Math.round(cmd[2]);
+                                ctx.lineTo(x + 0.5, y + 0.5);
+                                lastX = x;
+                                lastY = y;
+                                break;
+                            case 'Q':
+                                const qx = Math.round(cmd[3]);
+                                const qy = Math.round(cmd[4]);
+                                ctx.quadraticCurveTo(Math.round(cmd[1]) + 0.5, Math.round(cmd[2]) + 0.5, qx + 0.5, qy + 0.5);
+                                lastX = qx;
+                                lastY = qy;
+                                break;
+                            case 'C':
+                                const cx = Math.round(cmd[5]);
+                                const cy = Math.round(cmd[6]);
+                                ctx.bezierCurveTo(
+                                    Math.round(cmd[1]) + 0.5, Math.round(cmd[2]) + 0.5,
+                                    Math.round(cmd[3]) + 0.5, Math.round(cmd[4]) + 0.5,
+                                    cx + 0.5, cy + 0.5
+                                );
+                                lastX = cx;
+                                lastY = cy;
+                                break;
+                            case 'Z':
+                                ctx.closePath();
+                                break;
+                        }
+                    });
+                    ctx.fill();
+                } else if (obj instanceof fabric.Rect) {
+                    const rect = obj as fabric.Rect;
+                    const left = Math.round(rect.left || 0);
+                    const top = Math.round(rect.top || 0);
+                    const width = Math.round((rect.width || 0) * (rect.scaleX || 1));
+                    const height = Math.round((rect.height || 0) * (rect.scaleY || 1));
+                    ctx.fillRect(left + 0.5, top + 0.5, width, height);
+                } else if (obj instanceof fabric.Triangle) {
+                    const triangle = obj as fabric.Triangle;
+                    const matrix = triangle.calcTransformMatrix();
+                    const w = triangle.width;
+                    const h = triangle.height;
+                    const localPoints = [
+                        new fabric.Point(0, -h / 2),
+                        new fabric.Point(w / 2, h / 2),
+                        new fabric.Point(-w / 2, h / 2)
+                    ];
+                    const vertices = localPoints.map(p => p.transform(matrix));
+                    ctx.beginPath();
+                    ctx.moveTo(Math.round(vertices[0].x) + 0.5, Math.round(vertices[0].y) + 0.5);
+                    ctx.lineTo(Math.round(vertices[1].x) + 0.5, Math.round(vertices[1].y) + 0.5);
+                    ctx.lineTo(Math.round(vertices[2].x) + 0.5, Math.round(vertices[2].y) + 0.5);
+                    ctx.closePath();
+                    ctx.fill();
+                } else if (obj instanceof fabric.Ellipse) {
+                    const ellipse = obj as fabric.Ellipse;
+                    const center = ellipse.getCenterPoint();
+                    const rx = Math.round(ellipse.rx * ellipse.scaleX);
+                    const ry = Math.round(ellipse.ry * ellipse.scaleY);
+                    ctx.beginPath();
+                    ctx.ellipse(
+                        center.x, center.y,
+                        rx, ry,
+                        (ellipse.angle || 0) * Math.PI / 180,
+                        0, 2 * Math.PI
+                    );
+                    ctx.fill();
+                } else if (obj instanceof fabric.Line) {
+                    // Lines cannot be filled in raster mode usually, but if needed:
+                    const line = obj as fabric.Line;
+                    ctx.beginPath();
+                    ctx.moveTo(Math.round(line.x1 || 0) + 0.5, Math.round(line.y1 || 0) + 0.5);
+                    ctx.lineTo(Math.round(line.x2 || 0) + 0.5, Math.round(line.y2 || 0) + 0.5);
+                    ctx.stroke(); // Fallback for line visibility
+                }
+                ctx.restore();
+            });
+
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                if (data[i] < 255 || data[i + 1] < 255 || data[i + 2] < 255) {
+                    data[i] = 0;
+                    data[i + 1] = 0;
+                    data[i + 2] = 0;
+                    data[i + 3] = 255;
+                }
+            }
+            ctx.putImageData(imageData, 0, 0);
+
+            const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+            if (!blob) throw new Error("Failed to generate image blob");
+            formData.append('file', blob, 'path.png');
+        }
 
         const response = await fetch(`${this.apiBaseUrl}/api/execute`, {
             method: 'POST',
