@@ -136,6 +136,29 @@ async def submit_heat_markers(markers: str = Form(...)):
         "markers": markers_list,
         "message": "Heat markers dispatched to robot"
     }
+    
+@app.post("/api/heat_area")
+async def update_heat_area(file: UploadFile = File(...)):
+    file_content = await file.read()
+
+    # Save specifically as heatarea.png
+    save_directory = "saved_masks"
+    os.makedirs(save_directory, exist_ok=True)
+    file_location = f"{save_directory}/heatarea.png"
+    
+    with open(file_location, "wb") as f:
+        f.write(file_content)
+
+    encoded_utf8 = base64.b64encode(file_content).decode('utf-8')
+    manager.desired_state.heat_mask = encoded_utf8
+    
+    print("Heat Area Update: Broadcasting mask")
+    await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
+    
+    return {
+        "status": "success", 
+        "message": "Heat area mask saved and dispatched"
+    }
 
 ws_ui_name = os.getenv("UI_WEBSOCKET_NAME", "ui")
 @app.websocket(f"/ws/{ws_ui_name}")

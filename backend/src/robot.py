@@ -20,6 +20,7 @@ class RobotSchema:
     pathEvent: str = None
     raster_mask: str = None
     fixtures_mask: str = None
+    heat_mask: str = None
     raster_type: str = None
     speed: float = None
     path: list[dict[str, float]] = None
@@ -31,11 +32,7 @@ class RobotSchema:
             self.raster_mask = None
             self.fixtures_mask = None
             self.path = None
-            # Do NOT clear heat_markers here if you want them to persist for temperature updates
-            # However, usually we want to clear commands. 
-            # If the backend treats this as a command to "set markers", clearing is fine.
-            # If the backend treats this as "current marker state with temps", we might keep it.
-            # For this logic, we'll clear it to avoid re-sending large payloads if unchanged.
+            self.heat_mask = None
             self.heat_markers = None 
             return payload
 

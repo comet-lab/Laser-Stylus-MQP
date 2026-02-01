@@ -70,6 +70,8 @@ window.addEventListener('load', () => {
 
     // heat display stuff
     const averageHeatDisplay = document.getElementById('average-heat-display') as HTMLElement;
+    const heatAreaBtn = document.getElementById('heatAreaBtn') as HTMLButtonElement;
+    const resetHeatAreaBtn = document.getElementById('resetHeatAreaBtn') as HTMLButtonElement;
 
     // --- 2. State Variables ---
     let laserConfirmationTimeout: number | null = null;
@@ -287,6 +289,13 @@ window.addEventListener('load', () => {
                     () => {
                         // On markers change
                         updateThermalButtonState();
+                    },
+                    () => {                                 // NEW: onHeatAreaDefined
+                        // When a heat area is successfully sent to backend:
+                        resetHeatAreaBtn.disabled = false;
+                        // Optionally deselect the tool if you want one-time use, 
+                        // or keep it selected to draw a new one immediately.
+                        // keeping it selected is usually better UX for "retrying".
                     }
                 );
 
@@ -375,6 +384,46 @@ window.addEventListener('load', () => {
 
     document.getElementById('drawingBtn')?.classList.add('active');
 
+    function selectThermalTool(tool: 'marker' | 'heat') {
+        // 1. Reset UI States
+        markerBtn.classList.remove('selected');
+        heatAreaBtn.classList.remove('selected');
+
+        // 2. Reset Tracker Modes
+        drawingTracker?.disableDrawing(); // Disables standard shapes
+        drawingTracker?.disableMarkerMode();
+        drawingTracker?.disableHeatAreaMode();
+
+        // 3. Apply New Selection
+        if (tool === 'marker') {
+            markerBtn.classList.add('selected');
+            drawingTracker?.enableMarkerMode();
+            selectedShape = 'marker'; // Keep existing logic happy
+        } else {
+            heatAreaBtn.classList.add('selected');
+            drawingTracker?.enableHeatAreaMode();
+            selectedShape = null; // Ensure standard shapes aren't active
+        }
+    }
+
+    markerBtn.addEventListener('click', () => selectThermalTool('marker'));
+
+    heatAreaBtn.addEventListener('click', () => {
+        if (heatAreaBtn.disabled) return;
+        selectThermalTool('heat');
+    });
+
+    resetHeatAreaBtn.addEventListener('click', async () => {
+        if (!drawingTracker) return;
+        resetHeatAreaBtn.disabled = true; // Disable immediately
+        try {
+            await drawingTracker.resetHeatArea();
+        } catch (e) {
+            console.error("Failed to reset heat area", e);
+            resetHeatAreaBtn.disabled = false; // Re-enable on failure
+        }
+    });
+
     function switchMode(modeId: string) {
         console.log("Switching to mode:", modeId);
 
@@ -395,12 +444,6 @@ window.addEventListener('load', () => {
             markerBtn.classList.remove('selected');
         }
 
-        // Logic to Hide/Show markers based on Mode
-        if (modeId === 'thermalBtn') {
-            drawingTracker?.showMarkers();
-            updateThermalButtonState();
-        }
-
         if (modeId === 'fixturesBtn') {
             currentMode = 'fixtures';
             drawingTools.classList.add('hidden');
@@ -417,6 +460,8 @@ window.addEventListener('load', () => {
 
         } else if (modeId === 'thermalBtn') {
             currentMode = 'thermal';
+            drawingTracker?.showMarkers();
+            updateThermalButtonState();
             drawingTools.classList.add('hidden');
             thermalTools.classList.remove('hidden');
             fixturesTools.classList.add('hidden');
@@ -442,6 +487,11 @@ window.addEventListener('load', () => {
             drawingTools.classList.remove('hidden');
             thermalTools.classList.add('hidden');
             fixturesTools.classList.add('hidden');
+
+            heatAreaBtn.classList.remove('selected');
+            markerBtn.classList.remove('selected');
+            drawingTracker?.disableMarkerMode();
+            drawingTracker?.disableHeatAreaMode();
 
             drawingUiElements.forEach(el => el.classList.remove('hidden'));
             fixturesUiElements.forEach(el => el.classList.add('hidden'));

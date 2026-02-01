@@ -9,6 +9,7 @@ export class DrawingTracker {
     private onShapeComplete: () => void;
     private onFixturesChange: () => void;
     private onMarkersChange: () => void; // NEW Callback
+    private onHeatAreaDefined: () => void;
 
     // State for Drag-to-Create
     private currentShapeType: ShapeType | null = null;
@@ -22,6 +23,12 @@ export class DrawingTracker {
     private markerObjects: fabric.Group[] = [];
     private prevWidth: number;
     private prevHeight: number;
+
+    //Heat area mode
+    private isHeatAreaMode: boolean = false;
+    private isDrawingHeatArea: boolean = false;
+    private heatStartPos: { x: number, y: number } | null = null;
+    private activeHeatRect: fabric.Rect | null = null;
 
     // Fixtures mode
     private isFixturesMode: boolean = false;
@@ -61,13 +68,15 @@ export class DrawingTracker {
         apiBaseUrl: string = `http://${window.location.hostname}:443`,
         onShapeComplete: () => void = () => { },
         onFixturesChange: () => void = () => { },
-        onMarkersChange: () => void = () => { } // NEW
+        onMarkersChange: () => void = () => { },
+        onHeatAreaDefined: () => void
     ) {
         this.video = video;
         this.apiBaseUrl = apiBaseUrl;
         this.onShapeComplete = onShapeComplete;
         this.onFixturesChange = onFixturesChange;
         this.onMarkersChange = onMarkersChange;
+        this.onHeatAreaDefined = onHeatAreaDefined;
 
         const el = canvas as any;
         if (el.__canvas) {
@@ -94,9 +103,18 @@ export class DrawingTracker {
         brush.color = '#007AFF';
         this.fCanvas.freeDrawingBrush = brush;
 
-        this.fCanvas.on('mouse:down', this.onMouseDown.bind(this));
-        this.fCanvas.on('mouse:move', this.onMouseMove.bind(this));
-        this.fCanvas.on('mouse:up', this.onMouseUp.bind(this));
+        this.fCanvas.on('mouse:down', (opt) => {
+            if (this.isHeatAreaMode) this.onHeatMouseDown(opt);
+            else this.onMouseDown(opt);
+        });
+        this.fCanvas.on('mouse:move', (opt) => {
+            if (this.isHeatAreaMode) this.onHeatMouseMove(opt);
+            else this.onMouseMove(opt);
+        });
+        this.fCanvas.on('mouse:up', (opt) => {
+            if (this.isHeatAreaMode) this.onHeatMouseUp();
+            else this.onMouseUp();
+        });
         this.fCanvas.on('path:created', (e: any) => {
             if (e.path) {
                 e.path.set({
@@ -375,6 +393,148 @@ export class DrawingTracker {
         }
         this.fixturesApplied = true;
         return await response.json();
+    }
+
+    public enableHeatAreaMode(): void {
+        this.clearDrawing(); // Clear any standard shapes
+        this.disableDrawing(); // Ensure standard flags are off
+        this.disableMarkerMode(); // Ensure markers are off
+        
+        this.isHeatAreaMode = true;
+        this.fCanvas.defaultCursor = 'crosshair';
+        this.fCanvas.selection = false; // Disable group selection
+        this.fCanvas.discardActiveObject();
+        this.fCanvas.requestRenderAll();
+    }
+
+    public disableHeatAreaMode(): void {
+        this.isHeatAreaMode = false;
+        this.isDrawingHeatArea = false;
+        this.fCanvas.defaultCursor = 'default';
+        if (this.activeHeatRect) {
+            this.fCanvas.remove(this.activeHeatRect);
+            this.activeHeatRect = null;
+        }
+    }
+
+    public async resetHeatArea(): Promise<void> {
+        // Send a black mask to clear the setting on backend
+        await this.sendHeatMaskToServer(null); // null triggers the "blank" generation
+    }
+
+    // --- NEW: Specific Heat Area Event Logic ---
+
+    private onHeatMouseDown(opt: any) {
+        if (!this.fCanvas.getElement()) return;
+        
+        this.isDrawingHeatArea = true;
+        const pointer = this.fCanvas.getScenePoint(opt.e);
+        this.heatStartPos = { x: pointer.x, y: pointer.y };
+
+        // Create the specific "Heat Style" rectangle
+        this.activeHeatRect = new fabric.Rect({
+            left: pointer.x,
+            top: pointer.y,
+            width: 0,
+            height: 0,
+            fill: 'rgba(255, 69, 0, 0.3)', // Translucent Orange
+            stroke: '#ff4500',            // Solid Orange (for base)
+            strokeWidth: 2,
+            strokeDashArray: [6, 6],      // Dotted/Dashed
+            selectable: false,            // NOT MOVABLE
+            evented: false,               // NO EVENTS
+            hasControls: false,           // NO HANDLES
+            hasBorders: false,
+            originX: 'left',
+            originY: 'top'
+        });
+
+        this.fCanvas.add(this.activeHeatRect);
+    }
+
+    private onHeatMouseMove(opt: any) {
+        if (!this.isDrawingHeatArea || !this.activeHeatRect || !this.heatStartPos) return;
+
+        const pointer = this.fCanvas.getScenePoint(opt.e);
+        
+        // Calculate geometry allowing for dragging in any direction (negative width/height handling)
+        const origX = this.heatStartPos.x;
+        const origY = this.heatStartPos.y;
+        
+        const left = Math.min(origX, pointer.x);
+        const top = Math.min(origY, pointer.y);
+        const width = Math.abs(origX - pointer.x);
+        const height = Math.abs(origY - pointer.y);
+
+        this.activeHeatRect.set({ left, top, width, height });
+        this.fCanvas.requestRenderAll();
+    }
+
+    private async onHeatMouseUp() {
+        if (!this.isDrawingHeatArea || !this.activeHeatRect) return;
+        
+        this.isDrawingHeatArea = false;
+
+        // Prevent tiny accidental clicks from registering as masks
+        if (this.activeHeatRect.width * this.activeHeatRect.scaleX < 5 || 
+            this.activeHeatRect.height * this.activeHeatRect.scaleY < 5) {
+            this.fCanvas.remove(this.activeHeatRect);
+            this.activeHeatRect = null;
+            return;
+        }
+
+        // 1. Generate Mask and Send to Backend
+        await this.sendHeatMaskToServer(this.activeHeatRect);
+
+        // 2. Remove the visual rectangle (as requested: "finish drawing... it will disappear")
+        this.fCanvas.remove(this.activeHeatRect);
+        this.activeHeatRect = null;
+        this.fCanvas.requestRenderAll();
+
+        // 3. Notify UI to enable the Reset Button
+        this.onHeatAreaDefined();
+    }
+
+    // --- NEW: Mask Generation & Upload ---
+
+    private async sendHeatMaskToServer(rect: fabric.Rect | null): Promise<void> {
+        const width = this.fCanvas.getWidth();
+        const height = this.fCanvas.getHeight();
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = width;
+        tempCanvas.height = height;
+        const ctx = tempCanvas.getContext('2d');
+        if (!ctx) return;
+
+        // Background: Black (No Heat)
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+
+        // Foreground: White (Heat Active) - Only if a rect is provided
+        if (rect) {
+            ctx.fillStyle = '#000000';
+            // We must account for scale if Fabric applied any, though we created it raw
+            const w = rect.width * (rect.scaleX || 1);
+            const h = rect.height * (rect.scaleY || 1);
+            ctx.fillRect(rect.left, rect.top, w, h);
+        }
+
+        const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+        if (!blob) return;
+
+        const formData = new FormData();
+        formData.append('file', blob, 'heat_mask.png');
+
+        try {
+            // Note: Ensure this endpoint exists in your main.py (as discussed in previous turn)
+            await fetch(`${this.apiBaseUrl}/api/heat_area`, {
+                method: 'POST',
+                body: formData
+            });
+        } catch (e) {
+            console.error("Error uploading heat mask:", e);
+        }
     }
 
     // --- Interaction Handlers ---
