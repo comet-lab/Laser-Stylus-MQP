@@ -52,9 +52,10 @@ class MockCameraRegistration():
     def heat_overlay(self, rgb_img, mask = None, roi = None, invert = False, transformed_view: bool = True,
                                 alpha: float = 0.45,
                                 colormap: int = cv2.COLORMAP_JET):
-        return np.zeros((1280, 720)), np.array([]), 0, 0
+        return np.zeros((720, 1280, 3)), np.array([]), 0, 0
+    
     def tracking_display(self, disp, cam_type = 'color', warped = True):
-        return np.zeros((1280, 720))
+        return np.zeros((720, 1280 , 3))
 
 
 
