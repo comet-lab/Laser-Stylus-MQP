@@ -86,7 +86,7 @@ async def execute_bundled_command(
     manager.desired_state.density = density
     manager.desired_state.path = pixel_list
     # If no file, we explicitly set the mask to None or empty so the robot knows not to raster
-    manager.desired_state.raster_mask = encoded_utf8 
+    manager.desired_state.raster_mask = encoded_utf8 if encoded_utf8 is not None else None
 
     print(f"Bundled Execution: Broadcasting {len(pixel_list)} pixels. Fill: {is_fill}")
     await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
