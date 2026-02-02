@@ -120,12 +120,11 @@ pre {
   margin-bottom: auto;
 }
 
-/* --- Helper class for your new icon buttons --- */
 .icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 90%; /* Example size */
+  width: 90%;
   aspect-ratio: 1 / 1;
   border-radius: 12px;
   border: none;
@@ -143,6 +142,17 @@ pre {
   border-color: #e0f2e0;
   box-shadow: inset 2px 2px 8px rgba(0, 0, 0, 0.5);
 }
+
+/* Disabled state for shape buttons */
+.icon-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  filter: grayscale(50%);
+  pointer-events: none;
+  box-shadow: none;
+  border-color: transparent;
+}
+
 .icon-btn-stroke {
   stroke: #e0f2e0;
 }
@@ -219,21 +229,42 @@ pre {
 /* ============================================
    CANVAS & VIDEO
    ============================================ */
-#canvas {
-  height: calc(100% - 60px);
+#viewport {
   position: absolute;
-  bottom: 0;
-  left: 65.5px;
-  right: 0;
+  top: 60px; /* Below Top Panel */
+  left: 65.5px; /* Right of Left Panel */
   width: calc(100% - 65.5px);
+  height: calc(100% - 60px);
+  overflow: hidden;
+  background-color: #000;
 }
 
 #video {
-  position: absolute; 
-  bottom: 0; 
-  right: 0; 
-  opacity: 100; 
-  z-index: -1;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill; /* Stretches video to match canvas coordinate system */
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Fabric.js wraps #canvas in a div, so style that not the canvas directly
+*/
+.fabric-canvas-container {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 10; /* Above video */
+}
+
+/* Ensure the inner canvas element fills the wrapper */
+#canvas {
+  width: 100%;
+  height: 100%;
 }
 
 /* for the different tools on the left side */
@@ -241,6 +272,22 @@ pre {
   outline: 3px solid #6df06d;
   border-radius: 6px;
 }
+
+/* Styles for the circular robot marker */
+#robot-marker {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border: 3px solid #70ff57;
+    border-radius: 50%;
+    background-color: transparent;
+    pointer-events: none;
+    z-index: 999;
+    display: none;
+    transform: translate(-50%, -50%); 
+    transition: left 0.1s linear, top 0.1s linear;
+}
+
 
 /* Code to allow for drawing on the tablet */
 html, body {

@@ -53,21 +53,21 @@ class Camera_Registration(System_Calibration):
         # pathToCWD = os.getcwd()        
         
         # Create checkerboard
-        # self.robot_controller.load_edit_pose()
+        self.robot_controller.load_edit_pose()
         
-        # self.create_checkerboard(gridShape = np.array([9, 8]), \
-        #                          saveLocation=self.calibration_folder, debug=debug)
+        self.create_checkerboard(gridShape = np.array([9, 8]), \
+                                 saveLocation=self.calibration_folder, debug=debug)
         
-        # self.laser_controller.set_output(False)
+        self.laser_controller.set_output(False)
         
-        # self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder, debug = debug)
-        # self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder, debug = debug)
+        self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder, debug = debug)
+        self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder, debug = debug)
         
-        # self.reprojection_test('color', self.rgb_M, gridShape = np.array([2, 2]), laserDuration = .15, \
-        #                 debug=debug, height=0)
+        self.reprojection_test('color', self.rgb_M, gridShape = np.array([2, 2]), laserDuration = .15, \
+                        debug=debug, height=0)
         
-        # self.reprojection_test('thermal', self.therm_M, gridShape = np.array([2, 2]), laserDuration = .15, \
-        #                 debug=debug, height=0)
+        self.reprojection_test('thermal', self.therm_M, gridShape = np.array([2, 2]), laserDuration = .15, \
+                        debug=debug, height=0)
         
         self.laser_alignment()
         # self.therm_cam.deinitialize_cam()
@@ -257,13 +257,14 @@ class Camera_Registration(System_Calibration):
             print("Firing...")
             self.laser_controller.set_output(True)
             time.sleep(laserDuration)
-            self.laser_controller.set_output(False)
+            
             
             
             
             ### Get images ##
             therm_img = self.therm_cam.get_latest()['thermal']
             color_img = self.rgbd_cam.get_latest()['color']
+            self.laser_controller.set_output(False)
             
             
             ## Thermal image pixel
@@ -274,7 +275,6 @@ class Camera_Registration(System_Calibration):
             therm_pixel_old = np.flip(np.asarray((np.unravel_index(np.argmax(therm_img), therm_img.shape))))
             therm_laser_pixel = self.get_hot_pixel(therm_img, method="Centroid")
             # print("Hottest pixel: ", laserPixelOld, "Centroid Pixel: ", laserPixel)
-            
             ##rgbd image pixel
             rgb_laser_pixel = self.get_hot_pixel(color_img, method="Centroid")
             
@@ -500,7 +500,7 @@ if __name__ == '__main__':
     laser_controller.set_output(laser_on)
     
     camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_controller)
-    # camera_reg.run()
+    camera_reg.run()
     rgbd_cam.set_default_setting()
     camera_reg.transformed_view()
     # camera_reg.draw_traj()

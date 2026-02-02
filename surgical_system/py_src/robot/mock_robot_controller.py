@@ -1,11 +1,13 @@
 import numpy as np
 import time
 from scipy.spatial.transform import Rotation
+from laser_control.mock_laser import MockLaser
 
 class MockRobotController():
-    def __init__(self):
+    def __init__(self, laser_obj:MockLaser):
         self.pose = self.load_home_pose()
         self.current_velocity = [0, 0, 0]
+        self.laser_obj = laser_obj
         self.last_update_time = time.time()
         self._is_trajectory_running = False
 
@@ -47,7 +49,7 @@ class MockRobotController():
     def create_custom_trajectory(self, robot_waypoints, speed):
         return (robot_waypoints, speed)
 
-    def run_trajectory(self, traj, blocking):
+    def run_trajectory(self, traj, blocking, laser_on):
         print("Waypoint 0:", traj[0][0])
         print("Waypoint Final:", traj[0][-1])
         print("Speed", traj[1])
