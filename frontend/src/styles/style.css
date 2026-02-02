@@ -298,10 +298,9 @@ pre {
   border-radius: 50%;
   background-color: transparent;
   pointer-events: none;
-  z-index: 999;
+  z-index: 900;
   display: none;
   transform: translate(-50%, -50%);
-  transition: left 0.1s linear, top 0.1s linear;
 }
 
 #average-heat-container {
