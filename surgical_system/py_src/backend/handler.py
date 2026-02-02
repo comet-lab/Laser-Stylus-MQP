@@ -76,6 +76,9 @@ class Handler:
         status = RobotSchema.from_pose(np.linalg.inv(self.home_tf)@current_pose)
         status.isLaserOn = self.desired_state.isLaserOn # TODO Separate variable for on & enabled? Need read-only portions of schema?
         status.isRobotOn = self.desired_state.isRobotOn # TODO get from ???
+        status.heat_markers = self.desired_state.heat_markers
+        status.averageHeat = self.desired_state.averageHeat
+        status.laserX, status.laserY = int(self.desired_state.laserX), int(self.desired_state.laserY)
         return status.to_str()
     
     def _recv_fn(self, msg: str):
@@ -95,7 +98,9 @@ class Handler:
     def _read_raster(self):
         img = self._read_mask(self.desired_state.raster_mask)
         img = Motion_Planner.fill_in_shape(img) 
-        path = Motion_Planner.raster_pattern(img, pitch = 8)
+        pitch = int(self.desired_state.density) # TODO calculate lines per distance 
+        print(f"[Pitch]: {pitch}")
+        path = Motion_Planner.raster_pattern(img, pitch = pitch) # pixel spacing
         print("Raster Path: ", path)
         fig, ax = plt.subplots(figsize=(8,4))
         # ax.imshow(img, cmap='gray')
@@ -166,7 +171,9 @@ class Handler:
     def get_heat_overlay(self, img):
         mask = self._read_mask(self.desired_state.heat_mask)
         heat_img, selection, min_temp, max_temp = self.cam_reg.heat_overlay(img, mask, invert=True)
-        self.desired_state.averageHeat = max_temp #TODO find average heat of current robot kernal pixel
+        if selection is not None:
+            self.desired_state.averageHeat = float(max_temp) #TODO find average heat of current robot kernal pixel
+            # print(f"Max temp: {max_temp}")
         return heat_img
             
     

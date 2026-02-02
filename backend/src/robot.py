@@ -34,6 +34,7 @@ class RobotSchema:
     heat_mask: Optional[str] = None
     raster_type: Optional[str] = None
     speed: Optional[float] = None
+    density: Optional[float] = None
     
     # Complex Data
     path: Optional[List[Dict[str, float]]] = None
