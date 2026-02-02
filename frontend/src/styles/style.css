@@ -310,3 +310,82 @@ pre {
   margin-left: auto;
   padding-right: 10px;
 }
+
+/* ============================================
+   INDEPENDENT LAYOUT POSITIONING STYLES
+   ============================================ */
+#preparePopup {
+  --popup-edge-offset: 10px; /* ← must match the `right` value in preparePage.css */
+}
+
+/* ============================================
+   MENU AT BOTTOM
+   ============================================ */
+body.menu-bottom #top-panel {
+  position: absolute;
+  top: auto;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+body.menu-bottom #viewport {
+  top: 0;
+  bottom: 60px;
+  height: calc(100% - 60px);
+}
+
+body.menu-bottom #left-panel {
+  top: 0;
+  bottom: 60px;
+  height: calc(100% - 60px);
+}
+
+/* --- Prepare popup: pin to top-left, top padding = normal right padding --- */
+body.menu-bottom #preparePopup {
+  top:    var(--popup-edge-offset);
+  left:   calc(var(--popup-edge-offset) + 65px);
+  right:  auto;
+  bottom: auto;
+}
+
+/* --- Settings gear: move to top of the sidebar --- */
+body.menu-bottom #settings-icon-section {
+  order:         -1;
+  margin-top:    0.2vw;
+  margin-bottom: 0;
+}
+
+/* ============================================
+   SIDEBAR ON RIGHT
+   ============================================ */
+body.sidebar-right #left-panel {
+  position: absolute;
+  left: auto;
+  right: 0;
+  top: 60px;
+  bottom: 0;
+}
+
+body.sidebar-right #viewport {
+  left: 0;
+  right: 65.5px;
+  width: calc(100% - 65.5px);
+}
+
+/* ============================================
+   COMBINED: MENU BOTTOM + SIDEBAR RIGHT
+   ============================================ */
+body.menu-bottom.sidebar-right #left-panel {
+  top: 0;
+  bottom: 60px;
+}
+
+body.menu-bottom.sidebar-right #viewport {
+  top: 0;
+  left: 0;
+  right: 65.5px;
+  bottom: 60px;
+  width: calc(100% - 65.5px);
+  height: calc(100% - 60px);
+}

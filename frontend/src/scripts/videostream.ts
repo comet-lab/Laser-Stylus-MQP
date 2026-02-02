@@ -33,6 +33,7 @@ class VideoStreamController {
         settingsPopup: document.getElementById('settingsPopup') as HTMLElement,
         preparePopup: document.getElementById('preparePopup') as HTMLElement,
 
+
         // --- Action Buttons ---
         settingsBtn: document.getElementById('settingsBtn') as HTMLButtonElement,
         settingsCloseBtn: document.getElementById('settingsCloseBtn') as HTMLButtonElement,
@@ -50,6 +51,10 @@ class VideoStreamController {
         processingModeSwitch: document.getElementById('processing-mode') as HTMLInputElement, // Real-time vs Batch
         transformedModeSwitch: document.getElementById('transformed-view-mode') as HTMLInputElement,
         saveView: document.getElementById('save-view') as HTMLInputElement,
+        layoutTopBtn: document.getElementById('layout-top') as HTMLButtonElement,
+        layoutBottomBtn: document.getElementById('layout-bottom') as HTMLButtonElement,
+        layoutLeftBtn: document.getElementById('layout-left') as HTMLButtonElement,
+        layoutRightBtn: document.getElementById('layout-right') as HTMLButtonElement,
 
         // --- Input Fields ---
         speedInput: document.getElementById('speedInput') as HTMLInputElement,
@@ -169,6 +174,21 @@ class VideoStreamController {
 
         // Default to Drawing mode visually
         document.getElementById('drawingBtn')?.classList.add('active');
+
+        const savedMenuPosition = localStorage.getItem('menuPosition') || 'top';
+        const savedSidebarPosition = localStorage.getItem('sidebarPosition') || 'left';
+
+        if (savedMenuPosition === 'bottom') {
+            document.body.classList.add('menu-bottom');
+            this.ui.layoutBottomBtn.classList.add('active');
+            this.ui.layoutTopBtn.classList.remove('active');
+        }
+
+        if (savedSidebarPosition === 'right') {
+            document.body.classList.add('sidebar-right');
+            this.ui.layoutRightBtn.classList.add('active');
+            this.ui.layoutLeftBtn.classList.remove('active');
+        }
     }
 
     private setMessage(str: string) {
@@ -388,6 +408,14 @@ class VideoStreamController {
                 await this.drawingTracker.updateViewSettings(this.ui.transformedModeSwitch.checked, false);
             }
         });
+
+        // --- Menu Position Controls ---
+        this.ui.layoutTopBtn.addEventListener('click', () => this.setMenuPosition('top'));
+        this.ui.layoutBottomBtn.addEventListener('click', () => this.setMenuPosition('bottom'));
+
+        // --- Sidebar Position Controls ---
+        this.ui.layoutLeftBtn.addEventListener('click', () => this.setSidebarPosition('left'));
+        this.ui.layoutRightBtn.addEventListener('click', () => this.setSidebarPosition('right'));
 
         // Handle window resizing
         window.addEventListener('resize', () => {
@@ -954,7 +982,35 @@ class VideoStreamController {
     private closeSettings() {
         this.ui.settingsPopup.classList.remove('active');
         this.ui.overlay.classList.remove('active');
-        [this.ui.clearBtn, this.ui.robotBtn, this.ui.laserBtn].forEach(btn => btn.disabled = false);
+        [this.ui.robotBtn, this.ui.laserBtn].forEach(btn => btn.disabled = false);
+    }
+
+    private setMenuPosition(position: 'top' | 'bottom') {
+        if (position === 'bottom') {
+            document.body.classList.add('menu-bottom');
+            this.ui.layoutBottomBtn.classList.add('active');
+            this.ui.layoutTopBtn.classList.remove('active');
+            localStorage.setItem('menuPosition', 'bottom');
+        } else {
+            document.body.classList.remove('menu-bottom');
+            this.ui.layoutTopBtn.classList.add('active');
+            this.ui.layoutBottomBtn.classList.remove('active');
+            localStorage.setItem('menuPosition', 'top');
+        }
+    }
+
+    private setSidebarPosition(position: 'left' | 'right') {
+        if (position === 'right') {
+            document.body.classList.add('sidebar-right');
+            this.ui.layoutRightBtn.classList.add('active');
+            this.ui.layoutLeftBtn.classList.remove('active');
+            localStorage.setItem('sidebarPosition', 'right');
+        } else {
+            document.body.classList.remove('sidebar-right');
+            this.ui.layoutLeftBtn.classList.add('active');
+            this.ui.layoutRightBtn.classList.remove('active');
+            localStorage.setItem('sidebarPosition', 'left');
+        }
     }
 
     // =========================================
