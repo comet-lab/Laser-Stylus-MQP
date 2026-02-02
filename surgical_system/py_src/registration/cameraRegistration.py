@@ -387,7 +387,8 @@ class Camera_Registration(System_Calibration):
 
         return out
     
-    def heat_overlay(self, rgb_img, roi, transformed_view: bool = True,
+    def heat_overlay(self, rgb_img, mask = None, roi = None, invert = False, 
+                                transformed_view: bool = True,
                                 alpha: float = 0.45,
                                 colormap: int = cv2.COLORMAP_JET):
 
@@ -399,72 +400,94 @@ class Camera_Registration(System_Calibration):
         therm_img = self.get_cam_latest('thermal')
         therm_h, therm_w = therm_img.shape[:2]
         disp = rgb_img.copy()
+        H, W = disp.shape[:2]
         vmin, vmax = None, None
+        
+        
+        if mask is None and roi is None:
+            return disp, None, None, None
+        
 
-
-        # If ROI exists, compute overlay inside ROI
-        if roi is not None:
-            x0, y0, x1, y1 = normalize_rect(*roi)
-            x0, y0 = int(x0), int(y0)
-            x1, y1 = int(x1), int(y1)
             
-            cv2.rectangle(disp, (x0, y0), (x1, y1), (0, 255, 0), 1)
+        if roi is not None:
+            sel = np.zeros((H, W), dtype=bool)
+            x0, y0, x1, y1 = normalize_rect(*roi)
+            x0, y0 = max(0, x0), max(0, y0)
+            x1, y1 = min(W - 1, x1), min(H - 1, y1)
+            sel[y0:y1+1, x0:x1+1] = True
 
-            # Create grid of display pixels in ROI
-            xs = np.arange(x0, x1 + 1, dtype=np.float32)
-            ys = np.arange(y0, y1 + 1, dtype=np.float32)
-            X, Y = np.meshgrid(xs, ys)  # shapes (roi_h, roi_w)
-            pts_disp = np.stack([X, Y], axis=-1).reshape(-1, 2)  # (N,2)
+            
+            # cv2.rectangle(disp, (x0, y0), (x1, y1), (0, 255, 0), 1)
 
-            if transformed_view:
-                world_pts = self.cam_transforms['color'].disp_px_to_world_m(pts_disp)
-                therm_uv = self.cam_transforms['thermal'].world_m_to_img_px(world_pts).astype('int32')
-            else:
-                therm_uv = self.cam_transforms['rgb_thermal'].img_px_to_world_m(pts_disp)[:, :2].astype('int32')
+        else:  # mask is not None
+            
+            mask_bool = ~mask.astype(bool) if invert else mask.astype(bool)
+            if mask_bool.shape[:2] != (H, W):
+                raise ValueError(f"mask shape {mask_bool.shape[:2]} must match image {(H, W)}")
+            sel = mask_bool
 
-            # bounds checking
-            tx = np.rint(therm_uv[:, 0]).astype(np.int32)
-            ty = np.rint(therm_uv[:, 1]).astype(np.int32)
+        if not np.any(sel):
+            return disp, sel, None, None
 
-            valid = (tx >= 0) & (tx < therm_w) & (ty >= 0) & (ty < therm_h)
+        
+        # Bounding Box
+        ys, xs = np.nonzero(sel)
+        y0, y1 = int(ys.min()), int(ys.max())
+        x0, x1 = int(xs.min()), int(xs.max())
 
-            # Prepare ROI heat buffer
-            roi_h = (y1 - y0 + 1)
-            roi_w = (x1 - x0 + 1)
-            heat = np.zeros((roi_h * roi_w,), dtype=np.float32)
-            heat[:] = np.nan
+        # local selection mask for bbox
+        sel_local = sel[y0:y1+1, x0:x1+1]
+        roi_h, roi_w = sel_local.shape
+        
+        ly, lx = np.nonzero(sel_local)  # local coords
+        pts_disp = np.stack([lx + x0, ly + y0], axis=1).astype(np.float32)  # (N,2) in (x,y)
 
-            # Fill valid samples
-            heat[valid] = therm_img[ty[valid], tx[valid]].astype(np.float32)
+        if transformed_view:
+            world_pts = self.cam_transforms['color'].disp_px_to_world_m(pts_disp)
+            therm_uv = self.cam_transforms['thermal'].world_m_to_img_px(world_pts).astype('int32')
+        else:
+            therm_uv = self.cam_transforms['rgb_thermal'].img_px_to_world_m(pts_disp)[:, :2].astype('int32')
 
-            # Reshape to ROI image
-            heat_img = heat.reshape(roi_h, roi_w)
+        # bounds checking
+        tx = np.rint(therm_uv[:, 0]).astype(np.int32)
+        ty = np.rint(therm_uv[:, 1]).astype(np.int32)
 
-            # Normalize heat for colormap (robust to NaNs)
-            finite = np.isfinite(heat_img)
-            if finite is not None and np.any(finite):
-                vmin = np.nanmin(heat_img)
-                vmax = np.nanmax(heat_img)
-                if vmax - vmin < 1e-6:
-                    norm = np.zeros_like(heat_img, dtype=np.uint8)
-                else:
-                    norm = np.zeros_like(heat_img, dtype=np.uint8)
-                    norm[finite] = (255.0 * (heat_img[finite] - vmin) / (vmax - vmin)).astype(np.uint8)
+        valid = (tx >= 0) & (tx < therm_w) & (ty >= 0) & (ty < therm_h)
+
+        heat_img = np.full((roi_h, roi_w), np.nan, dtype=np.float32)
+
+        # write only where selection exists and mapping valid
+        lx_v = lx[valid]
+        ly_v = ly[valid]
+        heat_img[ly_v, lx_v] = therm_img[ty[valid], tx[valid]].astype(np.float32)
+
+
+        # Normalize heat for colormap (robust to NaNs)
+        finite = np.isfinite(heat_img)
+        if finite is not None and np.any(finite):
+            vmin = np.nanmin(heat_img)
+            vmax = np.nanmax(heat_img)
+            if vmax - vmin < 1e-6:
+                norm = np.zeros_like(heat_img, dtype=np.uint8)
             else:
                 norm = np.zeros_like(heat_img, dtype=np.uint8)
+                norm[finite] = (255.0 * (heat_img[finite] - vmin) / (vmax - vmin)).astype(np.uint8)
+        else:
+            norm = np.zeros_like(heat_img, dtype=np.uint8)
 
-            # Colorize
-            heat_color = cv2.applyColorMap(norm, colormap)
+        # Colorize
+        heat_color = cv2.applyColorMap(norm, colormap)
 
-            # mask out invalid pixels from overlay
-            if np.any(~finite):
-                heat_color[~finite] = 0
+        # mask out invalid pixels from overlay
+        if np.any(~finite):
+            heat_color[~finite] = 0
 
-            # Alpha blend overlay 
-            roi_bgr = disp[y0:y1 + 1, x0:x1 + 1]
-            disp[y0:y1 + 1, x0:x1 + 1] = cv2.addWeighted(heat_color, alpha, roi_bgr, 1.0 - alpha, 0)
-            return disp, finite, vmin, vmax
-        return disp, None, None, None
+        # Alpha blend overlay 
+        roi_bgr = disp[y0:y1 + 1, x0:x1 + 1]
+        disp[y0:y1 + 1, x0:x1 + 1] = cv2.addWeighted(heat_color, alpha, roi_bgr, 1.0 - alpha, 0)
+        return disp, sel, vmin, vmax
+    
+    
     
     
     def tracking_display(self, disp, cam_type = 'color', warped = True):
@@ -574,7 +597,7 @@ class Camera_Registration(System_Calibration):
                     current_pixel_location = np.asarray(current_pixel_location, dtype=np.int16)
                     beam_waist = self.laser_controller.get_beam_width(curr_position[-1]) 
 
-                    laser_points = circle_perimeter_pixels(curr_position[:2], beam_waist/2.0)
+                    laser_points = self.circle_perimeter_pixels(curr_position[:2], beam_waist/2.0)
                     laser_pixels = self.get_world_m_to_UI(cam_type, laser_points, warped).astype(np.int16)
 
                     xs = laser_pixels[:, 0]
@@ -840,7 +863,7 @@ class Camera_Registration(System_Calibration):
 
                 # Display image is always resized to 1280x720 for consistent mouse mapping
                 disp = cv2.resize(rgb_img, (DISP_W, DISP_H), interpolation=cv2.INTER_NEAREST)
-                disp, finite, vmin, vmax = self.heat_overlay(disp, roi, transformed_view = transformed_view)
+                disp, finite, vmin, vmax = self.heat_overlay(disp, roi=roi, transformed_view = transformed_view)
                     
                 if np.any(finite):
                     cv2.putText(
@@ -928,11 +951,11 @@ if __name__ == '__main__':
     camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_controller)
     # camera_reg.run()
     rgbd_cam.set_default_setting()
-    robot_controller.load_edit_pose()
+    # robot_controller.load_edit_pose()
     # camera_reg.view_rgbd_therm_registration()
     # camera_reg.transformed_view(cam_type="thermal")
     # camera_reg.live_control_view('color', warped=True, tracking=True)
-    # camera_reg.view_rgbd_therm_heat_overlay()
+    camera_reg.view_rgbd_therm_heat_overlay()
     # camera_reg.draw_traj()
     therm_cam.deinitialize_cam()
     # camera_reg.live_control_view("color")

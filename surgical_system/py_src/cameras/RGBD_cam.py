@@ -90,37 +90,41 @@ class RGBD_Cam(Camera):
                 return 
             while True:
                 self.thread_ready.wait()
-                frames = self.pipeline.wait_for_frames()
-                depth = frames.get_depth_frame()
-                color = frames.get_color_frame()
-                raw = np.asanyarray(depth.get_data())
-                # print(
-                #     "scale:", self.depth_scale,
-                #     "raw mean:", raw.mean(),
-                #     "meters mean:", raw.mean() * self.depth_scale
-                # )
+                frames = self.pipeline.poll_for_frames()
+                if frames:
+                    
+                    depth = frames.get_depth_frame()
+                    color = frames.get_color_frame()
+                    raw = np.asanyarray(depth.get_data())
+                    # print(
+                    #     "scale:", self.depth_scale,
+                    #     "raw mean:", raw.mean(),
+                    #     "meters mean:", raw.mean() * self.depth_scale
+                    # )
 
-                # for f in self.recommended_filters:
-                #     depth = f.process(depth)
-                if not depth or not color:
-                    continue
-                
-                depth = self.thresh.process(depth)
-                depth = self.depth_to_disparity.process(depth)
-                depth = self.decimation.process(depth)
-                depth = self.spatial.process(depth)
-                depth = self.temporal.process(depth)
-                depth = self.hole_filling.process(depth)
-                depth = self.disparity_to_depth.process(depth)
-                depth_np = np.asanyarray(depth.get_data()) * self.depth_scale
-                
-                color_np = np.asanyarray(color.get_data())
-                ts = frames.get_timestamp()  # milliseconds
-                item = {"color": color_np, "depth": depth_np, "ts": ts}
+                    # for f in self.recommended_filters:
+                    #     depth = f.process(depth)
+                    if not depth or not color:
+                        continue
+                    
+                    # depth = self.thresh.process(depth)
+                    # depth = self.depth_to_disparity.process(depth)
+                    # depth = self.decimation.process(depth)
+                    # depth = self.spatial.process(depth)
+                    # depth = self.temporal.process(depth)
+                    # depth = self.hole_filling.process(depth)
+                    # depth = self.disparity_to_depth.process(depth)
+                    depth_np = np.asanyarray(depth.get_data()) * self.depth_scale
+                    
+                    color_np = np.asanyarray(color.get_data())
+                    ts = frames.get_timestamp()  # milliseconds
+                    item = {"color": color_np, "depth": depth_np, "ts": ts}
 
-                self._lock.acquire()
-                self._latest = item
-                self._lock.release()
+                    self._lock.acquire()
+                    self._latest = item
+                    self._lock.release()
+                else:
+                    time.sleep(0.0005)
         finally:
             self.pipeline.stop()
             

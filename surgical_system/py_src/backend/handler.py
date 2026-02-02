@@ -33,6 +33,7 @@ class Handler:
         self.virtual_fixture, self.dx, self.dy, self.distance_field = self.generate_virtual_fixture()
         self.vf_valid_flag = None
         
+        
         initial_pose, _ = robot_controller.get_current_state()
         desired_state.update(asdict(RobotSchema.from_pose(initial_pose@np.linalg.inv(self.home_tf))))
         desired_state.isLaserOn = False
@@ -81,16 +82,19 @@ class Handler:
         self.last_update_time = time.time()
         data = json.loads(msg)
         self.desired_state.update(data)
-                
-            
-    def _read_raster(self):
-        data_str = self.desired_state.raster_mask
+        
+    def _read_mask(self, mask):
+        data_str = mask
         image_bytes = base64.b64decode(data_str)
         numpy_array = np.frombuffer(image_bytes, np.uint8)
         img = cv2.imdecode(numpy_array, cv2.IMREAD_UNCHANGED)
         img = cv2.resize(img, (1280, 720))
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        img = Motion_Planner.fill_in_shape(img) # TODO, see if it fills or not 
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        return gray       
+            
+    def _read_raster(self):
+        img = self._read_mask(self.desired_state.raster_mask)
+        img = Motion_Planner.fill_in_shape(img) 
         path = Motion_Planner.raster_pattern(img, pitch = 8)
         print("Raster Path: ", path)
         fig, ax = plt.subplots(figsize=(8,4))
@@ -104,15 +108,10 @@ class Handler:
         return path
     
     def _read_fixtures(self):
-        data_str = self.desired_state.fixtures_mask
-        image_bytes = base64.b64decode(data_str)
-        numpy_array = np.frombuffer(image_bytes, np.uint8)
-        img = cv2.imdecode(numpy_array, cv2.IMREAD_UNCHANGED)
-        img = cv2.resize(img, (1280, 720))
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray = self._read_mask(self.desired_state.fixtures_mask)
         self.virtual_fixture, self.dx, self.dy, self.distance_field = self.generate_virtual_fixture(img=gray)
         # cv2.imwrite("Virtural Fixtures.png", (self.virtual_fixture.astype(np.uint8)) * 255)
-        
+    
     def _track_virtual_fixtures(self, pixel):
         x, y = pixel
         if(x is not None and y is not None):
@@ -138,6 +137,8 @@ class Handler:
     
     def _do_current_thermal_info(self):
         if self.desired_state.heat_markers != None:
+            if(len(self.desired_state.heat_markers) == 0 ):
+                return
             temps = np.zeros(len(self.desired_state.heat_markers))
             markers = np.array([[pixel['x'], pixel['y']] for pixel in self.desired_state.heat_markers])
             # print("[Temperature Markers] Marker Locations: ", markers)
@@ -161,8 +162,12 @@ class Handler:
                     self.desired_state.heat_markers[i]["temp"] = float(therm_img[ys[i], xs[i]])
                 else:
                     marker["temp"] = None
-            # print("[Temperature Markers] Temps: ", self.desired_state.heat_markers)
-
+                    
+    def get_heat_overlay(self, img):
+        mask = self._read_mask(self.desired_state.heat_mask)
+        heat_img, selection, min_temp, max_temp = self.cam_reg.heat_overlay(img, mask, invert=True)
+        self.desired_state.averageHeat = max_temp #TODO find average heat of current robot kernal pixel
+        return heat_img
             
     
     def _read_path(self):
@@ -266,6 +271,7 @@ class Handler:
                 
             
             # TODO, always recieving raster_mask 
+            
             if(self.desired_state.raster_mask is not None
                and not self.robot_controller.is_trajectory_running()):
                 self.desired_state.x = None

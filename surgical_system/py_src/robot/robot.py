@@ -14,6 +14,7 @@ class RobotSchema:
     laserX: float = None
     laserY: float = None
     beamWaist: float = None
+    averageHeat: float = None
     isLaserOn: bool = None
     isRobotOn: bool = None
     isTransformedViewOn: bool = None
@@ -21,6 +22,7 @@ class RobotSchema:
     pathEvent: str = None
     raster_mask: str = None
     raster_type: str = None
+    heat_mask: str = None
     fixtures_mask: str = None
     speed: float = None
     path: List[Dict[str, float]] = None

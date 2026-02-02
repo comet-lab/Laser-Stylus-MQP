@@ -159,6 +159,9 @@ async def main():
 
         if latest.shape != (1280, 720):
             latest = cv2.resize(latest, (1280, 720), interpolation=cv2.INTER_NEAREST)
+            
+        if control_flow_handler.desired_state.heat_mask is not None:
+            latest = control_flow_handler.get_heat_overlay(latest)
 
         if camera_reg.display_path:
             latest = camera_reg.show_path(latest)
