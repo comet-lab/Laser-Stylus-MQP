@@ -402,40 +402,53 @@ class VideoStreamController {
      * Updates the UI based on incoming WebSocket state from the robot/server.
      */
     private syncUiToState(state: Partial<WebSocketMessage>) {
-        // 1. Update Robot Position Marker
-        if (state.x !== undefined && state.y !== undefined) {
+        //Update Robot Position Marker
+        if (state.laserX !== undefined && state.laserY !== undefined) {
             const containerWidth = this.ui.viewport.offsetWidth;
             const containerHeight = this.ui.viewport.offsetHeight;
             const videoWidth = this.ui.video.videoWidth;
             const videoHeight = this.ui.video.videoHeight;
 
-            // Map Video Coordinates -> Screen/CSS Coordinates
             if (videoWidth > 0 && videoHeight > 0) {
-                const cssLeft = (state.x / videoWidth) * containerWidth;
-                const cssTop = (state.y / videoHeight) * containerHeight;
+                const cssLeft = (state.laserX / videoWidth) * containerWidth;
+                const cssTop = (state.laserY / videoHeight) * containerHeight;
                 this.ui.robotMarker.style.left = `${cssLeft}px`;
                 this.ui.robotMarker.style.top = `${cssTop}px`;
                 this.ui.robotMarker.style.display = 'block';
             }
         }
         
-        // 2. Update Thermal/Heat Data
+        //Update Thermal/Heat Data
         if (state.averageHeat !== undefined) this.updateAverageHeat(state.averageHeat);
         if (state.heat_markers && this.drawingTracker) this.drawingTracker.updateMarkerTemperatures(state.heat_markers);
         
-        // 3. Update Hardware Toggles (with timeout protection)
-        if (state.isLaserOn !== undefined) this.syncToggleState(this.ui.laserBtn, !!state.isLaserOn, this.state.laserConfirmationTimeout);
-        if (state.isRobotOn !== undefined) this.syncToggleState(this.ui.robotBtn, !!state.isRobotOn, this.state.robotConfirmationTimeout);
-    }
+        //Update Hardware Toggles
+        if (state.isLaserOn !== undefined) {
+            const isOn = !!state.isLaserOn;
+            
+            //Always update the visual state to match the server
+            this.ui.laserBtn.classList.toggle('active', isOn);
+            
+            // If we were waiting for confirmation, clear the lock immediately
+            if (this.state.laserConfirmationTimeout) {
+                clearTimeout(this.state.laserConfirmationTimeout);
+                this.state.laserConfirmationTimeout = null;
+                this.ui.laserBtn.style.pointerEvents = 'auto';
+            }
+        }
 
-    private syncToggleState(btn: HTMLElement, incomingState: boolean, timeoutRef: number | null) {
-        if (timeoutRef) {
-            // If waiting for confirmation, only re-enable interaction if state matches
-            if (incomingState === btn.classList.contains('active')) btn.style.pointerEvents = 'auto';
-        } else {
-            // Immediate update if no pending action
-            btn.classList.toggle('active', incomingState);
-            btn.style.pointerEvents = 'auto';
+        if (state.isRobotOn !== undefined) {
+            const isOn = !!state.isRobotOn;
+            
+            //Always update the visual state to match the server
+            this.ui.robotBtn.classList.toggle('active', isOn);
+            
+            //If we were waiting for confirmation, clear the lock immediately
+            if (this.state.robotConfirmationTimeout) {
+                clearTimeout(this.state.robotConfirmationTimeout);
+                this.state.robotConfirmationTimeout = null;
+                this.ui.robotBtn.style.pointerEvents = 'auto';
+            }
         }
     }
 

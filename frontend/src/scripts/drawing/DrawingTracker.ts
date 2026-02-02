@@ -38,6 +38,7 @@ export class DrawingTracker {
     private isFixturesDrawing: boolean = false;
     private lastFixturesPoint: { x: number, y: number } | null = null;
     private fixturesApplied: boolean = false;
+    private rawDrawingBackup: ImageData | null = null;
 
     // --- State: Canvas Sizing ---
     private prevWidth: number;
@@ -61,8 +62,12 @@ export class DrawingTracker {
         transparentCorners: false,
         padding: 10,
         originX: 'left' as const,
-        originY: 'top' as const
+        originY: 'top' as const,
+
     };
+
+    // --- CONFIG: Other Constants ---
+    private readonly BORDER_THICKNESS = 4;
 
     constructor(
         canvas: HTMLCanvasElement,
@@ -239,6 +244,9 @@ export class DrawingTracker {
 
     private onFixturesPointerDown(e: PointerEvent): void {
         if (!this.currentBrushType || !this.fixturesCanvas || !this.fixturesCtx) return;
+        if (this.fixturesApplied) {
+            this.restoreDrawingState();
+        }
         this.isFixturesDrawing = true;
         this.fixturesCanvas.setPointerCapture(e.pointerId);
         const { x, y } = this.getCanvasCoordinates(e, this.fixturesCanvas);
@@ -262,16 +270,27 @@ export class DrawingTracker {
         this.fixturesCanvas.releasePointerCapture(e.pointerId);
     }
 
+    private restoreDrawingState(): void {
+        if (!this.fixturesCtx || !this.rawDrawingBackup) return;
+        
+        // Put the raw cyan pixels back
+        this.fixturesCtx.putImageData(this.rawDrawingBackup, 0, 0);
+        
+        // Reset flags
+        this.fixturesApplied = false;
+        this.rawDrawingBackup = null;
+    }
+
     private drawFixturesBrush(x: number, y: number): void {
         if (!this.fixturesCtx || !this.currentBrushType) return;
         if (this.isErasing) {
             this.fixturesCtx.globalCompositeOperation = 'destination-out';
-            this.fixturesCtx.fillStyle = '#E69F00';
-            this.fixturesCtx.strokeStyle = '#E69F00';
+            this.fixturesCtx.fillStyle = '#007AFF';
+            this.fixturesCtx.strokeStyle = '#007AFF';
         } else {
             this.fixturesCtx.globalCompositeOperation = 'source-over';
-            this.fixturesCtx.fillStyle = '#E69F00';
-            this.fixturesCtx.strokeStyle = '#E69F00';
+            this.fixturesCtx.fillStyle = '#007AFF';
+            this.fixturesCtx.strokeStyle = '#007AFF';
         }
 
         if (this.currentBrushType === 'round') {
@@ -312,7 +331,7 @@ export class DrawingTracker {
         const imageData = this.fixturesCtx.getImageData(0, 0, this.fixturesCanvas.width, this.fixturesCanvas.height);
         const data = imageData.data;
         for (let i = 0; i < data.length; i += 4) {
-            if (data[i + 3] > 0 && data[i] > 200) {
+            if (data[i + 3] > 0) {
                 return true;
             }
         }
@@ -327,6 +346,10 @@ export class DrawingTracker {
         if (!this.fixturesCtx || !this.fixturesCanvas) return;
         this.fixturesCtx.clearRect(0, 0, this.fixturesCanvas.width, this.fixturesCanvas.height);
         this.fixturesApplied = false;
+        this.rawDrawingBackup = null; // Clear backup
+        
+        this.fixturesCtx.globalCompositeOperation = 'source-over';
+        
         if (!this.isFixturesMode) {
             this.fixturesCanvas.classList.remove('active');
         } else {
@@ -344,33 +367,102 @@ export class DrawingTracker {
     public async executeFixtures(): Promise<any> {
         if (!this.fixturesCanvas || !this.fixturesCtx) throw new Error("Fixtures canvas not initialized");
         
+        const width = this.fixturesCanvas.width;
+        const height = this.fixturesCanvas.height;
+
+        // 1. Capture the current RAW state (The Cyan Blobs)
+        const currentDrawing = this.fixturesCtx.getImageData(0, 0, width, height);
+        this.rawDrawingBackup = currentDrawing; // Save backup for later editing
+
+        const data = currentDrawing.data;
+
+        // 2. Prepare Server Mask (Black=Forbidden, White=Safe)
         const maskCanvas = document.createElement('canvas');
-        maskCanvas.width = this.fixturesCanvas.width;
-        maskCanvas.height = this.fixturesCanvas.height;
+        maskCanvas.width = width;
+        maskCanvas.height = height;
         const maskCtx = maskCanvas.getContext('2d');
         if (!maskCtx) throw new Error("Could not create mask context");
 
-        maskCtx.fillStyle = '#ffffff';
-        maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-        const fixturesData = this.fixturesCtx.getImageData(0, 0, this.fixturesCanvas.width, this.fixturesCanvas.height);
-        const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
-        for (let i = 0; i < fixturesData.data.length; i += 4) {
-            const r = fixturesData.data[i];
-            const a = fixturesData.data[i + 3];
-            if (a > 0 && r > 200) {
-                maskData.data[i] = 0;
-                maskData.data[i + 1] = 0;
-                maskData.data[i + 2] = 0;
-                maskData.data[i + 3] = 255;
+        const maskImageData = maskCtx.createImageData(width, height);
+        const maskPixels = maskImageData.data;
+
+        // 3. Prepare Visual Feedback (Dark background, Transparent safe zone, Red Border)
+        const visualImageData = this.fixturesCtx.createImageData(width, height);
+        const visualPixels = visualImageData.data;
+
+        // Helper: Is this pixel part of the user's drawing? (Alpha > 0)
+        // We use the backup data because we are writing to new arrays
+        const isSafe = (idx: number) => data[idx + 3] > 0;
+
+        // Helper: Check for border condition with thickness
+        // Returns true if ANY pixel within 'radius' is Forbidden (not drawn)
+        const isNearEdge = (cx: number, cy: number, radius: number) => {
+            // Optimization: check cardinal directions first (fast fail)
+            const idxTop = ((cy - radius) * width + cx) * 4;
+            const idxBottom = ((cy + radius) * width + cx) * 4;
+            const idxLeft = (cy * width + (cx - radius)) * 4;
+            const idxRight = (cy * width + (cx + radius)) * 4;
+
+            // Bounds checks + Safety check
+            if (cy - radius >= 0 && !isSafe(idxTop)) return true;
+            if (cy + radius < height && !isSafe(idxBottom)) return true;
+            if (cx - radius >= 0 && !isSafe(idxLeft)) return true;
+            if (cx + radius < width && !isSafe(idxRight)) return true;
+
+            return false;
+        };
+
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const i = (y * width + x) * 4;
+
+                if (isSafe(i)) {
+                    // --- SAFE ZONE (User Drawn) ---
+
+                    // Server Mask: White (Allowed)
+                    maskPixels[i] = 255; maskPixels[i + 1] = 255; maskPixels[i + 2] = 255; maskPixels[i + 3] = 255;
+
+                    // Visual Feedback:
+                    // Check if we are near the edge to draw the Red Border
+                    if (isNearEdge(x, y, this.BORDER_THICKNESS)) {
+                        // Border: Solid Red
+                        visualPixels[i] = 255;     // R
+                        visualPixels[i + 1] = 0;   // G
+                        visualPixels[i + 2] = 0;   // B
+                        visualPixels[i + 3] = 255; // Alpha
+                    } else {
+                        // Inner Safe Zone: Transparent (Show Video)
+                        visualPixels[i + 3] = 0; 
+                    }
+                } else {
+                    // --- FORBIDDEN ZONE (Empty) ---
+
+                    // Server Mask: Black (Forbidden)
+                    maskPixels[i + 3] = 255; // Solid Alpha for PNG
+
+                    //Dark overlay
+                    visualPixels[i] = 0;       // R
+                    visualPixels[i + 1] = 0;   // G
+                    visualPixels[i + 2] = 0;   // B
+                    visualPixels[i + 3] = 180; // Darken the camera view
+                }
             }
         }
-        maskCtx.putImageData(maskData, 0, 0);
+
+        //Update the Canvas with the Visual Feedback
+        this.fixturesCtx.putImageData(visualImageData, 0, 0);
+
+        //Send mask to server
+        maskCtx.putImageData(maskImageData, 0, 0);
         
         const blob = await new Promise<Blob | null>(resolve => maskCanvas.toBlob(resolve, 'image/png'));
         if (!blob) throw new Error("Failed to generate fixtures blob");
         
         const result = await this.uploadFixtures(blob);
-        this.fixturesApplied = true;
+        
+        //Mark as applied so we know to restore backup on next draw
+        this.fixturesApplied = true; 
+        
         return result;
     }
 
@@ -382,7 +474,7 @@ export class DrawingTracker {
         this.clearDrawing(); // Clear any standard shapes
         this.disableDrawing(); // Ensure standard flags are off
         this.disableMarkerMode(); // Ensure markers are off
-        
+
         this.isHeatAreaMode = true;
         this.fCanvas.defaultCursor = 'crosshair';
         this.fCanvas.selection = false; // Disable group selection
@@ -407,7 +499,7 @@ export class DrawingTracker {
 
     private onHeatMouseDown(opt: any) {
         if (!this.fCanvas.getElement()) return;
-        
+
         this.isDrawingHeatArea = true;
         const pointer = this.fCanvas.getScenePoint(opt.e);
         this.heatStartPos = { x: pointer.x, y: pointer.y };
@@ -437,11 +529,11 @@ export class DrawingTracker {
         if (!this.isDrawingHeatArea || !this.activeHeatRect || !this.heatStartPos) return;
 
         const pointer = this.fCanvas.getScenePoint(opt.e);
-        
+
         // Calculate geometry allowing for dragging in any direction (negative width/height handling)
         const origX = this.heatStartPos.x;
         const origY = this.heatStartPos.y;
-        
+
         const left = Math.min(origX, pointer.x);
         const top = Math.min(origY, pointer.y);
         const width = Math.abs(origX - pointer.x);
@@ -453,11 +545,11 @@ export class DrawingTracker {
 
     private async onHeatMouseUp() {
         if (!this.isDrawingHeatArea || !this.activeHeatRect) return;
-        
+
         this.isDrawingHeatArea = false;
 
         // Prevent tiny accidental clicks from registering as masks
-        if (this.activeHeatRect.width * this.activeHeatRect.scaleX < 5 || 
+        if (this.activeHeatRect.width * this.activeHeatRect.scaleX < 5 ||
             this.activeHeatRect.height * this.activeHeatRect.scaleY < 5) {
             this.fCanvas.remove(this.activeHeatRect);
             this.activeHeatRect = null;

@@ -45,11 +45,22 @@ class RobotSchema:
         (masks, paths, markers) to None to prevent re-sending heavy data.
         """
         payload = self.to_str()
+        
+        #Reset transient fields
         self.raster_mask = None
         self.fixtures_mask = None
         self.path = None
         self.heat_mask = None
-        self.heat_markers = None 
+        self.heat_markers = None
+        
+        # Clear motion commands, persist laserX and laserY but not x and y
+        self.x = None
+        self.y = None
+        self.z = None
+        self.rx = None
+        self.ry = None
+        self.rz = None
+        
         return payload
 
     def to_str(self) -> str:
