@@ -403,7 +403,7 @@ class VideoStreamController {
      */
     private syncUiToState(state: Partial<WebSocketMessage>) {
         // 1. Update Robot Position Marker
-        if (state.x !== undefined && state.y !== undefined) {
+        if (state.laserX !== undefined && state.laserY !== undefined) {
             const containerWidth = this.ui.viewport.offsetWidth;
             const containerHeight = this.ui.viewport.offsetHeight;
             const videoWidth = this.ui.video.videoWidth;
@@ -411,8 +411,8 @@ class VideoStreamController {
 
             // Map Video Coordinates -> Screen/CSS Coordinates
             if (videoWidth > 0 && videoHeight > 0) {
-                const cssLeft = (state.x / videoWidth) * containerWidth;
-                const cssTop = (state.y / videoHeight) * containerHeight;
+                const cssLeft = (state.laserX / videoWidth) * containerWidth;
+                const cssTop = (state.laserY / videoHeight) * containerHeight;
                 this.ui.robotMarker.style.left = `${cssLeft}px`;
                 this.ui.robotMarker.style.top = `${cssTop}px`;
                 this.ui.robotMarker.style.display = 'block';
