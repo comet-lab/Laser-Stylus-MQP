@@ -8,11 +8,14 @@ export interface WebSocketMessage {
     rz: number;
     laserX: number;
     laserY: number;
+    averageHeat: number; 
     beamWaist: number;
     speed: number;
     isLaserOn: boolean;
     isRobotOn: boolean;
+    isTransformedViewOn: boolean;
     pathEvent: string | null;
+    heat_markers?: { x: number, y: number }[];
 }
 
 // Type for partial updates, any subset of WebSocketMessage

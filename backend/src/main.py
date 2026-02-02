@@ -5,12 +5,13 @@ import base64
 from robot import RobotSchema
 from manager import ConnectionManager
 import json
+from typing import Optional # Import Optional
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["*"], # changed to * to ensure IP access works
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -51,42 +52,50 @@ async def execute_fixtures(file: UploadFile = File(...)):
         "message": "Fixtures mask dispatched to robot"
     }
 
+# --- CORRECTED ENDPOINT ---
 @app.post("/api/execute")
 async def execute_bundled_command(
     speed: float = Form(...),
-    raster_type: str = Form(...),
+    raster_type: str = Form(None),
     density: float = Form(...),
     pixels: str = Form(...),
-    file: UploadFile = File(...)
+    is_fill: bool = Form(...), # NEW: Capture the boolean sent from frontend
+    file: Optional[UploadFile] = File(None) # CHANGED: Defaults to None, making it optional
 ):
     try:
         pixel_list = json.loads(pixels)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid pixel data format")
 
-    file_content = await file.read()
-    save_directory = "saved_masks"
-    os.makedirs(save_directory, exist_ok=True)
-    file_location = f"{save_directory}/{file.filename}"
-    
-    with open(file_location, "wb") as f:
-        f.write(file_content)
+    encoded_utf8 = None
 
-    encoded_utf8 = base64.b64encode(file_content).decode('utf-8')
+    # Only process the file if it was actually sent
+    if file:
+        file_content = await file.read()
+        save_directory = "saved_masks"
+        os.makedirs(save_directory, exist_ok=True)
+        file_location = f"{save_directory}/{file.filename}"
+        
+        with open(file_location, "wb") as f:
+            f.write(file_content)
+
+        encoded_utf8 = base64.b64encode(file_content).decode('utf-8')
 
     manager.desired_state.speed = speed
-    manager.desired_state.raster_type = raster_type
+    manager.desired_state.raster_type = raster_type if encoded_utf8 is not None else None
     manager.desired_state.density = density
     manager.desired_state.path = pixel_list
-    manager.desired_state.raster_mask = encoded_utf8
+    # If no file, we explicitly set the mask to None or empty so the robot knows not to raster
+    manager.desired_state.raster_mask = encoded_utf8 if encoded_utf8 is not None else None
 
-    print(f"Bundled Execution: Broadcasting {len(pixel_list)} pixels")
+    print(f"Bundled Execution: Broadcasting {len(pixel_list)} pixels. Fill: {is_fill}")
     await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
 
     return {
         "status": "success",
         "message": "Full execution packet dispatched to robot",
-        "pixel_count": len(pixel_list)
+        "pixel_count": len(pixel_list),
+        "has_raster": encoded_utf8 is not None
     }
 
 @app.post("/api/view_settings")
@@ -115,6 +124,8 @@ async def submit_heat_markers(markers: str = Form(...)):
         raise HTTPException(status_code=400, detail="Invalid markers format")
 
     manager.desired_state.heat_markers = markers_list
+    
+    # Broadcast to robot so it knows where to measure
     await manager.broadcast_to_group(
         group=manager.robot_connections,
         state=manager.desired_state
@@ -124,6 +135,29 @@ async def submit_heat_markers(markers: str = Form(...)):
         "marker_count": len(markers_list),
         "markers": markers_list,
         "message": "Heat markers dispatched to robot"
+    }
+    
+@app.post("/api/heat_area")
+async def update_heat_area(file: UploadFile = File(...)):
+    file_content = await file.read()
+
+    # Save specifically as heatarea.png
+    save_directory = "saved_masks"
+    os.makedirs(save_directory, exist_ok=True)
+    file_location = f"{save_directory}/heatarea.png"
+    
+    with open(file_location, "wb") as f:
+        f.write(file_content)
+
+    encoded_utf8 = base64.b64encode(file_content).decode('utf-8')
+    manager.desired_state.heat_mask = encoded_utf8
+    
+    print("Heat Area Update: Broadcasting mask")
+    await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
+    
+    return {
+        "status": "success", 
+        "message": "Heat area mask saved and dispatched"
     }
 
 ws_ui_name = os.getenv("UI_WEBSOCKET_NAME", "ui")

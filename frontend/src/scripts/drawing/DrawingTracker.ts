@@ -1,6 +1,6 @@
 import * as fabric from 'fabric';
-import { Position, ShapeType } from './types';
-import * as Utils from './utils';
+import { Position, ShapeType } from '../types';
+import * as Utils from '../utils';
 
 export class DrawingTracker {
     private fCanvas: fabric.Canvas;
@@ -8,20 +8,27 @@ export class DrawingTracker {
     private apiBaseUrl: string;
     private onShapeComplete: () => void;
     private onFixturesChange: () => void;
+    private onMarkersChange: () => void;
+    private onHeatAreaDefined: () => void;
 
-    // State for Drag-to-Create
+    // --- State: Drawing Mode ---
     private currentShapeType: ShapeType | null = null;
     private isCreatingShape: boolean = false;
     private shapeStartPos: { x: number, y: number } | null = null;
     private activeShape: fabric.FabricObject | null = null;
     private hasPlacedShape: boolean = false;
 
-    // Heat marker mode
+    // --- State: Heat Marker Mode ---
     private isMarkerMode: boolean = false;
-    private markerPoints: Position[] = [];
-    private markerObjects: fabric.Object[] = [];
+    private markerObjects: fabric.Group[] = [];
 
-    // Fixtures mode
+    // --- State: Heat Area Mode ---
+    private isHeatAreaMode: boolean = false;
+    private isDrawingHeatArea: boolean = false;
+    private heatStartPos: { x: number, y: number } | null = null;
+    private activeHeatRect: fabric.Rect | null = null;
+
+    // --- State: Fixtures Mode ---
     private isFixturesMode: boolean = false;
     private fixturesCanvas: HTMLCanvasElement | null = null;
     private fixturesCtx: CanvasRenderingContext2D | null = null;
@@ -31,6 +38,10 @@ export class DrawingTracker {
     private isFixturesDrawing: boolean = false;
     private lastFixturesPoint: { x: number, y: number } | null = null;
     private fixturesApplied: boolean = false;
+
+    // --- State: Canvas Sizing ---
+    private prevWidth: number;
+    private prevHeight: number;
 
     // --- CONFIG: Visual Defaults ---
     private readonly SHAPE_DEFAULTS = {
@@ -58,12 +69,16 @@ export class DrawingTracker {
         video: HTMLVideoElement,
         apiBaseUrl: string = `http://${window.location.hostname}:443`,
         onShapeComplete: () => void = () => { },
-        onFixturesChange: () => void = () => { }
+        onFixturesChange: () => void = () => { },
+        onMarkersChange: () => void = () => { },
+        onHeatAreaDefined: () => void
     ) {
         this.video = video;
         this.apiBaseUrl = apiBaseUrl;
         this.onShapeComplete = onShapeComplete;
         this.onFixturesChange = onFixturesChange;
+        this.onMarkersChange = onMarkersChange;
+        this.onHeatAreaDefined = onHeatAreaDefined;
 
         const el = canvas as any;
         if (el.__canvas) {
@@ -77,6 +92,9 @@ export class DrawingTracker {
             containerClass: 'fabric-canvas-container'
         });
 
+        this.prevWidth = canvas.width;
+        this.prevHeight = canvas.height;
+
         fabric.FabricObject.ownDefaults = {
             ...fabric.FabricObject.ownDefaults,
             ...(this.SHAPE_DEFAULTS as any)
@@ -87,9 +105,18 @@ export class DrawingTracker {
         brush.color = '#007AFF';
         this.fCanvas.freeDrawingBrush = brush;
 
-        this.fCanvas.on('mouse:down', this.onMouseDown.bind(this));
-        this.fCanvas.on('mouse:move', this.onMouseMove.bind(this));
-        this.fCanvas.on('mouse:up', this.onMouseUp.bind(this));
+        this.fCanvas.on('mouse:down', (opt) => {
+            if (this.isHeatAreaMode) this.onHeatMouseDown(opt);
+            else this.onMouseDown(opt);
+        });
+        this.fCanvas.on('mouse:move', (opt) => {
+            if (this.isHeatAreaMode) this.onHeatMouseMove(opt);
+            else this.onMouseMove(opt);
+        });
+        this.fCanvas.on('mouse:up', (opt) => {
+            if (this.isHeatAreaMode) this.onHeatMouseUp();
+            else this.onMouseUp();
+        });
         this.fCanvas.on('path:created', (e: any) => {
             if (e.path) {
                 e.path.set({
@@ -101,6 +128,7 @@ export class DrawingTracker {
             this.hasPlacedShape = true;
             this.fCanvas.isDrawingMode = false;
             this.fCanvas.defaultCursor = 'default';
+            this.ensureMarkersOnTop();
             this.onShapeComplete();
         });
 
@@ -110,20 +138,16 @@ export class DrawingTracker {
     private createFixturesCanvas(mainCanvas: HTMLCanvasElement): void {
         this.fixturesCanvas = document.createElement('canvas');
         this.fixturesCanvas.id = 'fixturesCanvas';
-        
-        // Set internal dimensions to match main canvas
         this.fixturesCanvas.width = mainCanvas.width;
         this.fixturesCanvas.height = mainCanvas.height;
-        
-        // CSS already handles positioning via #fixturesCanvas styles
-        // Just set opacity here (prevents "dots" at overlaps)
         this.fixturesCanvas.style.opacity = '0.6';
-        
         this.fixturesCtx = this.fixturesCanvas.getContext('2d', { willReadFrequently: true });
-        
-        // Append to viewport (same parent as main canvas)
         mainCanvas.parentElement?.appendChild(this.fixturesCanvas);
     }
+
+    // =========================================================================
+    // Core Lifecycle Methods
+    // =========================================================================
 
     public dispose(): void {
         if (this.fCanvas) {
@@ -134,11 +158,14 @@ export class DrawingTracker {
         }
     }
 
-    // --- Fixtures Mode Methods ---
+    // =========================================================================
+    // Fixtures Mode Logic
+    // =========================================================================
+
     public enableFixturesMode(): void {
         this.isFixturesMode = true;
         this.disableDrawing();
-        
+
         if (this.fixturesCanvas) {
             this.fixturesCanvas.classList.add('active');
             this.fixturesCanvas.style.pointerEvents = 'auto';
@@ -148,7 +175,7 @@ export class DrawingTracker {
     public disableFixturesMode(): void {
         this.isFixturesMode = false;
         this.disableFixturesBrush();
-        
+
         if (this.fixturesCanvas) {
             if (this.hasFixtures()) {
                 this.fixturesCanvas.classList.add('active');
@@ -186,7 +213,6 @@ export class DrawingTracker {
 
     public disableFixturesBrush(): void {
         this.currentBrushType = null;
-        
         if (this.fixturesCanvas) {
             this.fixturesCanvas.style.cursor = 'default';
             this.fixturesCanvas.onpointerdown = null;
@@ -196,51 +222,34 @@ export class DrawingTracker {
         }
     }
 
-
-    //Convert client coordinates to canvas coordinates accounting for scaling
     private getCanvasCoordinates(e: PointerEvent, canvas: HTMLCanvasElement): { x: number, y: number } {
         const rect = canvas.getBoundingClientRect();
-        
-        // Get the actual canvas internal dimensions
         const canvasWidth = canvas.width;
         const canvasHeight = canvas.height;
-        
-        // Get the displayed CSS dimensions
         const displayWidth = rect.width;
         const displayHeight = rect.height;
-        
-        // Calculate scaling factors
         const scaleX = canvasWidth / displayWidth;
         const scaleY = canvasHeight / displayHeight;
-        
-        // Get client coordinates relative to canvas
         const clientX = e.clientX - rect.left;
         const clientY = e.clientY - rect.top;
-        
-        // Scale to canvas coordinates
         const x = clientX * scaleX;
         const y = clientY * scaleY;
-        
         return { x, y };
     }
 
     private onFixturesPointerDown(e: PointerEvent): void {
         if (!this.currentBrushType || !this.fixturesCanvas || !this.fixturesCtx) return;
-
         this.isFixturesDrawing = true;
         this.fixturesCanvas.setPointerCapture(e.pointerId);
-
         const { x, y } = this.getCanvasCoordinates(e, this.fixturesCanvas);
         this.lastFixturesPoint = { x, y };
         this.drawFixturesBrush(x, y);
-
         this.fixturesApplied = false;
         this.onFixturesChange();
     }
 
     private onFixturesPointerMove(e: PointerEvent): void {
         if (!this.isFixturesDrawing || !this.fixturesCanvas) return;
-
         const { x, y } = this.getCanvasCoordinates(e, this.fixturesCanvas);
         this.drawFixturesBrush(x, y);
         this.lastFixturesPoint = { x, y };
@@ -248,7 +257,6 @@ export class DrawingTracker {
 
     private onFixturesPointerUp(e: PointerEvent): void {
         if (!this.fixturesCanvas) return;
-        
         this.isFixturesDrawing = false;
         this.lastFixturesPoint = null;
         this.fixturesCanvas.releasePointerCapture(e.pointerId);
@@ -256,8 +264,6 @@ export class DrawingTracker {
 
     private drawFixturesBrush(x: number, y: number): void {
         if (!this.fixturesCtx || !this.currentBrushType) return;
-
-        // Setup Opacity/Composite
         if (this.isErasing) {
             this.fixturesCtx.globalCompositeOperation = 'destination-out';
             this.fixturesCtx.fillStyle = '#E69F00';
@@ -269,11 +275,9 @@ export class DrawingTracker {
         }
 
         if (this.currentBrushType === 'round') {
-            // Round Brush Logic
             this.fixturesCtx.lineWidth = this.currentBrushSize;
             this.fixturesCtx.lineCap = 'round';
             this.fixturesCtx.lineJoin = 'round';
-
             if (this.lastFixturesPoint) {
                 this.fixturesCtx.beginPath();
                 this.fixturesCtx.moveTo(this.lastFixturesPoint.x, this.lastFixturesPoint.y);
@@ -281,42 +285,32 @@ export class DrawingTracker {
                 this.fixturesCtx.stroke();
             }
         } else {
-            // Square Brush Logic
             const size = this.currentBrushSize;
             const halfSize = size / 2;
-
             if (this.lastFixturesPoint) {
                 const p1 = this.lastFixturesPoint;
                 const p2 = { x, y };
-                
                 const dx = p2.x - p1.x;
                 const dy = p2.y - p1.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 const steps = Math.ceil(distance);
-
                 for (let i = 0; i <= steps; i++) {
                     const t = steps === 0 ? 0 : i / steps;
                     const cx = p1.x + (dx * t);
                     const cy = p1.y + (dy * t);
-                    
                     this.fixturesCtx.fillRect(cx - halfSize, cy - halfSize, size, size);
                 }
             } else {
-                // Just a dot (single click)
                 this.fixturesCtx.fillRect(x - halfSize, y - halfSize, size, size);
             }
         }
-
-        // Reset composite
         this.fixturesCtx.globalCompositeOperation = 'source-over';
     }
 
     public hasFixtures(): boolean {
         if (!this.fixturesCanvas || !this.fixturesCtx) return false;
-
         const imageData = this.fixturesCtx.getImageData(0, 0, this.fixturesCanvas.width, this.fixturesCanvas.height);
         const data = imageData.data;
-
         for (let i = 0; i < data.length; i += 4) {
             if (data[i + 3] > 0 && data[i] > 200) {
                 return true;
@@ -331,95 +325,218 @@ export class DrawingTracker {
 
     public clearFixtures(): void {
         if (!this.fixturesCtx || !this.fixturesCanvas) return;
-
         this.fixturesCtx.clearRect(0, 0, this.fixturesCanvas.width, this.fixturesCanvas.height);
         this.fixturesApplied = false;
-        
         if (!this.isFixturesMode) {
             this.fixturesCanvas.classList.remove('active');
         } else {
             this.fixturesCanvas.classList.add('active');
             this.fixturesCanvas.style.pointerEvents = 'auto';
         }
-        
         this.onFixturesChange();
+    }
+
+    public async clearFixturesOnServer(): Promise<void> {
+        const blob = await this.generateBlankFixtureBlob();
+        await this.uploadFixtures(blob);
     }
 
     public async executeFixtures(): Promise<any> {
         if (!this.fixturesCanvas || !this.fixturesCtx) throw new Error("Fixtures canvas not initialized");
-
+        
         const maskCanvas = document.createElement('canvas');
         maskCanvas.width = this.fixturesCanvas.width;
         maskCanvas.height = this.fixturesCanvas.height;
         const maskCtx = maskCanvas.getContext('2d');
-        
         if (!maskCtx) throw new Error("Could not create mask context");
 
         maskCtx.fillStyle = '#ffffff';
         maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-
         const fixturesData = this.fixturesCtx.getImageData(0, 0, this.fixturesCanvas.width, this.fixturesCanvas.height);
         const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
-
         for (let i = 0; i < fixturesData.data.length; i += 4) {
             const r = fixturesData.data[i];
             const a = fixturesData.data[i + 3];
             if (a > 0 && r > 200) {
-                maskData.data[i] = 0;     // R
-                maskData.data[i + 1] = 0; // G
-                maskData.data[i + 2] = 0; // B
-                maskData.data[i + 3] = 255; // A
+                maskData.data[i] = 0;
+                maskData.data[i + 1] = 0;
+                maskData.data[i + 2] = 0;
+                maskData.data[i + 3] = 255;
             }
         }
-
         maskCtx.putImageData(maskData, 0, 0);
-
-        const blob = await new Promise<Blob | null>(resolve =>
-            maskCanvas.toBlob(resolve, 'image/png')
-        );
         
+        const blob = await new Promise<Blob | null>(resolve => maskCanvas.toBlob(resolve, 'image/png'));
         if (!blob) throw new Error("Failed to generate fixtures blob");
-
-        const formData = new FormData();
-        formData.append('file', blob, 'fixtures.png');
-
-        const response = await fetch(`${this.apiBaseUrl}/api/fixtures`, {
-            method: 'POST',
-            body: formData
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || "Fixtures execution failed");
-        }
-
+        
+        const result = await this.uploadFixtures(blob);
         this.fixturesApplied = true;
-        return await response.json();
+        return result;
     }
 
-    // --- Interaction Handlers ---
-    private onMouseDown(opt: any) {
-        if (this.isMarkerMode) {
-            const pointer = this.fCanvas.getScenePoint(opt.e);
-            this.markerPoints.push({ x: pointer.x, y: pointer.y });
+    // =========================================================================
+    // Heat Area Logic
+    // =========================================================================
 
-            const dot = new fabric.Circle({
-                left: pointer.x,
-                top: pointer.y,
-                radius: 6,
-                fill: '#007AFF',
-                originX: 'center',
-                originY: 'center',
-                selectable: false,
-                evented: false
-            });
+    public enableHeatAreaMode(): void {
+        this.clearDrawing(); // Clear any standard shapes
+        this.disableDrawing(); // Ensure standard flags are off
+        this.disableMarkerMode(); // Ensure markers are off
+        
+        this.isHeatAreaMode = true;
+        this.fCanvas.defaultCursor = 'crosshair';
+        this.fCanvas.selection = false; // Disable group selection
+        this.fCanvas.discardActiveObject();
+        this.fCanvas.requestRenderAll();
+    }
 
-            this.fCanvas.add(dot);
-            this.markerObjects.push(dot);
-            this.fCanvas.requestRenderAll();
+    public disableHeatAreaMode(): void {
+        this.isHeatAreaMode = false;
+        this.isDrawingHeatArea = false;
+        this.fCanvas.defaultCursor = 'default';
+        if (this.activeHeatRect) {
+            this.fCanvas.remove(this.activeHeatRect);
+            this.activeHeatRect = null;
+        }
+    }
+
+    public async resetHeatArea(): Promise<void> {
+        // Send a black mask to clear the setting on backend
+        await this.sendHeatMaskToServer(null); // null triggers the "blank" generation
+    }
+
+    private onHeatMouseDown(opt: any) {
+        if (!this.fCanvas.getElement()) return;
+        
+        this.isDrawingHeatArea = true;
+        const pointer = this.fCanvas.getScenePoint(opt.e);
+        this.heatStartPos = { x: pointer.x, y: pointer.y };
+
+        // Create the specific "Heat Style" rectangle
+        this.activeHeatRect = new fabric.Rect({
+            left: pointer.x,
+            top: pointer.y,
+            width: 0,
+            height: 0,
+            fill: 'rgba(255, 69, 0, 0.3)', // Translucent Orange
+            stroke: '#ff4500',            // Solid Orange (for base)
+            strokeWidth: 2,
+            strokeDashArray: [6, 6],      // Dotted/Dashed
+            selectable: false,            // NOT MOVABLE
+            evented: false,               // NO EVENTS
+            hasControls: false,           // NO HANDLES
+            hasBorders: false,
+            originX: 'left',
+            originY: 'top'
+        });
+
+        this.fCanvas.add(this.activeHeatRect);
+    }
+
+    private onHeatMouseMove(opt: any) {
+        if (!this.isDrawingHeatArea || !this.activeHeatRect || !this.heatStartPos) return;
+
+        const pointer = this.fCanvas.getScenePoint(opt.e);
+        
+        // Calculate geometry allowing for dragging in any direction (negative width/height handling)
+        const origX = this.heatStartPos.x;
+        const origY = this.heatStartPos.y;
+        
+        const left = Math.min(origX, pointer.x);
+        const top = Math.min(origY, pointer.y);
+        const width = Math.abs(origX - pointer.x);
+        const height = Math.abs(origY - pointer.y);
+
+        this.activeHeatRect.set({ left, top, width, height });
+        this.fCanvas.requestRenderAll();
+    }
+
+    private async onHeatMouseUp() {
+        if (!this.isDrawingHeatArea || !this.activeHeatRect) return;
+        
+        this.isDrawingHeatArea = false;
+
+        // Prevent tiny accidental clicks from registering as masks
+        if (this.activeHeatRect.width * this.activeHeatRect.scaleX < 5 || 
+            this.activeHeatRect.height * this.activeHeatRect.scaleY < 5) {
+            this.fCanvas.remove(this.activeHeatRect);
+            this.activeHeatRect = null;
             return;
         }
-        
+
+        // 1. Generate Mask and Send to Backend
+        await this.sendHeatMaskToServer(this.activeHeatRect);
+
+        // 2. Remove the visual rectangle (as requested: "finish drawing... it will disappear")
+        this.fCanvas.remove(this.activeHeatRect);
+        this.activeHeatRect = null;
+        this.fCanvas.requestRenderAll();
+
+        // 3. Notify UI to enable the Reset Button
+        this.onHeatAreaDefined();
+    }
+
+    private async sendHeatMaskToServer(rect: fabric.Rect | null): Promise<void> {
+        const width = this.fCanvas.getWidth();
+        const height = this.fCanvas.getHeight();
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = width;
+        tempCanvas.height = height;
+        const ctx = tempCanvas.getContext('2d');
+        if (!ctx) return;
+
+        // Background: Black (No Heat)
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+
+        // Foreground: White (Heat Active) - Only if a rect is provided
+        if (rect) {
+            ctx.fillStyle = '#000000';
+            // We must account for scale if Fabric applied any, though we created it raw
+            const w = rect.width * (rect.scaleX || 1);
+            const h = rect.height * (rect.scaleY || 1);
+            ctx.fillRect(rect.left, rect.top, w, h);
+        }
+
+        const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+        if (!blob) return;
+
+        await this.uploadHeatMask(blob);
+    }
+
+    // =========================================================================
+    // Drawing Interaction Handlers
+    // =========================================================================
+
+    private async onMouseDown(opt: any) {
+        if (this.isMarkerMode) {
+            const pointer = this.fCanvas.getScenePoint(opt.e);
+            if (opt.target && opt.target.type === 'group' && opt.target._isMarker) {
+                const group = opt.target as fabric.Group;
+                const groupCenter = group.getCenterPoint();
+                const clickRelX = pointer.x - groupCenter.x;
+                const clickRelY = pointer.y - groupCenter.y;
+
+                const closeBoxObj = group.getObjects()[3];
+
+                const distToX = Math.sqrt(
+                    Math.pow(clickRelX - closeBoxObj.left, 2) +
+                    Math.pow(clickRelY - closeBoxObj.top, 2)
+                );
+
+                if (distToX < 15) {
+                    this.removeMarker(group);
+                    await this.submitHeatMarkers(this.getHeatMarkersInVideoSpace());
+                    return;
+                }
+                return;
+            }
+            this.addHeatMarker(pointer.x, pointer.y);
+            await this.submitHeatMarkers(this.getHeatMarkersInVideoSpace());
+            return;
+        }
+
         if (this.hasPlacedShape) return;
         if (!this.currentShapeType || this.currentShapeType === 'freehand') return;
         if (opt.target) return;
@@ -427,7 +544,6 @@ export class DrawingTracker {
         this.isCreatingShape = true;
         const pointer = this.fCanvas.getScenePoint(opt.e);
         this.shapeStartPos = { x: pointer.x, y: pointer.y };
-
         const commonOpts = {
             left: pointer.x,
             top: pointer.y,
@@ -460,7 +576,6 @@ export class DrawingTracker {
 
     private onMouseMove(opt: any) {
         if (!this.isCreatingShape || !this.activeShape || !this.shapeStartPos) return;
-
         const pointer = this.fCanvas.getScenePoint(opt.e);
         const w = Math.abs(pointer.x - this.shapeStartPos.x);
         const h = Math.abs(pointer.y - this.shapeStartPos.y);
@@ -474,7 +589,6 @@ export class DrawingTracker {
         } else {
             this.activeShape.set({ left, top, width: w, height: h });
         }
-
         this.activeShape.setCoords();
         this.fCanvas.requestRenderAll();
     }
@@ -482,7 +596,6 @@ export class DrawingTracker {
     private onMouseUp() {
         if (this.isCreatingShape) {
             this.isCreatingShape = false;
-
             if (this.activeShape) {
                 if (this.activeShape instanceof fabric.Line) {
                     const x1 = this.activeShape.x1 || 0;
@@ -496,7 +609,6 @@ export class DrawingTracker {
                 } else {
                     if ((this.activeShape.width || 0) < 5) this.activeShape.set({ width: 50, height: 50 });
                 }
-
                 this.activeShape.setCoords();
                 this.hasPlacedShape = true;
                 this.fCanvas.requestRenderAll();
@@ -505,14 +617,15 @@ export class DrawingTracker {
         }
     }
 
-    // --- Public API ---
+    // =========================================================================
+    // Public Drawing API
+    // =========================================================================
+
     public setShapeType(type: ShapeType | null): void {
         if (this.hasPlacedShape && type !== null) {
             return;
         }
-
         this.currentShapeType = type;
-
         if (type === 'freehand') {
             this.fCanvas.isDrawingMode = true;
             this.fCanvas.discardActiveObject();
@@ -524,7 +637,13 @@ export class DrawingTracker {
     }
 
     public clearDrawing(): void {
-        this.fCanvas.clear();
+        const objects = this.fCanvas.getObjects();
+        objects.forEach(obj => {
+            if (!(obj as any)._isMarker) {
+                this.fCanvas.remove(obj);
+            }
+        });
+
         this.activeShape = null;
         this.hasPlacedShape = false;
 
@@ -539,8 +658,10 @@ export class DrawingTracker {
         this.currentShapeType = null;
         this.fCanvas.discardActiveObject();
         this.fCanvas.forEachObject(o => {
-            o.selectable = false;
-            o.evented = false;
+            if (!(o as any)._isMarker) {
+                o.selectable = false;
+                o.evented = false;
+            }
         });
         this.fCanvas.requestRenderAll();
         this.fCanvas.defaultCursor = 'default';
@@ -548,8 +669,10 @@ export class DrawingTracker {
 
     public enableDrawing(): void {
         this.fCanvas.forEachObject(o => {
-            o.selectable = true;
-            o.evented = true;
+            if (!(o as any)._isMarker) {
+                o.selectable = true;
+                o.evented = true;
+            }
         });
     }
 
@@ -558,295 +681,427 @@ export class DrawingTracker {
     }
 
     public hasShape(): boolean {
-        return this.hasPlacedShape || this.fCanvas.getObjects().length > 0;
+        return this.hasPlacedShape || this.fCanvas.getObjects().some(o => !(o as any)._isMarker);
     }
 
     public updateCanvasSize(width: number, height: number): void {
+        // 1. Calculate the scaling factor based on the change
+        // Prevent division by zero if initialized incorrectly
+        const scaleX = this.prevWidth ? width / this.prevWidth : 1;
+        const scaleY = this.prevHeight ? height / this.prevHeight : 1;
+
+        // 2. Resize the actual fabric canvas container
         this.fCanvas.setDimensions({ width, height });
-        
+
+        // 3. Iterate through all objects to reposition them relative to the new size
+        this.fCanvas.getObjects().forEach(obj => {
+            // Scale the position
+            const newLeft = obj.left * scaleX;
+            const newTop = obj.top * scaleY;
+
+            obj.set({
+                left: newLeft,
+                top: newTop
+            });
+
+            // Also scale specific custom properties for Markers
+            if ((obj as any)._isMarker) {
+                (obj as any)._tipX = (obj as any)._tipX * scaleX;
+                (obj as any)._tipY = (obj as any)._tipY * scaleY;
+            }
+            obj.setCoords(); // Critical, recalculate hitboxes
+        });
+
+        // 4. Handle Fixtures (Raster) Canvas Scaling
+        // We scale the bitmap image to fit the new size
         if (this.fixturesCanvas && this.fixturesCtx) {
+            // Create a temporary copy of the current fixtures
             const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = this.fixturesCanvas.width;
-            tempCanvas.height = this.fixturesCanvas.height;
+            tempCanvas.width = this.prevWidth;
+            tempCanvas.height = this.prevHeight;
             const tempCtx = tempCanvas.getContext('2d');
 
             if (tempCtx) {
                 tempCtx.drawImage(this.fixturesCanvas, 0, 0);
             }
-
-            // Update internal dimensions
             this.fixturesCanvas.width = width;
             this.fixturesCanvas.height = height;
-            
-            // CSS 100% will automatically adjust to match viewport
 
             if (tempCtx) {
                 this.fixturesCtx.drawImage(tempCanvas, 0, 0, width, height);
             }
         }
+        this.prevWidth = width;
+        this.prevHeight = height;
+
+        this.fCanvas.requestRenderAll();
     }
 
     public render(): void {
         this.fCanvas.renderAll();
-        
         if (this.hasFixtures() && this.fixturesCanvas && !this.fixturesCanvas.classList.contains('active')) {
             this.fixturesCanvas.classList.add('active');
         }
     }
 
-    // Heat marker methods
+    // =========================================================================
+    // Heat Marker Logic
+    // =========================================================================
+
     public enableMarkerMode(): void {
+        // We only clear drawing SHAPES, not markers
         this.clearDrawing();
         this.disableDrawing();
         this.isMarkerMode = true;
-        this.markerPoints = [];
-        this.markerObjects = [];
         this.fCanvas.defaultCursor = 'crosshair';
+
+        this.markerObjects.forEach(m => {
+            m.selectable = true;
+            m.evented = true;
+            m.hoverCursor = 'pointer';
+        });
     }
 
     public disableMarkerMode(): void {
         this.isMarkerMode = false;
         this.fCanvas.defaultCursor = 'default';
+        this.markerObjects.forEach(m => {
+            m.selectable = false;
+            m.evented = false;
+        });
     }
 
-    public getHeatMarkers(): Position[] {
-        return this.markerPoints;
+    private ensureMarkersOnTop(): void {
+        this.markerObjects.forEach(markerGroup => {
+            this.fCanvas.bringObjectToFront(markerGroup);
+        });
+        this.fCanvas.requestRenderAll();
+    }
+
+    public showMarkers(): void {
+        this.markerObjects.forEach(m => {
+            m.visible = true;
+        });
+        this.fCanvas.requestRenderAll();
+    }
+
+    public hideMarkers(): void {
+        this.markerObjects.forEach(m => {
+            m.visible = false;
+        });
+        this.fCanvas.requestRenderAll();
+    }
+
+    public hasMarkers(): boolean {
+        return this.markerObjects.length > 0;
+    }
+
+    private addHeatMarker(x: number, y: number): void {
+        const arrow = new fabric.Triangle({
+            width: 20,
+            height: 20,
+            fill: '#151b21B3',
+            stroke: '#e0f2e0',
+            strokeWidth: 2,
+            left: 0,
+            top: 18,
+            originX: 'center',
+            originY: 'top',
+            flipY: true
+        });
+        const box = new fabric.Rect({
+            fill: '#151b21B3',
+            width: 70,
+            height: 25,
+            stroke: '#e0f2e0',
+            strokeWidth: 2,
+            rx: 4,
+            ry: 4,
+            left: 24,
+            top: 20,
+            originX: 'center',
+            originY: 'bottom'
+        });
+        const text = new fabric.Text('...°C', {
+            fontSize: 14,
+            fill: '#ffffff',
+            fontFamily: 'IBM Plex Sans',
+            left: 14,
+            top: 16,
+            originX: 'center',
+            originY: 'bottom'
+        });
+        const closeBox = new fabric.Rect({
+            width: 20,
+            height: 20,
+            rx: 4,
+            ry: 4,
+            fill: '#151b21B3',
+            strokeWidth: 2,
+            left: 46,
+            top: 6.5,
+            originX: 'center',
+            originY: 'center'
+        });
+        const closeText = new fabric.Text('×', {
+            fontSize: 14,
+            fill: '#ffffff',
+            left: 46,
+            top: 6.5,
+            originX: 'center',
+            originY: 'center',
+            fontFamily: 'Arial'
+        });
+
+        const group = new fabric.Group([arrow, box, text, closeBox, closeText], {
+            left: x,
+            top: y,
+            originX: 'center',
+            originY: 'center',
+            selectable: true,
+            hasControls: false,
+            hasBorders: false,
+            lockMovementX: true,
+            lockMovementY: true,
+            hoverCursor: 'default'
+        });
+        const arrowObj = group.getObjects()[0];
+        const tipOffsetY = arrowObj.top + arrowObj.height;
+        const tipOffsetX = arrowObj.left;
+
+        group.set({
+            left: x - tipOffsetX,
+            top: y - tipOffsetY
+        });
+
+        (group as any)._isMarker = true;
+        (group as any)._textObj = text;
+        (group as any)._tipX = x;
+        (group as any)._tipY = y;
+
+        this.fCanvas.add(group);
+        this.markerObjects.push(group);
+        this.fCanvas.requestRenderAll();
+        this.ensureMarkersOnTop();
+
+        // Notify UI
+        this.onMarkersChange();
+    }
+
+    private removeMarker(markerGroup: fabric.Group): void {
+        this.fCanvas.remove(markerGroup);
+        this.markerObjects = this.markerObjects.filter(m => m !== markerGroup);
+        this.fCanvas.requestRenderAll();
+        // Notify UI
+        this.onMarkersChange();
+    }
+
+    public clearMarkers(): void {
+        this.markerObjects.forEach(m => this.fCanvas.remove(m));
+        this.markerObjects = [];
+        this.fCanvas.requestRenderAll();
+        // Notify UI
+        this.onMarkersChange();
     }
 
     public getHeatMarkersInVideoSpace(): Position[] {
-        return this.markerPoints.map(p => ({
-            x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
-            y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
-        }));
+        return this.markerObjects.map(m => {
+            const tipX = (m as any)._tipX;
+            const tipY = (m as any)._tipY;
+            return {
+                x: (tipX / this.fCanvas.getWidth()) * this.video.videoWidth,
+                y: (tipY / this.fCanvas.getHeight()) * this.video.videoHeight
+            };
+        });
+    }
+
+    public updateMarkerTemperatures(markersData: { x: number, y: number, temp?: number }[]): void {
+        if (markersData.length !== this.markerObjects.length) {
+            return;
+        }
+        this.markerObjects.forEach((markerGroup, index) => {
+            const data = markersData[index];
+            if (data && data.temp !== undefined) {
+                const textObj = (markerGroup as any)._textObj as fabric.Text;
+                textObj.set('text', `${data.temp.toFixed(1)}°`);
+            }
+        });
+        this.fCanvas.requestRenderAll();
     }
 
     public async submitHeatMarkers(markers: Position[]): Promise<any> {
-        if (!this.apiBaseUrl) throw new Error("API base URL not set");
-
-        const videoMarkers = markers.map(p => ({
-            x: p.x,
-            y: p.y
-        }));
-
-        const formData = new FormData();
-        formData.append('markers', JSON.stringify(videoMarkers));
-
-        const response = await fetch(`${this.apiBaseUrl}/api/heat_markers`, {
-            method: 'POST',
-            body: formData
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(errorText || "Failed to submit heat markers");
-        }
-
-        return await response.json();
+        return this.postData('/api/heat_markers', { markers: JSON.stringify(markers) }, true);
     }
 
-    // --- Execution & Export Logic ---
+    // =========================================================================
+    // Execution & Export Logic
+    // =========================================================================
+
     public async executePath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<any> {
+        // 1. Always generate the vector path (pixels)
         const pixels = this.generatePixelPath();
         const videoPixels = pixels.map(p => ({
             x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
             y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
         }));
 
-        const width = this.fCanvas.getWidth();
-        const height = this.fCanvas.getHeight();
-
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = width;
-        tempCanvas.height = height;
-        const ctx = tempCanvas.getContext('2d', {
-            willReadFrequently: true,
-            alpha: false
-        });
-
-        if (!ctx) throw new Error("Could not create temp context");
-
-        ctx.imageSmoothingEnabled = false;
-        (ctx as any).mozImageSmoothingEnabled = false;
-        (ctx as any).webkitImageSmoothingEnabled = false;
-        (ctx as any).msImageSmoothingEnabled = false;
-
-        // Background is always white
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, width, height);
-
-        // Configure Context based on Fill Mode
-        if (isFillEnabled) {
-            ctx.fillStyle = "#000000"; // Black fill for raster
-            ctx.strokeStyle = "transparent";
-        } else {
-            ctx.strokeStyle = "#000000"; // Black stroke for vector/outline
-            ctx.fillStyle = "transparent";
-            ctx.lineWidth = 1;
-            ctx.lineCap = 'square';
-            ctx.lineJoin = 'miter';
-        }
-
-        this.fCanvas.getObjects().forEach(obj => {
-            ctx.save();
-
-            if (obj instanceof fabric.Path) {
-                ctx.beginPath();
-                const pathData = (obj as any).path;
-                let lastX = 0, lastY = 0;
-
-                pathData.forEach((cmd: any) => {
-                    const type = cmd[0];
-                    switch (type) {
-                        case 'M':
-                            lastX = Math.round(cmd[1]);
-                            lastY = Math.round(cmd[2]);
-                            ctx.moveTo(lastX + 0.5, lastY + 0.5);
-                            break;
-                        case 'L':
-                            const x = Math.round(cmd[1]);
-                            const y = Math.round(cmd[2]);
-                            ctx.lineTo(x + 0.5, y + 0.5);
-                            lastX = x;
-                            lastY = y;
-                            break;
-                        case 'Q':
-                            const qx = Math.round(cmd[3]);
-                            const qy = Math.round(cmd[4]);
-                            ctx.quadraticCurveTo(Math.round(cmd[1]) + 0.5, Math.round(cmd[2]) + 0.5, qx + 0.5, qy + 0.5);
-                            lastX = qx;
-                            lastY = qy;
-                            break;
-                        case 'C':
-                            const cx = Math.round(cmd[5]);
-                            const cy = Math.round(cmd[6]);
-                            ctx.bezierCurveTo(
-                                Math.round(cmd[1]) + 0.5, Math.round(cmd[2]) + 0.5,
-                                Math.round(cmd[3]) + 0.5, Math.round(cmd[4]) + 0.5,
-                                cx + 0.5, cy + 0.5
-                            );
-                            lastX = cx;
-                            lastY = cy;
-                            break;
-                        case 'Z':
-                            ctx.closePath();
-                            break;
-                    }
-                });
-                
-                if (isFillEnabled) ctx.fill();
-                else ctx.stroke();
-            } else if (obj instanceof fabric.Rect) {
-                const rect = obj as fabric.Rect;
-                const left = Math.round(rect.left || 0);
-                const top = Math.round(rect.top || 0);
-                const width = Math.round((rect.width || 0) * (rect.scaleX || 1));
-                const height = Math.round((rect.height || 0) * (rect.scaleY || 1));
-                
-                if (isFillEnabled) ctx.fillRect(left + 0.5, top + 0.5, width, height);
-                else ctx.strokeRect(left + 0.5, top + 0.5, width, height);
-            } else if (obj instanceof fabric.Triangle) {
-                const triangle = obj as fabric.Triangle;
-                const matrix = triangle.calcTransformMatrix();
-                const w = triangle.width;
-                const h = triangle.height;
-
-                const localPoints = [
-                    new fabric.Point(0, -h / 2),
-                    new fabric.Point(w / 2, h / 2),
-                    new fabric.Point(-w / 2, h / 2)
-                ];
-
-                const vertices = localPoints.map(p => p.transform(matrix));
-
-                ctx.beginPath();
-                ctx.moveTo(Math.round(vertices[0].x) + 0.5, Math.round(vertices[0].y) + 0.5);
-                ctx.lineTo(Math.round(vertices[1].x) + 0.5, Math.round(vertices[1].y) + 0.5);
-                ctx.lineTo(Math.round(vertices[2].x) + 0.5, Math.round(vertices[2].y) + 0.5);
-                ctx.closePath();
-                
-                if (isFillEnabled) ctx.fill();
-                else ctx.stroke();
-            } else if (obj instanceof fabric.Ellipse) {
-                const ellipse = obj as fabric.Ellipse;
-                const center = ellipse.getCenterPoint();
-                const rx = Math.round(ellipse.rx * ellipse.scaleX);
-                const ry = Math.round(ellipse.ry * ellipse.scaleY);
-
-                ctx.beginPath();
-                ctx.ellipse(
-                    center.x, center.y,
-                    rx, ry,
-                    (ellipse.angle || 0) * Math.PI / 180,
-                    0, 2 * Math.PI
-                );
-                
-                if (isFillEnabled) ctx.fill();
-                else ctx.stroke();
-            } else if (obj instanceof fabric.Line) {
-                const line = obj as fabric.Line;
-                ctx.beginPath();
-                ctx.moveTo(Math.round(line.x1 || 0) + 0.5, Math.round(line.y1 || 0) + 0.5);
-                ctx.lineTo(Math.round(line.x2 || 0) + 0.5, Math.round(line.y2 || 0) + 0.5);
-                ctx.stroke();
-            }
-
-            ctx.restore();
-        });
-
-        // Ensure binary contrast
-        const imageData = ctx.getImageData(0, 0, width, height);
-        const data = imageData.data;
-
-        for (let i = 0; i < data.length; i += 4) {
-            if (data[i] < 255 || data[i+1] < 255 || data[i+2] < 255) {
-                data[i] = 0;
-                data[i+1] = 0;
-                data[i+2] = 0;
-                data[i+3] = 255;
-            }
-        }
-
-        ctx.putImageData(imageData, 0, 0);
-
-        const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
-        if (!blob) throw new Error("Failed to generate image blob");
-
         const formData = new FormData();
         formData.append('speed', (Number(speed) / 1000).toString());
-        formData.append('raster_type', raster_type);
+        if (isFillEnabled) {
+            formData.append('raster_type', raster_type);
+        }
         formData.append('density', density.toString());
         formData.append('pixels', JSON.stringify(videoPixels));
-        formData.append('file', blob, 'path.png');
+        formData.append('is_fill', isFillEnabled.toString());
 
-        const response = await fetch(`${this.apiBaseUrl}/api/execute`, {
-            method: 'POST',
-            body: formData
-        });
+        // 2. Only generate raster image if fill is enabled
+        if (isFillEnabled) {
+            const width = this.fCanvas.getWidth();
+            const height = this.fCanvas.getHeight();
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const ctx = tempCanvas.getContext('2d', { willReadFrequently: true, alpha: false });
+            if (!ctx) throw new Error("Could not create temp context");
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || "Execution failed");
+            ctx.imageSmoothingEnabled = false;
+            (ctx as any).mozImageSmoothingEnabled = false;
+            (ctx as any).webkitImageSmoothingEnabled = false;
+            (ctx as any).msImageSmoothingEnabled = false;
+
+            // White background
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, width, height);
+
+            // Black fill for shapes
+            ctx.fillStyle = "#000000";
+            ctx.strokeStyle = "transparent";
+
+            this.fCanvas.getObjects().forEach(obj => {
+                if ((obj as any)._isMarker) return; // Skip markers
+                ctx.save();
+                if (obj instanceof fabric.Path) {
+                    ctx.beginPath();
+                    const pathData = (obj as any).path;
+                    let lastX = 0, lastY = 0;
+                    pathData.forEach((cmd: any) => {
+                        const type = cmd[0];
+                        switch (type) {
+                            case 'M':
+                                lastX = Math.round(cmd[1]);
+                                lastY = Math.round(cmd[2]);
+                                ctx.moveTo(lastX + 0.5, lastY + 0.5);
+                                break;
+                            case 'L':
+                                const x = Math.round(cmd[1]);
+                                const y = Math.round(cmd[2]);
+                                ctx.lineTo(x + 0.5, y + 0.5);
+                                lastX = x;
+                                lastY = y;
+                                break;
+                            case 'Q':
+                                const qx = Math.round(cmd[3]);
+                                const qy = Math.round(cmd[4]);
+                                ctx.quadraticCurveTo(Math.round(cmd[1]) + 0.5, Math.round(cmd[2]) + 0.5, qx + 0.5, qy + 0.5);
+                                lastX = qx;
+                                lastY = qy;
+                                break;
+                            case 'C':
+                                const cx = Math.round(cmd[5]);
+                                const cy = Math.round(cmd[6]);
+                                ctx.bezierCurveTo(
+                                    Math.round(cmd[1]) + 0.5, Math.round(cmd[2]) + 0.5,
+                                    Math.round(cmd[3]) + 0.5, Math.round(cmd[4]) + 0.5,
+                                    cx + 0.5, cy + 0.5
+                                );
+                                lastX = cx;
+                                lastY = cy;
+                                break;
+                            case 'Z':
+                                ctx.closePath();
+                                break;
+                        }
+                    });
+                    ctx.fill();
+                } else if (obj instanceof fabric.Rect) {
+                    const rect = obj as fabric.Rect;
+                    const left = Math.round(rect.left || 0);
+                    const top = Math.round(rect.top || 0);
+                    const width = Math.round((rect.width || 0) * (rect.scaleX || 1));
+                    const height = Math.round((rect.height || 0) * (rect.scaleY || 1));
+                    ctx.fillRect(left + 0.5, top + 0.5, width, height);
+                } else if (obj instanceof fabric.Triangle) {
+                    const triangle = obj as fabric.Triangle;
+                    const matrix = triangle.calcTransformMatrix();
+                    const w = triangle.width;
+                    const h = triangle.height;
+                    const localPoints = [
+                        new fabric.Point(0, -h / 2),
+                        new fabric.Point(w / 2, h / 2),
+                        new fabric.Point(-w / 2, h / 2)
+                    ];
+                    const vertices = localPoints.map(p => p.transform(matrix));
+                    ctx.beginPath();
+                    ctx.moveTo(Math.round(vertices[0].x) + 0.5, Math.round(vertices[0].y) + 0.5);
+                    ctx.lineTo(Math.round(vertices[1].x) + 0.5, Math.round(vertices[1].y) + 0.5);
+                    ctx.lineTo(Math.round(vertices[2].x) + 0.5, Math.round(vertices[2].y) + 0.5);
+                    ctx.closePath();
+                    ctx.fill();
+                } else if (obj instanceof fabric.Ellipse) {
+                    const ellipse = obj as fabric.Ellipse;
+                    const center = ellipse.getCenterPoint();
+                    const rx = Math.round(ellipse.rx * ellipse.scaleX);
+                    const ry = Math.round(ellipse.ry * ellipse.scaleY);
+                    ctx.beginPath();
+                    ctx.ellipse(
+                        center.x, center.y,
+                        rx, ry,
+                        (ellipse.angle || 0) * Math.PI / 180,
+                        0, 2 * Math.PI
+                    );
+                    ctx.fill();
+                } else if (obj instanceof fabric.Line) {
+                    // Lines cannot be filled in raster mode usually, but if needed:
+                    const line = obj as fabric.Line;
+                    ctx.beginPath();
+                    ctx.moveTo(Math.round(line.x1 || 0) + 0.5, Math.round(line.y1 || 0) + 0.5);
+                    ctx.lineTo(Math.round(line.x2 || 0) + 0.5, Math.round(line.y2 || 0) + 0.5);
+                    ctx.stroke(); // Fallback for line visibility
+                }
+                ctx.restore();
+            });
+
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                if (data[i] < 255 || data[i + 1] < 255 || data[i + 2] < 255) {
+                    data[i] = 0;
+                    data[i + 1] = 0;
+                    data[i + 2] = 0;
+                    data[i + 3] = 255;
+                }
+            }
+            ctx.putImageData(imageData, 0, 0);
+
+            const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+            if (!blob) throw new Error("Failed to generate image blob");
+            formData.append('file', blob, 'path.png');
         }
 
-        return await response.json();
+        return this.postFormData('/api/execute', formData);
     }
 
-    public async updateViewSettings(isTransformedViewOn: boolean, isThermalViewOn: boolean): Promise<any> {
-        const response = await fetch(`${this.apiBaseUrl}/api/view_settings`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ isTransformedViewOn, isThermalViewOn })
-        });
-
-        return await response.json();
+    public async updateViewSettings(isTransformedViewOn: boolean, isThermalViewOn: boolean = false): Promise<any> {
+        return this.postJson('/api/view_settings', { isTransformedViewOn, isThermalViewOn });
     }
 
-    // --- Internal: Geometry Bridge ---
     private generatePixelPath(): Position[] {
         const objects = this.fCanvas.getObjects();
         const pixels: Position[] = [];
 
         for (const obj of objects) {
+            if ((obj as any)._isMarker) continue;
+
             if (obj instanceof fabric.Path) {
                 const pathObj = obj as any;
                 if (pathObj.path) {
@@ -855,7 +1110,6 @@ export class DrawingTracker {
                         const type = cmd[0];
                         const x = cmd[1];
                         const y = cmd[2];
-
                         if (type === 'M') {
                             lastX = x; lastY = y;
                         } else if (type === 'L' || type === 'Q') {
@@ -865,38 +1119,31 @@ export class DrawingTracker {
                         }
                     }
                 }
-            }
-            else if (obj instanceof fabric.Triangle) {
+            } else if (obj instanceof fabric.Triangle) {
                 const triangle = obj as fabric.Triangle;
                 const matrix = triangle.calcTransformMatrix();
                 const w = triangle.width;
                 const h = triangle.height;
-
                 const localPoints = [
                     new fabric.Point(0, -h / 2),
                     new fabric.Point(w / 2, h / 2),
                     new fabric.Point(-w / 2, h / 2)
                 ];
-
                 const vertices = localPoints.map(p => p.transform(matrix));
-
                 for (let i = 0; i < vertices.length; i++) {
                     const start = vertices[i];
                     const end = vertices[(i + 1) % vertices.length];
                     const gen = Utils.generateLinePixels(start.x, start.y, end.x, end.y);
                     for (const p of gen) pixels.push(p);
                 }
-            }
-            else if (obj.type === 'ellipse' || obj.type === 'circle') {
+            } else if (obj.type === 'ellipse' || obj.type === 'circle') {
                 const ellipse = obj as fabric.Ellipse;
                 const center = ellipse.getCenterPoint();
                 const rx = ellipse.rx * ellipse.scaleX;
                 const ry = ellipse.ry * ellipse.scaleY;
                 const rotation = (ellipse.angle || 0) * (Math.PI / 180);
                 const steps = Math.max(120, Math.floor((rx + ry) * 2));
-
                 let prevX = 0, prevY = 0;
-
                 for (let i = 0; i <= steps; i++) {
                     const t = (i / steps) * 2 * Math.PI;
                     const rawX = rx * Math.cos(t);
@@ -905,30 +1152,96 @@ export class DrawingTracker {
                     const rotY = rawX * Math.sin(rotation) + rawY * Math.cos(rotation);
                     const finalX = center.x + rotX;
                     const finalY = center.y + rotY;
-
                     if (i > 0) {
                         const gen = Utils.generateLinePixels(prevX, prevY, finalX, finalY);
                         for (const p of gen) pixels.push(p);
                     }
-
                     prevX = finalX;
                     prevY = finalY;
                 }
-            }
-            else {
+            } else {
                 const coords = obj.getCoords();
-
                 for (let i = 0; i < coords.length; i++) {
                     const start = coords[i];
                     const end = coords[(i + 1) % coords.length];
                     if (obj.type === 'line' && i === coords.length - 1) continue;
-
                     const gen = Utils.generateLinePixels(start.x, start.y, end.x, end.y);
                     for (const p of gen) pixels.push(p);
                 }
             }
         }
-
         return pixels;
+    }
+
+    // =========================================================================
+    // Private API Helpers
+    // =========================================================================
+
+    private async generateBlankFixtureBlob(): Promise<Blob> {
+        const width = this.fixturesCanvas?.width ?? 640;
+        const height = this.fixturesCanvas?.height ?? 480;
+        const blankCanvas = document.createElement('canvas');
+        blankCanvas.width = width;
+        blankCanvas.height = height;
+        const ctx = blankCanvas.getContext('2d');
+        if (!ctx) throw new Error("Could not create blank canvas context");
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        const blob = await new Promise<Blob | null>(resolve => blankCanvas.toBlob(resolve, 'image/png'));
+        if (!blob) throw new Error("Failed to generate blank fixtures blob");
+        return blob;
+    }
+
+    private async uploadFixtures(blob: Blob): Promise<any> {
+        const formData = new FormData();
+        formData.append('file', blob, 'fixtures.png');
+        return this.postFormData('/api/fixtures', formData);
+    }
+
+    private async uploadHeatMask(blob: Blob): Promise<void> {
+        const formData = new FormData();
+        formData.append('file', blob, 'heat_mask.png');
+        try {
+            await this.postFormData('/api/heat_area', formData);
+        } catch (e) {
+            console.error("Error uploading heat mask:", e);
+        }
+    }
+
+    private async postFormData(endpoint: string, formData: FormData): Promise<any> {
+        const response = await fetch(`${this.apiBaseUrl}${endpoint}`, {
+            method: 'POST',
+            body: formData
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(errorData.detail || `Request to ${endpoint} failed`);
+        }
+        return response.json();
+    }
+
+    private async postJson(endpoint: string, data: any): Promise<any> {
+        const response = await fetch(`${this.apiBaseUrl}${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        return response.json();
+    }
+
+    private async postData(endpoint: string, data: Record<string, string>, isFormData: boolean = false): Promise<any> {
+        const formData = new FormData();
+        for (const key in data) {
+            formData.append(key, data[key]);
+        }
+        const response = await fetch(`${this.apiBaseUrl}${endpoint}`, {
+            method: 'POST',
+            body: formData
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || `Request to ${endpoint} failed`);
+        }
+        return response.json();
     }
 }
