@@ -9,6 +9,7 @@ class MockCameraRegistration():
         self.rgbd_cam = rgbd_cam
         self.robot_controller = robot_controller
         self.laser_obj = laser_obj
+        self.display_path = False
 
     def pixel_to_world(self, img_points, cam_type, z = 0.0):
         if(isinstance(img_points, np.ndarray) and len(img_points.shape) > 1):
@@ -46,13 +47,14 @@ class MockCameraRegistration():
         pass 
     
     def get_world_m_to_UI(self, cam_type, world_points, warped):
-        return np.zeros(1280, 720)
+        return np.zeros((1280, 2))
     
     def heat_overlay(self, rgb_img, mask = None, roi = None, invert = False, transformed_view: bool = True,
                                 alpha: float = 0.45,
                                 colormap: int = cv2.COLORMAP_JET):
-        return np.zeros(1280, 720), np.array([]), 0, 0
-    
+        return np.zeros((1280, 720)), np.array([]), 0, 0
+    def tracking_display(self, disp, cam_type = 'color', warped = True):
+        return np.zeros((1280, 720))
 
 
 

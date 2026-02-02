@@ -13,7 +13,7 @@ from dataclasses import dataclass, asdict
 import matplotlib.pyplot as plt
 
 # Classes
-mock_robot = os.getenv("MOCK_ROBOT", "0") == "1"
+mock_robot = os.getenv("MOCK_ROBOT", "0") == "0"
 print(f"Mocking? {mock_robot}")
 if(not mock_robot):
     from robot.robot_controller import Robot_Controller
