@@ -8,29 +8,27 @@ export class DrawingTracker {
     private apiBaseUrl: string;
     private onShapeComplete: () => void;
     private onFixturesChange: () => void;
-    private onMarkersChange: () => void; // NEW Callback
+    private onMarkersChange: () => void;
     private onHeatAreaDefined: () => void;
 
-    // State for Drag-to-Create
+    // --- State: Drawing Mode ---
     private currentShapeType: ShapeType | null = null;
     private isCreatingShape: boolean = false;
     private shapeStartPos: { x: number, y: number } | null = null;
     private activeShape: fabric.FabricObject | null = null;
     private hasPlacedShape: boolean = false;
 
-    // Heat marker mode
+    // --- State: Heat Marker Mode ---
     private isMarkerMode: boolean = false;
     private markerObjects: fabric.Group[] = [];
-    private prevWidth: number;
-    private prevHeight: number;
 
-    //Heat area mode
+    // --- State: Heat Area Mode ---
     private isHeatAreaMode: boolean = false;
     private isDrawingHeatArea: boolean = false;
     private heatStartPos: { x: number, y: number } | null = null;
     private activeHeatRect: fabric.Rect | null = null;
 
-    // Fixtures mode
+    // --- State: Fixtures Mode ---
     private isFixturesMode: boolean = false;
     private fixturesCanvas: HTMLCanvasElement | null = null;
     private fixturesCtx: CanvasRenderingContext2D | null = null;
@@ -40,6 +38,10 @@ export class DrawingTracker {
     private isFixturesDrawing: boolean = false;
     private lastFixturesPoint: { x: number, y: number } | null = null;
     private fixturesApplied: boolean = false;
+
+    // --- State: Canvas Sizing ---
+    private prevWidth: number;
+    private prevHeight: number;
 
     // --- CONFIG: Visual Defaults ---
     private readonly SHAPE_DEFAULTS = {
@@ -143,6 +145,10 @@ export class DrawingTracker {
         mainCanvas.parentElement?.appendChild(this.fixturesCanvas);
     }
 
+    // =========================================================================
+    // Core Lifecycle Methods
+    // =========================================================================
+
     public dispose(): void {
         if (this.fCanvas) {
             this.fCanvas.dispose();
@@ -152,7 +158,10 @@ export class DrawingTracker {
         }
     }
 
-    // --- Fixtures Mode Methods ---
+    // =========================================================================
+    // Fixtures Mode Logic
+    // =========================================================================
+
     public enableFixturesMode(): void {
         this.isFixturesMode = true;
         this.disableDrawing();
@@ -328,36 +337,13 @@ export class DrawingTracker {
     }
 
     public async clearFixturesOnServer(): Promise<void> {
-        const width = this.fixturesCanvas?.width ?? 640;
-        const height = this.fixturesCanvas?.height ?? 480;
-
-        const blankCanvas = document.createElement('canvas');
-        blankCanvas.width = width;
-        blankCanvas.height = height;
-        const ctx = blankCanvas.getContext('2d');
-        if (!ctx) throw new Error("Could not create blank canvas context");
-
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, width, height);
-
-        const blob = await new Promise<Blob | null>(resolve => blankCanvas.toBlob(resolve, 'image/png'));
-        if (!blob) throw new Error("Failed to generate blank fixtures blob");
-
-        const formData = new FormData();
-        formData.append('file', blob, 'fixtures.png');
-
-        const response = await fetch(`${this.apiBaseUrl}/api/fixtures`, {
-            method: 'POST',
-            body: formData
-        });
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || "Failed to clear fixtures on server");
-        }
+        const blob = await this.generateBlankFixtureBlob();
+        await this.uploadFixtures(blob);
     }
 
     public async executeFixtures(): Promise<any> {
         if (!this.fixturesCanvas || !this.fixturesCtx) throw new Error("Fixtures canvas not initialized");
+        
         const maskCanvas = document.createElement('canvas');
         maskCanvas.width = this.fixturesCanvas.width;
         maskCanvas.height = this.fixturesCanvas.height;
@@ -379,21 +365,18 @@ export class DrawingTracker {
             }
         }
         maskCtx.putImageData(maskData, 0, 0);
+        
         const blob = await new Promise<Blob | null>(resolve => maskCanvas.toBlob(resolve, 'image/png'));
         if (!blob) throw new Error("Failed to generate fixtures blob");
-        const formData = new FormData();
-        formData.append('file', blob, 'fixtures.png');
-        const response = await fetch(`${this.apiBaseUrl}/api/fixtures`, {
-            method: 'POST',
-            body: formData
-        });
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || "Fixtures execution failed");
-        }
+        
+        const result = await this.uploadFixtures(blob);
         this.fixturesApplied = true;
-        return await response.json();
+        return result;
     }
+
+    // =========================================================================
+    // Heat Area Logic
+    // =========================================================================
 
     public enableHeatAreaMode(): void {
         this.clearDrawing(); // Clear any standard shapes
@@ -421,8 +404,6 @@ export class DrawingTracker {
         // Send a black mask to clear the setting on backend
         await this.sendHeatMaskToServer(null); // null triggers the "blank" generation
     }
-
-    // --- NEW: Specific Heat Area Event Logic ---
 
     private onHeatMouseDown(opt: any) {
         if (!this.fCanvas.getElement()) return;
@@ -495,8 +476,6 @@ export class DrawingTracker {
         this.onHeatAreaDefined();
     }
 
-    // --- NEW: Mask Generation & Upload ---
-
     private async sendHeatMaskToServer(rect: fabric.Rect | null): Promise<void> {
         const width = this.fCanvas.getWidth();
         const height = this.fCanvas.getHeight();
@@ -523,21 +502,13 @@ export class DrawingTracker {
         const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
         if (!blob) return;
 
-        const formData = new FormData();
-        formData.append('file', blob, 'heat_mask.png');
-
-        try {
-            // Note: Ensure this endpoint exists in your main.py (as discussed in previous turn)
-            await fetch(`${this.apiBaseUrl}/api/heat_area`, {
-                method: 'POST',
-                body: formData
-            });
-        } catch (e) {
-            console.error("Error uploading heat mask:", e);
-        }
+        await this.uploadHeatMask(blob);
     }
 
-    // --- Interaction Handlers ---
+    // =========================================================================
+    // Drawing Interaction Handlers
+    // =========================================================================
+
     private async onMouseDown(opt: any) {
         if (this.isMarkerMode) {
             const pointer = this.fCanvas.getScenePoint(opt.e);
@@ -646,7 +617,10 @@ export class DrawingTracker {
         }
     }
 
-    // --- Public API ---
+    // =========================================================================
+    // Public Drawing API
+    // =========================================================================
+
     public setShapeType(type: ShapeType | null): void {
         if (this.hasPlacedShape && type !== null) {
             return;
@@ -770,7 +744,10 @@ export class DrawingTracker {
         }
     }
 
-    // --- Heat marker methods ---
+    // =========================================================================
+    // Heat Marker Logic
+    // =========================================================================
+
     public enableMarkerMode(): void {
         // We only clear drawing SHAPES, not markers
         this.clearDrawing();
@@ -953,21 +930,13 @@ export class DrawingTracker {
     }
 
     public async submitHeatMarkers(markers: Position[]): Promise<any> {
-        if (!this.apiBaseUrl) throw new Error("API base URL not set");
-        const formData = new FormData();
-        formData.append('markers', JSON.stringify(markers));
-        const response = await fetch(`${this.apiBaseUrl}/api/heat_markers`, {
-            method: 'POST',
-            body: formData
-        });
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(errorText || "Failed to submit heat markers");
-        }
-        return await response.json();
+        return this.postData('/api/heat_markers', { markers: JSON.stringify(markers) }, true);
     }
 
-    // --- Execution & Export Logic ---
+    // =========================================================================
+    // Execution & Export Logic
+    // =========================================================================
+
     public async executePath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<any> {
         // 1. Always generate the vector path (pixels)
         const pixels = this.generatePixelPath();
@@ -1119,24 +1088,11 @@ export class DrawingTracker {
             formData.append('file', blob, 'path.png');
         }
 
-        const response = await fetch(`${this.apiBaseUrl}/api/execute`, {
-            method: 'POST',
-            body: formData
-        });
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || "Execution failed");
-        }
-        return await response.json();
+        return this.postFormData('/api/execute', formData);
     }
 
     public async updateViewSettings(isTransformedViewOn: boolean, isThermalViewOn: boolean = false): Promise<any> {
-        const response = await fetch(`${this.apiBaseUrl}/api/view_settings`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ isTransformedViewOn, isThermalViewOn })
-        });
-        return await response.json();
+        return this.postJson('/api/view_settings', { isTransformedViewOn, isThermalViewOn });
     }
 
     private generatePixelPath(): Position[] {
@@ -1215,5 +1171,77 @@ export class DrawingTracker {
             }
         }
         return pixels;
+    }
+
+    // =========================================================================
+    // Private API Helpers
+    // =========================================================================
+
+    private async generateBlankFixtureBlob(): Promise<Blob> {
+        const width = this.fixturesCanvas?.width ?? 640;
+        const height = this.fixturesCanvas?.height ?? 480;
+        const blankCanvas = document.createElement('canvas');
+        blankCanvas.width = width;
+        blankCanvas.height = height;
+        const ctx = blankCanvas.getContext('2d');
+        if (!ctx) throw new Error("Could not create blank canvas context");
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        const blob = await new Promise<Blob | null>(resolve => blankCanvas.toBlob(resolve, 'image/png'));
+        if (!blob) throw new Error("Failed to generate blank fixtures blob");
+        return blob;
+    }
+
+    private async uploadFixtures(blob: Blob): Promise<any> {
+        const formData = new FormData();
+        formData.append('file', blob, 'fixtures.png');
+        return this.postFormData('/api/fixtures', formData);
+    }
+
+    private async uploadHeatMask(blob: Blob): Promise<void> {
+        const formData = new FormData();
+        formData.append('file', blob, 'heat_mask.png');
+        try {
+            await this.postFormData('/api/heat_area', formData);
+        } catch (e) {
+            console.error("Error uploading heat mask:", e);
+        }
+    }
+
+    private async postFormData(endpoint: string, formData: FormData): Promise<any> {
+        const response = await fetch(`${this.apiBaseUrl}${endpoint}`, {
+            method: 'POST',
+            body: formData
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(errorData.detail || `Request to ${endpoint} failed`);
+        }
+        return response.json();
+    }
+
+    private async postJson(endpoint: string, data: any): Promise<any> {
+        const response = await fetch(`${this.apiBaseUrl}${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        return response.json();
+    }
+
+    private async postData(endpoint: string, data: Record<string, string>, isFormData: boolean = false): Promise<any> {
+        const formData = new FormData();
+        for (const key in data) {
+            formData.append(key, data[key]);
+        }
+        const response = await fetch(`${this.apiBaseUrl}${endpoint}`, {
+            method: 'POST',
+            body: formData
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || `Request to ${endpoint} failed`);
+        }
+        return response.json();
     }
 }
