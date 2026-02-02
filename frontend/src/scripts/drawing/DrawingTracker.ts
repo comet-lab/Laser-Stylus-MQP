@@ -608,12 +608,11 @@ export class DrawingTracker {
         
         // Run both requests in parallel
         // console.log("Rastor Type in executePath:", raster_type);
-        const [jsonResult, imageResult, settingsResult] = await Promise.all([
-            this.sendCoordinates(),
-            this.uploadPathImage(),
-            this.uploadSettings(speed, raster_type)
-        ]);
-
+        //Speed first, and separate these. Wait for previous, then do the next one
+        const jsonResult = await this.uploadSettings(speed, raster_type);
+        const imageResult = await this.sendCoordinates();
+        const settingsResult = await this.uploadPathImage();
+        
         return { jsonResult, imageResult, settingsResult };
     }
 }

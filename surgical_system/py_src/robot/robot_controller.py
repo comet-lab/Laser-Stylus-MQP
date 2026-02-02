@@ -1,5 +1,6 @@
 import os, subprocess, time, sys, math
 from scipy.spatial.transform import Rotation
+import threading
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -19,6 +20,10 @@ class Robot_Controller():
         print("Robot Online")
         self.home_pose = self.load_home_pose()
         self.home_pose_inv = self.HT_Inv(self.home_pose)
+        
+         # Trajectory thread management
+        self._traj_thread = None
+        self._stop_traj = threading.Event()
 
     def load_home_pose(self, home_pose_path = "surgical_system/py_src/robot/home_pose.csv"):
         if(os.path.exists(home_pose_path)):
@@ -43,14 +48,12 @@ class Robot_Controller():
         # Default robot starting location 
         self.home_pose = self.load_home_pose(home_pose_path=filePath)
         self.franka_client.send_pose(self.home_pose,1) # Send robot to zero position
-        self.home_pose = self.align_robot_input()
+        self.home_pose = self.align_robot_input(self.home_pose)
         np.savetxt(filePath, self.home_pose, delimiter=",")
         print("Saving new self.home_pose...")
         return self.home_pose
   
-    '''
-    Code is blocking
-    '''
+
     def go_to_pose(self, pose, linTol = .05, rotTol = 0.05, maxIterations = 24, blocking = True):
         # tolerances are in mm and degrees 
         error, angleError = 10000, 10000
@@ -101,9 +104,9 @@ class Robot_Controller():
         time.sleep(1)
         return velocity
     
-    def align_robot_input(self):
-        newPose = self.home_pose.copy()
-        self.go_to_pose(self.home_pose)
+    def align_robot_input(self, new_pose):
+            
+        self.go_to_pose(new_pose)
         while True:
             user_input = input("Enter offset in X Y Z (mm), separated by space (blank to escape): ")
             
@@ -115,15 +118,15 @@ class Robot_Controller():
                 offset_m = np.array([x_mm, y_mm, z_mm]) / 1000.0  # Convert to meters
 
                 # Apply the offset
-                newPose[:3, 3] += offset_m
+                new_pose[:3, 3] += offset_m
                 print(f"Applying offset (m): {offset_m}")
-                print(f"New position (m): {newPose[:3, 3]}")
-                self.go_to_pose(newPose)
+                print(f"New position (m): {new_pose[:3, 3]}")
+                self.go_to_pose(new_pose)
 
             except ValueError:
                 print("Invalid input. Please enter three numeric values separated by space.")
 
-        return newPose
+        return new_pose
 
     def get_home_pose(self):
         return self.home_pose
@@ -157,6 +160,16 @@ class Robot_Controller():
         t_inv = -R_inv @ t
         return np.concatenate((np.concatenate((R_inv, t_inv.reshape(3, 1)), axis=1), [[0, 0, 0, 1]]), axis=0)
 
+    def create_custom_trajectory(self, path, max_velocity):
+        path_info = {"Positions": path, 
+                    "Pattern": "Custom",
+                    "Radius": -1,
+                    "Passes": 1,
+                    "MaxVelocity": max_velocity, # [m/s]
+                    "MaxAcceleration": 0.0,#[m/s/s]
+                    "Durations":[-1]} #time per step
+        return TrajectoryController(path_info, debug=True)
+    
     def create_trajectory(self, path_info):
         if not isinstance(path_info['Positions'], np.ndarray):
             path_info['Positions'] = np.array( path_info['Positions'])
@@ -166,72 +179,152 @@ class Robot_Controller():
         path_info['Positions'] = path_info['Positions'] / 100.0 #converts from cm to m
         return TrajectoryController(path_info, debug=True)
     
-    def run_trajectory(self, traj: TrajectoryController):
-        #
+    def _run_trajectory_worker(self, traj: TrajectoryController):
         total_time = traj.durations[-1]
         print("Path Duration: ", total_time)
         
         start_pos = traj.start_pos
         start_pose = np.eye(4)
         start_pose[:3, -1] = start_pos
-        print(start_pose)
-        current_pose = np.array(self.go_to_pose(start_pose@self.home_pose))
-        # current_pose = self.quat_to_Mat(current_pose)
+        print("Heading to starting location")
+        current_pose = np.array(self.go_to_pose(start_pose @ self.home_pose))
         
         time_step = 0.05
-        elapsedTime = 0
-        t = time.time()
-        # TODO ask user to verify they want to continue
+        elapsedTime = 0.0
+        t = time.monotonic()
+
         target_vel = np.zeros(3)
         
-        #record data
-        data_num = int(math.ceil(total_time/time_step)) 
+        # record data
+        data_num = int(math.ceil(total_time / time_step))
         actual_vel_list = np.empty((data_num, 3))
         target_vel_list = np.empty((data_num, 3))
+        actual_pos_list = np.empty((data_num, 3))
+        target_pos_list = np.empty((data_num, 3))
         i = 0
-        while (elapsedTime) < total_time:
-            if (time.time() - t) >= time_step:    
-                elapsedTime = elapsedTime + time.time() - t
-                t = time.time()
-                movement = traj.update(elapsedTime)
-                target_vel = (movement['velocity'])
-                print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel) 
-                velocity = self.set_velocity(target_vel, [0,0,0])
-                # new_pose = np.array(self.franka_client.request_pose())
-                actual_vel_list[i, :] =  velocity[:3] if i != 0 else np.zeros(3)
-                target_vel_list[i, :] = target_vel
-                # current_pose = new_pose
-                i += 1
-        self.robot_stop()
-        
-        plt.figure(figsize=(10,6))
-        time_range = np.arange(0, total_time, time_step)
-        plt.plot(time_range, actual_vel_list[:, 0], label="actual x")
-        plt.plot(time_range, actual_vel_list[:, 1], label="actual y")
-        plt.plot(time_range, actual_vel_list[:, 2], label="actual z")
-        plt.plot(time_range, target_vel_list[:, 0], '--', label="target x")
-        plt.plot(time_range, target_vel_list[:, 1], '--', label="target y")
-        plt.plot(time_range, target_vel_list[:, 2], '--', label="target z")
-        plt.xlabel("Time [s]")
-        plt.ylabel("velcity [m]")
-        title = "Time vs velocity "+ traj.pattern
-        plt.title(title)
-        plt.grid(True)
-        plt.legend()
-        plt.tight_layout()
+        try:
+            while (elapsedTime < total_time) and (not self._stop_traj.is_set()):
+                now = time.monotonic()
+                if (now - t) >= time_step:
+                    elapsedTime += (now - t)
+                    t = now
 
-        # Save and also display inline
-        out_path = "time_vs_velocity_" + traj.pattern + ".png"
-        plt.savefig(out_path, dpi=200)
-        plt.show()
-        # np.savetxt("actualVel.npy", actual_vel_list)
-        # np.savetxt("targetVel.npy", actual_vel_list)
+                    movement = traj.update(elapsedTime)
+                    target_vel = movement['velocity']
+                    target_pos = movement['position']
+
+                    # print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel, f" | Target Pos: ", target_pos)
+                    
+                    target_pose = np.eye(4)
+                    target_pose[:3, -1] = target_pos
+                    velocity_correction = self.live_control(target_pose, 0.01, 5)
+                    print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
+                    target_vel += velocity_correction
+                    state = self.set_velocity(target_vel, [0, 0, 0]) 
+                    
+                    
+                    pos, vel = state[:3], state[7:10]
+
+                    if i < data_num:
+                        actual_vel_list[i, :] = vel[:3] if i != 0 else np.zeros(3)
+                        target_vel_list[i, :] = target_vel
+                        actual_pos_list[i, :] = pos[:3] - self.home_pose[:3, -1]
+                        target_pos_list[i, :] = target_pos
+                        i += 1
+
+            # stop robot on exit (normal or stopped)
+            self.robot_stop()
+
+            # Optional: if you are okay plotting from a thread, keep this.
+            # Otherwise, you can return the data instead and plot in main thread.
+            # time_range = np.arange(0, total_time, time_step)
+
+            # plt.figure(figsize=(10,6))
+            # plt.plot(time_range, actual_vel_list[:, 0], label="actual x")
+            # plt.plot(time_range, actual_vel_list[:, 1], label="actual y")
+            # plt.plot(time_range, actual_vel_list[:, 2], label="actual z")
+            # plt.plot(time_range, target_vel_list[:, 0], '--', label="target x")
+            # plt.plot(time_range, target_vel_list[:, 1], '--', label="target y")
+            # plt.plot(time_range, target_vel_list[:, 2], '--', label="target z")
+            # plt.xlabel("Time [s]")
+            # plt.ylabel("velocity [m/s]")
+            # title = "Time vs velocity " + traj.pattern
+            # plt.title(title)
+            # plt.grid(True)
+            # plt.legend()
+            # plt.tight_layout()
+            # plt.savefig("time_vs_velocity_" + traj.pattern + ".png", dpi=200)
+            # plt.close()
+
+            # plt.figure(figsize=(10,6))
+            # plt.plot(time_range, actual_pos_list[:, 0], label="actual x")
+            # plt.plot(time_range, actual_pos_list[:, 1], label="actual y")
+            # plt.plot(time_range, actual_pos_list[:, 2], label="actual z")
+            # plt.plot(time_range, target_pos_list[:, 0], '--', label="target x")
+            # plt.plot(time_range, target_pos_list[:, 1], '--', label="target y")
+            # plt.plot(time_range, target_pos_list[:, 2], '--', label="target z")
+            # plt.xlabel("Time [s]")
+            # plt.ylabel("position [m]")
+            # title = "Time vs position " + traj.pattern
+            # plt.title(title)
+            # plt.grid(True)
+            # plt.legend()
+            # plt.tight_layout()
+            # plt.savefig("time_vs_position_" + traj.pattern + ".png", dpi=200)
+            # plt.close()
+        finally:
+            self._stop_traj.set()
+            self._traj_thread = None
+            print("traj done")
+        # return [actual_vel_list,
+        #         target_vel_list,
+        #         actual_pos_list,
+        #         target_pos_list]
     
-    def live_control(self, target_pose_home, max_vel):
+    def run_trajectory(self, traj: TrajectoryController, blocking: bool = True):
+        """
+        Run trajectory either blocking or in a background thread.
+        """
+        if blocking:
+            # Old behavior
+            self._stop_traj.clear()
+            self._run_trajectory_worker(traj)
+        else:
+            # Non-blocking background thread
+            if self._traj_thread is not None and self._traj_thread.is_alive():
+                print("[WARNING] A trajectory is already running.")
+                return
+
+            self._stop_traj.clear()
+            self._traj_thread = threading.Thread(
+                target=self._run_trajectory_worker,
+                args=(traj,),
+                daemon=True,
+            )
+            self._traj_thread.start()
+    
+    
+    
+    def is_trajectory_running(self) -> bool:
+        return (self._traj_thread is not None
+            and self._traj_thread.is_alive())
+
+        
+    def stop_trajectory(self, wait: bool = False):
+        """
+        Signal the running trajectory to stop and optionally wait for it.
+        """
+        self._stop_traj.set()
+        # ensure robot commanded to stop
+        self.robot_stop()
+
+        if wait and self._traj_thread is not None:
+            self._traj_thread.join(timeout=2.0)
+            
+    def live_control(self, target_pose_home, max_vel, KP = 5.0):
         current_pose, _ = self.get_current_state()
         current_pose = current_pose[:3, -1] - self.home_pose[:3, -1]
         position_error = target_pose_home[:3, -1] - current_pose
-        KP = 5.0
         target_vel = position_error * KP
         mag = np.linalg.norm(target_vel)
         
@@ -250,7 +343,7 @@ if __name__=='__main__':
     home_pose = robot_controller.get_home_pose()
     
     mode = 1
-    height = 0.2 # m
+    height = 0.05 # m
     x = 0
     y = 0
     target_pose = np.array([[1,0,0,x],[0,1,0,y],[0,0,1,height],[0,0,0,1]])

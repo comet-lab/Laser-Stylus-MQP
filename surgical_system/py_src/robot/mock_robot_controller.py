@@ -7,8 +7,14 @@ class MockRobotController():
         self.pose = self.load_home_pose()
         self.current_velocity = [0, 0, 0]
         self.last_update_time = time.time()
+        self._is_trajectory_running = False
+
+    def is_trajectory_running(self):
+        return self._is_trajectory_running
         
     def go_to_pose(self, pose, linTol = .05):
+        if(pose.shape != (4,4)):
+            raise Exception("Incorrect pose shape")
         self.pose = pose
     
     def get_current_state(self):
@@ -21,7 +27,8 @@ class MockRobotController():
         homePosition = np.array([[0.5275],[0.0893],[0.1985]])
         homePose = np.concatenate((rotM,homePosition),axis=1)
         homePose = np.concatenate((homePose,[[0,0,0,1]]),axis=0)
-        return homePose
+        # return homePose
+        return np.eye(4)
     
     def set_velocity(self, lin_vel, ang_vel):
         return
@@ -33,7 +40,16 @@ class MockRobotController():
         self.last_update_time = current_time
 
     def live_control(self, target_pose, max_vel):
-        correction_pose = target_pose - self.pose
+        correction_position = target_pose - self.pose
         # correction_vector = correction_pose[0:3, 3]
         self.go_to_pose(target_pose)
+    
+    def create_custom_trajectory(self, robot_waypoints, speed):
+        return (robot_waypoints, speed)
+
+    def run_trajectory(self, traj, blocking):
+        print("Waypoint 0:", traj[0][0])
+        print("Waypoint Final:", traj[0][-1])
+        print("Speed", traj[1])
+        self.go_to_pose(traj[0][-1])
 
