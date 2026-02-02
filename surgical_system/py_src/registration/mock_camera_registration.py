@@ -45,6 +45,9 @@ class MockCameraRegistration():
     def get_path(self, points):
         pass 
     
+    def get_world_m_to_UI(self, cam_type, world_points, warped):
+        return np.zeros(1280, 720)
+    
     def heat_overlay(self, rgb_img, mask = None, roi = None, invert = False, transformed_view: bool = True,
                                 alpha: float = 0.45,
                                 colormap: int = cv2.COLORMAP_JET):
