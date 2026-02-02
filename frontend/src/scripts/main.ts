@@ -1,4 +1,4 @@
-import { WebSocketHandler, WebSocketMessage } from './classes/WebSocketHandler';
+import { WebSocketHandler, WebSocketMessage } from './api/WebSocketHandler';
 
 class ControlPanel {
     private ui = {

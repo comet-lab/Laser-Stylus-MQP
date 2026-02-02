@@ -293,3 +293,10 @@ pre {
   transform: translate(-50%, -50%);
   transition: left 0.1s linear, top 0.1s linear;
 }
+
+#average-heat-container {
+  font-weight: bold;
+  color: #e0f2e0;
+  margin-left: auto;
+  padding-right: 10px;
+}

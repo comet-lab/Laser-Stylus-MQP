@@ -1,6 +1,6 @@
 import * as fabric from 'fabric';
-import { Position, ShapeType } from './types';
-import * as Utils from './utils';
+import { Position, ShapeType } from '../types';
+import * as Utils from '../utils';
 
 export class DrawingTracker {
     private fCanvas: fabric.Canvas;
