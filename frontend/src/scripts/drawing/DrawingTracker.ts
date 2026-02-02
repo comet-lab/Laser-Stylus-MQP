@@ -409,8 +409,6 @@ export class DrawingTracker {
             if (cx - radius >= 0 && !isSafe(idxLeft)) return true;
             if (cx + radius < width && !isSafe(idxRight)) return true;
 
-            // Optional: Diagonal checks for rounder corners (slightly more expensive)
-            // For boxy thickness, cardinal is often enough. 
             return false;
         };
 
