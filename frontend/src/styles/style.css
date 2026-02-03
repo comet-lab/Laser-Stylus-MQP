@@ -2,9 +2,9 @@
    FONTS & IMPORTS
    ============================================ */
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;700&display=swap');
-@import url('./buttons.css');
-@import url('./settingsPage.css');
-@import url('./preparePage.css');
+@import url('./components/buttons.css');
+@import url('./components/settingsPage.css');
+@import url('./components/preparePage.css');
 
 /* ============================================
    GLOBAL STYLES & UTILITIES

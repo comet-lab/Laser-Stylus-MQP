@@ -1,3 +1,5 @@
+//frontend/src/services/WebSocketHandler.ts
+
 // Define the state interface matching your backend example_data
 export interface WebSocketMessage {
     x: number;

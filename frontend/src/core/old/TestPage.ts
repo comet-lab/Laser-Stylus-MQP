@@ -1,4 +1,6 @@
-import { WebSocketHandler, WebSocketMessage } from './api/WebSocketHandler';
+//frontend/src/core/TestPage.ts
+
+import { WebSocketHandler, WebSocketMessage } from '../../services/WebSocketHandler';
 
 class ControlPanel {
     private ui = {

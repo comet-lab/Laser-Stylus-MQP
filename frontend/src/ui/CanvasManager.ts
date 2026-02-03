@@ -1,8 +1,10 @@
-import * as fabric from 'fabric';
-import { Position, ShapeType } from '../types';
-import * as Utils from '../utils';
+//frontend/src/ui/CanvasManager.ts
 
-export class DrawingTracker {
+import * as fabric from 'fabric';
+import { Position, ShapeType } from './types';
+import * as Utils from '../utils/math_utils';
+
+export class CanvasManager {
     private fCanvas: fabric.Canvas;
     private video: HTMLVideoElement;
     private apiBaseUrl: string;
@@ -471,9 +473,7 @@ export class DrawingTracker {
     // =========================================================================
 
     public enableHeatAreaMode(): void {
-        this.clearDrawing(); // Clear any standard shapes
         this.disableDrawing(); // Ensure standard flags are off
-        this.disableMarkerMode(); // Ensure markers are off
 
         this.isHeatAreaMode = true;
         this.fCanvas.defaultCursor = 'crosshair';
@@ -842,7 +842,6 @@ export class DrawingTracker {
 
     public enableMarkerMode(): void {
         // We only clear drawing SHAPES, not markers
-        this.clearDrawing();
         this.disableDrawing();
         this.isMarkerMode = true;
         this.fCanvas.defaultCursor = 'crosshair';
