@@ -329,11 +329,13 @@ class Robot_Controller():
         current_pose, _ = self.get_current_state()
         return current_pose[:3, -1] - self.home_pose[:3, -1]
             
-    def live_control(self, target_pose_home, max_vel, KP = 5.0):
-        current_pose, _ = self.get_current_state()
+    def live_control(self, target_pose_home, max_vel, KP = 5.0, KD = 0.01):
+        current_pose, current_velocity = self.get_current_state()
         current_pose = current_pose[:3, -1] - self.home_pose[:3, -1]
         position_error = target_pose_home[:3, -1] - current_pose
-        target_vel = position_error * KP
+        vel_vector = np.array(current_velocity[:3])
+        # print("[Live Controller] KD Control : ", vel_vector * KD)
+        target_vel = position_error * KP - vel_vector * KD
         mag = np.linalg.norm(target_vel)
         
         if mag == 0:

@@ -18,7 +18,7 @@ class RobotSchema:
     # Laser & Vision State
     laserX: Optional[float] = None
     laserY: Optional[float] = None
-    averageHeat: Optional[float] = None
+    maxHeat: Optional[float] = None
     beamWaist: Optional[float] = None
     
     # Flags

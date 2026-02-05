@@ -42,7 +42,7 @@ services:
   surgical_system:
     build: ./surgical_system
     environment:
-      - MOCK_ROBOT=1
+      - MOCK_ROBOT=0
       - PYTHONUNBUFFERED=1
       - ROBOT_WEBSOCKET_NAME=${ROBOT_WEBSOCKET_NAME}
     depends_on:

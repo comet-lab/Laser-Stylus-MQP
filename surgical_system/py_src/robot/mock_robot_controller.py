@@ -44,7 +44,7 @@ class MockRobotController():
         self.current_velocity = lin_vel
         self.last_update_time = current_time
 
-    def live_control(self, target_pose, max_vel):
+    def live_control(self, target_pose, max_vel, KP = 5.0, KD = 0.1):
         correction_position = target_pose - self.pose
         # correction_vector = correction_pose[0:3, 3]
         self.go_to_pose(target_pose)

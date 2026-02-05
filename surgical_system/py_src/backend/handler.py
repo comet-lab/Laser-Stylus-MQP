@@ -77,7 +77,7 @@ class Handler:
         status.isLaserOn = self.desired_state.isLaserOn # TODO Separate variable for on & enabled? Need read-only portions of schema?
         status.isRobotOn = self.desired_state.isRobotOn # TODO get from ???
         status.heat_markers = self.desired_state.heat_markers
-        status.averageHeat = self.desired_state.averageHeat
+        status.maxHeat = self.desired_state.maxHeat
         status.laserX, status.laserY = int(self.desired_state.laserX), int(self.desired_state.laserY)
         return status.to_str()
     
@@ -172,7 +172,7 @@ class Handler:
         mask = self._read_mask(self.desired_state.heat_mask)
         heat_img, selection, min_temp, max_temp = self.cam_reg.heat_overlay(img, mask, invert=True)
         if selection is not None:
-            self.desired_state.averageHeat = float(max_temp) #TODO find average heat of current robot kernal pixel
+            self.desired_state.maxHeat = float(max_temp) if max_temp is not None else -100.0 #TODO find average heat of current robot kernal pixel
             # print(f"Max temp: {max_temp}")
         return heat_img
             
@@ -228,23 +228,31 @@ class Handler:
             
         # self.laser_obj.set_output(False)
 
-    def _do_live_control(self):
-        # If no new message in 200ms, stop
-        if(self._input_downtime() > .12):
+    def _do_live_control(self, height_change):
+        # If no new message in 120 ms, stop
+        # print(height_change)
+        if(self._input_downtime() > .12 and not height_change):
+            # print("trigger")
             self._do_hold_pose()
         else:
-            pixel = np.array([[self.desired_state.x, self.desired_state.y]])
-            
-            warped_view = self.desired_state.isTransformedViewOn
-            target_world_point = self.cam_reg.get_UI_to_world_m(
-                self.cam_type, 
-                pixel, 
-                warped_view, 
-                z = self.working_height)[0]
-    
+            if self.desired_state.x is not None and  self.desired_state.y is not None:
+                if (self.desired_state.x < 0 and self.desired_state.y < 0):
+                    return
+                pixel = np.array([[self.desired_state.x, self.desired_state.y]])
+                
+                warped_view = self.desired_state.isTransformedViewOn
+                target_world_point = self.cam_reg.get_UI_to_world_m(
+                    self.cam_type, 
+                    pixel, 
+                    warped_view, 
+                    z = self.working_height)[0]
+            else:
+                target_world_point = self.robot_controller.current_robot_to_world_position()
+                target_world_point[-1] = self.working_height
+                
             target_pose = np.eye(4)
             target_pose[:3, -1] = target_world_point
-            target_vel = self.robot_controller.live_control(target_pose, 0.05)
+            target_vel = self.robot_controller.live_control(target_pose, 0.05, KP = 3.0)
             # TODO Multiply velocity controller in unit component direction * max(min_speed, min(1, (distance / max_distance)))
             
             
@@ -264,13 +272,17 @@ class Handler:
         self._do_current_position()
 
         if(self.desired_state.isRobotOn):          
-            
+            self.working_height = self.desired_state.height / 100.0 if self.desired_state.height else  0 # cm to m
+            # print(f"[Robot Height] {self.working_height} m")
+                
             # print("loop",
             # "raster?", self.desired_state.raster_mask is not None,
             # "path?", self.desired_state.path is not None,
             # "Path event?", self.desired_state.pathEvent,
             # "traj_running?", self.robot_controller.is_trajectory_running())
-            
+            height_diff = self.working_height - self.robot_controller.current_robot_to_world_position()[-1]
+            height_change = np.abs(height_diff) > 0.0005 # 0.5 mm
+            # print(f"[Robot Height] Height Difference: {height_diff:.3f}")
             
             if(self.desired_state.fixtures_mask is not None):
                 self._read_fixtures()
@@ -305,15 +317,17 @@ class Handler:
                 self.desired_state.y = None
                 self.desired_state.path = None
                 
-            elif(self.desired_state.x is not None and self.desired_state.y is not None 
+            elif(((self.desired_state.x is not None and self.desired_state.y is not None) 
+                 or height_change) # 5 mm
                  and not self.robot_controller.is_trajectory_running()):
-                if (self.desired_state.x >= 0 and self.desired_state.y >= 0):
+                
+                # :
                     # TODO check outside boundary
                     # Disable laser
                     # Pull laser back into closest valid position
                     # print(f"Live controller trigger {self.desired_state.x}, {self.desired_state.y}")
-                    self._do_live_control()
-                    self.desired_state.path = None
+                self._do_live_control(height_change)
+                self.desired_state.path = None
                     
                     
                     
