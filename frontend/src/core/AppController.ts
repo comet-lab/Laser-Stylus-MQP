@@ -314,7 +314,7 @@ class AppController {
         this.ui.heightSlider.addEventListener('input', () => {
             const heightValue = parseInt(this.ui.heightSlider.value);
             this.ui.heightDisplay.textContent = String(heightValue);
-            console.log('Sending height:', heightValue);
+            //console.log('Sending height:', heightValue);
             this.wsHandler.updateState({ height: heightValue });
         });
 
