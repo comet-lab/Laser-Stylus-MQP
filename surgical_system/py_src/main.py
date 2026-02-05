@@ -167,7 +167,7 @@ async def main():
             latest = camera_reg.show_path(latest)
         
         latest = camera_reg.tracking_display(latest, 
-                                             cam_type = 'thermal',
+                                             cam_type = 'color',
                                              warped=control_flow_handler.desired_state.isTransformedViewOn)
             
         if(b.connected):

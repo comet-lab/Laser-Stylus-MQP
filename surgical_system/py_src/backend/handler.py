@@ -46,7 +46,7 @@ class Handler:
         )
         asyncio.create_task(backend_connection.connect_to_websocket())
         
-    def generate_virtual_fixture(self, img = np.zeros((720, 1280), dtype=np.uint8)):
+    def generate_virtual_fixture(self, img = np.ones((720, 1280), dtype=np.uint8)):
         '''
         Returns:
         Virtual fixture mask (not allowed @ true)
@@ -235,7 +235,7 @@ class Handler:
         # print(f"[INPUT DOWN TIME] {self._input_downtime()}")
         # print(f"[Height Diff] {np.abs(height_diff)}")
         if(self._input_downtime() > .12 and np.abs(height_diff) < 0.001): # 1mm
-            # print("trigger")
+            # print("[Live Control] Holding Position")
             self._do_hold_pose()
         else:
             if self.desired_state.x is not None and  self.desired_state.y is not None:
@@ -284,7 +284,7 @@ class Handler:
             # "Path event?", self.desired_state.pathEvent,
             # "traj_running?", self.robot_controller.is_trajectory_running())
             height_diff = self.working_height - self.robot_controller.current_robot_to_world_position()[-1]
-            height_change = np.abs(height_diff) > 0.0005 # 1 mm
+            height_change = np.abs(height_diff) > 0.0001 # 1 mm
             # print(f"[Robot Height] Height Change: {height_change}")
             
             if(self.desired_state.fixtures_mask is not None):
@@ -337,6 +337,7 @@ class Handler:
                     
         else:
             self._do_hold_pose()
+            self.laser_obj.set_output(False)
                 
         self.prev_robot_on = self.desired_state.isRobotOn
         

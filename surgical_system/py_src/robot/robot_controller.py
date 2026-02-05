@@ -191,7 +191,7 @@ class Robot_Controller():
         print("Heading to starting location")
         current_pose = np.array(self.go_to_pose(start_pose @ self.home_pose))
         
-        time_step = 0.05
+        time_step = 0.02
         elapsedTime = 0.0
         t = time.monotonic()
 
@@ -220,9 +220,9 @@ class Robot_Controller():
                     
                     target_pose = np.eye(4)
                     target_pose[:3, -1] = target_pos
-                    velocity_correction = self.live_control(target_pose, 0.015, 5) #TODO CHANGE MAX SPEED
+                    velocity_correction = self.live_control(target_pose, 0.2, KP = 10, KD=3) #TODO CHANGE MAX SPEED
                     # print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
-                    target_vel += velocity_correction
+                    command_vel = target_vel + velocity_correction
                     state = self.set_velocity(target_vel, [0, 0, 0]) 
                     
                     
@@ -230,7 +230,7 @@ class Robot_Controller():
 
                     if i < data_num:
                         actual_vel_list[i, :] = vel[:3] if i != 0 else np.zeros(3)
-                        target_vel_list[i, :] = target_vel
+                        target_vel_list[i, :] = command_vel
                         actual_pos_list[i, :] = pos[:3] - self.home_pose[:3, -1]
                         target_pos_list[i, :] = target_pos
                         i += 1

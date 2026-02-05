@@ -63,19 +63,19 @@ class Camera_Registration(System_Calibration):
         # Create checkerboard
         # self.robot_controller.load_edit_pose()
         
-        # self.create_checkerboard(gridShape = np.array([9, 8]), \
-        #                          saveLocation=self.calibration_folder, debug=debug)
+        self.create_checkerboard(gridShape = np.array([9, 8]), \
+                                 saveLocation=self.calibration_folder, debug=debug)
         
         self.read_calibration()
         
         self.laser_controller.set_output(False)
         
         
-        # self.reprojection_test('color', self.cam_M['color'], gridShape = np.array([2, 2]), laserDuration = .15, \
-        #                 debug=debug, height=0)
+        self.reprojection_test('color', self.cam_M['color'], gridShape = np.array([2, 2]), laserDuration = .15, \
+                        debug=debug, height=0)
         
-        # self.reprojection_test('thermal', self.cam_M['thermal'], gridShape = np.array([2, 2]), laserDuration = .15, \
-        #                 debug=debug, height=0)
+        self.reprojection_test('thermal', self.cam_M['thermal'], gridShape = np.array([2, 2]), laserDuration = .15, \
+                        debug=debug, height=0)
         
         self.laser_alignment()
         # self.therm_cam.deinitialize_cam()
@@ -460,11 +460,13 @@ class Camera_Registration(System_Calibration):
         lx_v = lx[valid]
         ly_v = ly[valid]
         heat_img[ly_v, lx_v] = therm_img[ty[valid], tx[valid]].astype(np.float32)
-
+        
+        vmin = np.nanmin(heat_img) 
+        vmax = np.nanmax(heat_img)
 
         # --- Fixed temperature range ---
         T_MIN = 20.0
-        T_MAX = 150.0   # anything above this saturates
+        T_MAX = 100.0   
 
         # Clip temperatures
         heat_clipped = np.clip(heat_img, T_MIN, T_MAX)
