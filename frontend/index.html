@@ -1,30 +1,389 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <link rel="stylesheet" href="/src/styles/style.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Laser Stylus Frontend</title>
-  </head>
-  <body>
-    <h1>Send Coordinates/State via WebSocket</h2>
-    <!-- makes fields to input the 6 values  -->
-    <label>X: <input type="number" id="x" value="0" step="any"></label><br>
-    <label>Y: <input type="number" id="y" value="0" step="any"></label><br>
-    <label>Z: <input type="number" id="z" value="0" step="any"></label><br>
-    <label>RX: <input type="number" id="rx" value="0" step="any"></label><br>
-    <label>RY: <input type="number" id="ry" value="0" step="any"></label><br>
-    <label>RZ: <input type="number" id="rz" value="0" step="any"></label><br><br>
-    
-    <button id="laserBtn">Turn on Laser</button>
-    <button id = "sendCoordsBtn">Send coordinates</button>
-    <button id = "fetchBtn">Get Current Coordinates</button>
-    <h3>WebSocket Messages:</h3>
-    <pre id="wsOutput"></pre>
+<!DOCTYPE html>
+<html>
 
-    <h3>Current Coordinates using the API endpoint:</h3>
-    <pre id="httpOutput"></pre>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
+  <link rel="stylesheet" href="/src/styles/style.css" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,100..700;1,100..700&family=Inter:wght@100..900&display=swap"
+    rel="stylesheet">
+  <script>
+    var scriptElm = document.createElement('script');
+    scriptElm.defer = true;
+    scriptElm.src = 'http://' + window.location.hostname + ':8889/mystream/reader.js';
+    document.head.appendChild(scriptElm);
+  </script>
+  <script type="module" src="/src/core/AppController.ts" defer></script>
+</head>
 
-    <script type="module" src="/src/scripts/main.ts" defer></script>
-  </body>
+<body>
+  <div id="app-scaler">
+    <div id="overlay"></div>
+    <div id="preparePopup">
+      <div class="prepare-header">
+        <h2>Prepare Path</h2>
+        <button id="prepareCloseBtn">
+          <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M18 6L6 18M6 6L18 18" stroke="#E0F2E0" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+      <div class="prepare-body">
+        <div class="control-group">
+          <label for="speedInput" class="input-label">Robot Speed (mm/s)</label>
+          <div class="input-wrapper">
+            <input type="number" id="speedInput" class="styled-input" value="10" step="10" min="1" max="100"
+              placeholder="e.g. 10">
+          </div>
+
+          <div class="fill-accordion-container">
+
+            <button id="fillAccordionToggle" class="fill-accordion-toggle">
+              <span class="fill-toggle-text">Fill Shape</span>
+              <div class="fill-toggle-icon">
+                <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M1.41 0.589996L6 5.17L10.59 0.589996L12 2L6 8L0 2L1.41 0.589996Z" fill="currentColor" />
+                </svg>
+              </div>
+            </button>
+
+            <div id="fillSettingsPanel" class="fill-settings-panel">
+              <div class="fill-settings-inner">
+
+                <p class="fill-setting-label">Raster Pattern:</p>
+                <div class="segment-control">
+                  <button id="rasterA" class="segment-btn active">Line</button>
+                  <button id="rasterB" class="segment-btn">Spiral</button>
+                </div>
+
+                <div class="density-wrapper">
+                  <label for="densityRaster" class="fill-setting-label">Density:</label>
+                  <input type="number" id="densityRaster" class="styled-input-density" value="10" step="1" min="1"
+                    max="20" placeholder="10">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        <div id="bottomButtons">
+          <button id="prepareCancelBtn" class="action-btn action-btn-cancel">
+            <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M8 0C3.589 0 0 3.589 0 8C0 12.411 3.589 16 8 16C12.411 16 16 12.411 16 8C16 3.589 12.411 0 8 0ZM3 8C3 7.168 3.224 6.396 3.584 5.705L10.295 12.416C9.58866 12.7939 8.80103 12.9943 8 13C5.243 13 3 10.757 3 8ZM12.416 10.295L5.705 3.584C6.41134 3.20614 7.19897 3.00571 8 3C10.757 3 13 5.243 13 8C13 8.832 12.776 9.604 12.416 10.295Z" />
+            </svg>
+            <span class="btn-text">CANCEL</span>
+          </button>
+
+          <button id="executeBtn" class="action-btn action-btn-execute" data-state="ready">
+            <span class="btn-icon">
+              <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M10 0C15.523 0 20 4.477 20 10C20 15.523 15.523 20 10 20C4.477 20 0 15.523 0 10C0 4.477 4.477 0 10 0ZM10 13C9.73478 13 9.48043 13.1054 9.29289 13.2929C9.10536 13.4804 9 13.7348 9 14C9 14.2652 9.10536 14.5196 9.29289 14.7071C9.48043 14.8946 9.73478 15 10 15C10.2652 15 10.5196 14.8946 10.7071 14.7071C10.8946 14.5196 11 14.2652 11 14C11 13.7348 10.8946 13.4804 10.7071 13.2929C10.5196 13.1054 10.2652 13 10 13ZM10 4C9.75507 4.00003 9.51866 4.08996 9.33563 4.25272C9.15259 4.41547 9.03566 4.63975 9.007 4.883L9 5V11C9.00028 11.2549 9.09788 11.5 9.27285 11.6854C9.44782 11.8707 9.68695 11.9822 9.94139 11.9972C10.1958 12.0121 10.4464 11.9293 10.6418 11.7657C10.8373 11.6021 10.9629 11.3701 10.993 11.117L11 11V5C11 4.73478 10.8946 4.48043 10.7071 4.29289C10.5196 4.10536 10.2652 4 10 4Z" />
+              </svg>
+            </span>
+            <span class="btn-text">EXECUTE</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="settingsPopup">
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <button id="settingsCloseBtn">
+          <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M18 6L6 18M6 6L18 18" stroke="#E0F2E0" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+      <div class="settings-body">
+        <div class="settings-sidebar">
+          <button class="sidebar-btn active" data-target="general-settings">General</button>
+          <button class="sidebar-btn" data-target="robot-settings">Robot</button>
+          <button class="sidebar-btn" data-target="camera-settings">Camera</button>
+          <button class="sidebar-btn" data-target="laser-settings">Laser</button>
+        </div>
+        <div class="settings-main">
+          <div id="general-settings" class="settings-panel active">
+            <h3>General Settings</h3>
+            <div class="setting-item">
+              <span class="setting-label">Processing Mode</span>
+              <div class="switch-container">
+                <span class="switch-label">Batch</span>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="processing-mode">
+                  <span class="slider round"></span>
+                </label>
+                <span class="switch-label">Real-Time</span>
+              </div>
+            </div>
+            <div class="setting-item">
+              <span class="setting-label">Menu Position</span>
+              <div class="segment-control" style="width: 150px;">
+                <button id="layout-top" class="segment-btn active">Top</button>
+                <button id="layout-bottom" class="segment-btn">Bottom</button>
+              </div>
+            </div>
+
+            <div class="setting-item">
+              <span class="setting-label">Sidebar Position</span>
+              <div class="segment-control" style="width: 150px;">
+                <button id="layout-left" class="segment-btn active">Left</button>
+                <button id="layout-right" class="segment-btn">Right</button>
+              </div>
+            </div>
+          </div>
+          <div id="robot-settings" class="settings-panel">
+            <h3>Robot Settings</h3>
+          </div>
+          <div id="camera-settings" class="settings-panel">
+            <h3>Camera Settings</h3>
+            <div class="setting-item">
+              <span class="setting-label">Transformed</span>
+              <div class="switch-container">
+                <span class="switch-label">Off</span>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="transformed-view-mode">
+                  <span class="slider round"></span>
+                </label>
+                <span class="switch-label">On</span>
+              </div>
+            </div>
+            <button id="save-view" class="btn-text" data-state="ready">SAVE</button>
+          </div>
+          <div id="laser-settings" class="settings-panel">
+            <h3>Laser Settings</h3>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="top-panel">
+      <div id="laser-toggle-container">
+        <div id="laser-off-bg" class="laser-bg-section"></div>
+        <div id="laser-on-bg" class="laser-bg-section"></div>
+        <div id="laser-center-box">
+          <div id="laser-slider"></div>
+          <span id="laser-text">LASER</span>
+        </div>
+        <span id="laser-off-text">OFF</span>
+        <span id="laser-on-text">ON</span>
+      </div>
+
+      <div id="status-panel-left" class="status-message">
+        <button id="clearBtn" class="action-btn batch-ui drawing-ui-only" disabled>
+          <span class="btn-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M20 4L4 20M4 4L20 20" stroke="#E0F2E0" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
+          </span>
+          <span class="btn-text">CLEAR PATH</span>
+        </button>
+
+        <button id="clearBoundaryBtn" class="action-btn fixtures-ui-only hidden" disabled>
+          <span class="btn-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M20 4L4 20M4 4L20 20" stroke="#E0F2E0" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
+          </span>
+          <span class="btn-text">CLEAR FIXTURES</span>
+        </button>
+
+        <button id="clearMarkersBtn" class="action-btn thermal-ui hidden" disabled>
+          <span class="btn-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M20 4L4 20M4 4L20 20" stroke="#E0F2E0" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
+          </span>
+          <span class="btn-text">CLEAR MARKERS</span>
+        </button>
+
+        <button id="prepareBtn" class="action-btn action-btn-prepare batch-ui drawing-ui-only" disabled>
+          <svg width="20" height="12" viewBox="0 0 20 12" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M1 12C0.716667 12 0.479333 11.904 0.288 11.712C0.0966668 11.52 0.000666667 11.2827 0 11V1C0 0.71667 0.0960001 0.479337 0.288 0.288004C0.48 0.0966702 0.717333 0.000670115 1 3.44827e-06C1.28267 -0.000663218 1.52033 0.0953369 1.713 0.288004C1.90567 0.48067 2.00133 0.718003 2 1V11C2 11.2833 1.904 11.521 1.712 11.713C1.52 11.905 1.28267 12.0007 1 12ZM16.175 7H5C4.71667 7 4.47933 6.904 4.288 6.712C4.09667 6.52 4.00067 6.28267 4 6C3.99933 5.71734 4.09533 5.48 4.288 5.288C4.48067 5.096 4.718 5 5 5H16.175L13.3 2.1C13.1167 1.91667 13.0207 1.68767 13.012 1.413C13.0033 1.13834 13.0993 0.90067 13.3 0.700003C13.4833 0.51667 13.7167 0.425004 14 0.425004C14.2833 0.425004 14.5167 0.51667 14.7 0.700003L19.3 5.3C19.4 5.4 19.471 5.50834 19.513 5.625C19.555 5.74167 19.5757 5.86667 19.575 6C19.5743 6.13334 19.5537 6.25834 19.513 6.375C19.4723 6.49167 19.4013 6.6 19.3 6.7L14.7 11.3C14.5167 11.4833 14.2877 11.575 14.013 11.575C13.7383 11.575 13.5007 11.4833 13.3 11.3C13.1 11.1 13 10.8627 13 10.588C13 10.3133 13.1 10.0757 13.3 9.875L16.175 7Z" />
+          </svg>
+          <span class="btn-text">PREPARE PATH</span>
+        </button>
+
+        <button id="applyFixturesBtn" class="action-btn action-btn-prepare fixtures-ui-only hidden" disabled>
+          <svg width="22" height="22" viewBox="0 0 26 26" fill="none" stroke="currentColor"
+            xmlns="http://www.w3.org/2000/svg">
+            <path d="M1.5 13L9.5 21L24.5 5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <span class="btn-text">APPLY FIXTURES</span>
+        </button>
+
+        <button id="resetHeatAreaBtn" class="action-btn thermal-ui hidden" disabled>
+          <span class="btn-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M20 4L4 20M4 4L20 20" stroke="#E0F2E0" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" />
+            </svg>
+          </span>
+          <span class="btn-text">RESET HEATMAP</span>
+        </button>
+
+        <div id="max-heat-container" class="thermal-ui hidden">
+          MAX HEAT: <span id="max-heat-display">0°C</span>
+        </div>
+      </div>
+
+      <div id="status-panel-right" class="status-message">
+        <button id="drawingBtn" class="mode-btn" data-state="ready">
+          <span class="btn-icon">
+            <svg width="19" height="18" viewBox="0 0 19 18" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M7.74886 17.8481C9.52886 17.1481 9.13886 15.2181 8.23886 13.9981C7.34886 12.7481 6.11886 11.8881 4.87886 11.0581C3.99393 10.5007 3.20394 9.80526 2.53886 8.99813C2.25886 8.66813 1.68886 8.05813 2.26886 7.93813C2.85886 7.81813 3.87886 8.39813 4.39886 8.61813C5.30886 8.99813 6.20886 9.43813 7.04886 9.95813L8.05886 8.25813C6.49886 7.22813 4.49886 6.31813 2.63886 6.04813C1.57886 5.88813 0.458856 6.10813 0.0988564 7.25813C-0.221144 8.24813 0.288856 9.24813 0.868856 10.0281C2.23886 11.8581 4.36886 12.7381 5.95886 14.3181C6.29886 14.6481 6.70886 15.0381 6.90886 15.4981C7.11886 15.9381 7.06886 15.9681 6.59886 15.9681C5.35886 15.9681 3.80886 14.9981 2.79886 14.3581L1.78886 16.0581C3.31886 16.9981 5.87886 18.4681 7.74886 17.8481ZM18.8389 2.24813C19.0589 2.02813 19.0589 1.66813 18.8389 1.45813L17.5389 0.158129C17.4344 0.0567193 17.2945 0 17.1489 0C17.0032 0 16.8634 0.0567193 16.7589 0.158129L15.7389 1.17813L17.8189 3.25813M8.99886 7.91813V9.99813H11.0789L17.2289 3.84813L15.1489 1.76813L8.99886 7.91813Z" />
+            </svg>
+          </span>
+          <span class="btn-text">PATH MODE</span>
+        </button>
+        <button id="thermalBtn" class="mode-btn" data-state="ready">
+          <span class="btn-icon">
+            <svg width="10" height="20" viewBox="0 0 10 20" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M8 11V3C8 2.20435 7.68393 1.44129 7.12132 0.87868C6.55871 0.316071 5.79565 0 5 0C4.20435 0 3.44129 0.316071 2.87868 0.87868C2.31607 1.44129 2 2.20435 2 3V11C1.16047 11.6296 0.540333 12.5075 0.227432 13.5092C-0.0854685 14.5108 -0.0752697 15.5856 0.256584 16.5811C0.588437 17.5767 1.22512 18.4426 2.07645 19.0562C2.92778 19.6698 3.95059 20 5 20C6.04941 20 7.07222 19.6698 7.92355 19.0562C8.77488 18.4426 9.41156 17.5767 9.74342 16.5811C10.0753 15.5856 10.0855 14.5108 9.77257 13.5092C9.45967 12.5075 8.83953 11.6296 8 11ZM5 2C5.26522 2 5.51957 2.10536 5.70711 2.29289C5.89464 2.48043 6 2.73478 6 3V6H4V3C4 2.73478 4.10536 2.48043 4.29289 2.29289C4.48043 2.10536 4.73478 2 5 2Z" />
+            </svg>
+          </span>
+          <span class="btn-text">THERMAL MODE</span>
+        </button>
+        <button id="fixturesBtn" class="mode-btn" data-state="ready">
+          <span class="btn-icon">
+            <svg width="16" height="20" viewBox="0 0 16 20" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M8 19.75C7.88333 19.75 7.775 19.7417 7.675 19.725C7.575 19.7083 7.475 19.6833 7.375 19.65C5.125 18.9 3.33333 17.5127 2 15.488C0.666667 13.4633 0 11.284 0 8.95V4.225C0 3.80833 0.121 3.43333 0.363 3.1C0.605 2.76667 0.917334 2.525 1.3 2.375L7.3 0.125C7.53333 0.0416667 7.76667 0 8 0C8.23333 0 8.46667 0.0416667 8.7 0.125L14.7 2.375C15.0833 2.525 15.396 2.76667 15.638 3.1C15.88 3.43333 16.0007 3.80833 16 4.225V8.95C16 11.2833 15.3333 13.4627 14 15.488C12.6667 17.5133 10.875 18.9007 8.625 19.65C8.525 19.6833 8.425 19.7083 8.325 19.725C8.225 19.7417 8.11667 19.75 8 19.75ZM8 17.75C9.73333 17.2 11.1667 16.1 12.3 14.45C13.4333 12.8 14 10.9667 14 8.95V4.225L8 1.975L2 4.225V8.95C2 10.9667 2.56667 12.8 3.7 14.45C4.83333 16.1 6.26667 17.2 8 17.75Z" />
+            </svg>
+          </span>
+          <span class="btn-text">FIXTURES MODE</span>
+        </button>
+      </div>
+
+      <div id="robot-toggle-container">
+        <div id="robot-off-bg" class="robot-bg-section"></div>
+        <div id="robot-on-bg" class="robot-bg-section"></div>
+        <div id="robot-center-box">
+          <div id="robot-slider"></div>
+          <span id="robot-text">ROBOT</span>
+        </div>
+        <span id="robot-off-text">OFF</span>
+        <span id="robot-on-text">ON</span>
+      </div>
+    </div>
+
+    <div id="left-panel">
+      <div id="top-icon-section"></div>
+      <div id="main-section-wrapper">
+        <div id="middle-icon-section">
+
+          <div id="drawing-tools" class="tool-group">
+            <button id="penBtn" class="icon-btn icon-btn-fill">
+              <svg width="26" height="26" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M0.0879274 2.82755C-0.389565 1.15501 1.15613 -0.389531 2.82859 0.087985L14.0977 3.30753C17.7847 4.36102 20.4281 7.33319 20.4281 11.2887C20.4281 11.8917 20.3568 12.4825 20.2263 13.0572C20.1746 13.2849 20.2411 13.4584 20.3285 13.5458L23.3509 16.5685C23.5567 16.7742 23.7199 17.0184 23.8313 17.2872C23.9427 17.556 24 17.8442 24 18.1351C24 18.4261 23.9427 18.7142 23.8313 18.9831C23.7199 19.2519 23.5567 19.4961 23.3509 19.7018L19.7021 23.3509C19.4963 23.5567 19.2521 23.7199 18.9833 23.8313C18.7145 23.9427 18.4264 24 18.1354 24C17.8445 24 17.5564 23.9427 17.2876 23.8313C17.0188 23.7199 16.7745 23.5567 16.5688 23.3509L13.5414 20.3234C13.4553 20.236 13.2805 20.1695 13.0528 20.2224C12.4746 20.3572 11.883 20.4261 11.2893 20.428C7.334 20.428 4.36075 17.7844 3.30854 14.0972L0.0879274 2.82755ZM5.97044 5.96833C5.88467 6.05405 5.81663 6.15583 5.77021 6.26785C5.72379 6.37988 5.6999 6.49996 5.6999 6.62122C5.6999 6.74248 5.72379 6.86256 5.77021 6.97459C5.81663 7.08661 5.88467 7.18839 5.97044 7.27411L9.66855 10.9736C9.84255 11.1419 10.0757 11.235 10.3177 11.233C10.5597 11.231 10.7912 11.1341 10.9624 10.963C11.1336 10.7919 11.2308 10.5605 11.233 10.3185C11.2352 10.0764 11.1423 9.84324 10.9743 9.66908L7.27493 5.9671C7.10187 5.79424 6.86728 5.69715 6.62269 5.69715C6.3781 5.69715 6.1435 5.79547 5.97044 5.96833Z" />
+              </svg>
+            </button>
+            <button id="squareBtn" class="icon-btn icon-btn-stroke batch-ui">
+              <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M21.9444 1.5H4.05556C2.64416 1.5 1.5 2.64416 1.5 4.05556V21.9444C1.5 23.3558 2.64416 24.5 4.05556 24.5H21.9444C23.3558 24.5 24.5 23.3558 24.5 21.9444V4.05556C24.5 2.64416 23.3558 1.5 21.9444 1.5Z"
+                  stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <button id="circleBtn" class="icon-btn icon-btn-fill batch-ui">
+              <svg width="25" height="25" viewBox="0 0 25 25" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="12.5" cy="12.5" r="10" stroke="currentColor" stroke-width="3" fill="none" />
+              </svg>
+            </button>
+            <button id="triangleBtn" class="icon-btn icon-btn-stroke batch-ui">
+              <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M13 1.5L1.5 24.5H24.5L13 1.5Z" stroke-width="3" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <button id="lineBtn" class="icon-btn icon-btn-stroke batch-ui">
+              <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1.5 24.5L24.5 1.5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <div class="height-container">
+              <span class="height-label">Height</span>
+              <span class="height-label height-number" id="heightDisplay">0</span>
+              <div class="vertical-slider-container">
+                <input type="range" id="heightSlider" min="0" max="40" value="0"
+                  class="styled-range vertical-range">
+              </div>
+            </div>
+          </div>
+
+          <div id="thermal-tools" class="tool-group hidden">
+            <button id="heatAreaBtn" class="icon-btn icon-btn-stroke">
+              <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4.5 4.5 H21.5 V21.5 H4.5 Z" stroke="currentColor" stroke-width="2" stroke-dasharray="4 2"
+                  fill="none" />
+              </svg>
+            </button>
+
+            <button id="markerBtn" class="icon-btn icon-btn-stroke">
+              <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M13 3 C9.5 3 7 5.6 7 8.9 C7 13.2 13 23 13 23 C13 23 19 13.2 19 8.9 C19 5.6 16.5 3 13 3Z"
+                  stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+          </div>
+
+          <div id="fixtures-tools" class="tool-group hidden">
+            <button id="roundBrushBtn" class="icon-btn icon-btn-fill">
+              <svg width="25" height="25" viewBox="0 0 25 25" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="12.5" cy="12.5" r="10" stroke="currentColor" stroke-width="3" fill="none" />
+              </svg>
+            </button>
+            <button id="squareBrushBtn" class="icon-btn icon-btn-stroke">
+              <svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M21.9444 1.5H4.05556C2.64416 1.5 1.5 2.64416 1.5 4.05556V21.9444C1.5 23.3558 2.64416 24.5 4.05556 24.5H21.9444C23.3558 24.5 24.5 23.3558 24.5 21.9444V4.05556C24.5 2.64416 23.3558 1.5 21.9444 1.5Z"
+                  stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <button id="eraserBtn" class="icon-btn icon-btn-fill">
+              <svg width="20" height="19" viewBox="0 0 20 19" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M14.015 0.585L18.965 5.525C19.745 6.315 19.745 7.575 18.965 8.365L9.775 17.555C9.02343 18.3037 8.00583 18.724 6.945 18.724C5.88417 18.724 4.86657 18.3037 4.115 17.555L0.585 14.025C-0.195 13.235 -0.195 11.975 0.585 11.185L11.185 0.585C11.975 -0.195 13.235 -0.195 14.015 0.585ZM1.995 12.605L5.535 16.135C6.315 16.925 7.575 16.925 8.365 16.135L11.895 12.605L6.945 7.655L1.995 12.605Z" />
+              </svg>
+            </button>
+
+            <div class="brush-container">
+              <span class="brush-label">Size</span>
+              <div class="vertical-slider-container">
+                <input type="range" id="brushSizeSlider" min="20" max="300" value="70"
+                  class="styled-range vertical-range">
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <div id="settings-icon-section">
+          <button id="settingsBtn" class="icon-btn">
+            <svg width="33" height="33" viewBox="0 0 33 33" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M14.4635 33C13.6836 33 13.0122 32.7525 12.4495 32.2575C11.8868 31.7625 11.5471 31.1575 11.4304 30.4425L11.0404 27.72C10.6649 27.5825 10.3113 27.4175 9.97973 27.225C9.64811 27.0325 9.32285 26.8263 9.00394 26.6062L6.31749 27.6787C5.59533 27.9812 4.87316 28.0088 4.151 27.7613C3.42883 27.5138 2.86555 27.0737 2.46113 26.4412L0.424632 23.0588C0.0202203 22.4263 -0.0953256 21.7525 0.0779938 21.0375C0.251313 20.3225 0.641281 19.7313 1.2479 19.2638L3.54438 17.6138C3.51549 17.4212 3.50105 17.2353 3.50105 17.056V15.9423C3.50105 15.7641 3.51549 15.5787 3.54438 15.3862L1.2479 13.7362C0.641281 13.2687 0.251313 12.6775 0.0779938 11.9625C-0.0953256 11.2475 0.0202203 10.5737 0.424632 9.94125L2.46113 6.55875C2.86555 5.92625 3.42883 5.48625 4.151 5.23875C4.87316 4.99125 5.59533 5.01875 6.31749 5.32125L9.00394 6.39375C9.32169 6.17375 9.65389 5.9675 10.0005 5.775C10.3472 5.5825 10.6938 5.4175 11.0404 5.28L11.4304 2.5575C11.546 1.8425 11.8857 1.2375 12.4495 0.7425C13.0134 0.2475 13.6847 0 14.4635 0H18.5365C19.3164 0 19.9883 0.2475 20.5522 0.7425C21.1161 1.2375 21.4552 1.8425 21.5696 2.5575L21.9596 5.28C22.3351 5.4175 22.6892 5.5825 23.022 5.775C23.3548 5.9675 23.6795 6.17375 23.9961 6.39375L26.6825 5.32125C27.4047 5.01875 28.1268 4.99125 28.849 5.23875C29.5712 5.48625 30.1345 5.92625 30.5389 6.55875L32.5754 9.94125C32.9798 10.5737 33.0953 11.2475 32.922 11.9625C32.7487 12.6775 32.3587 13.2687 31.7521 13.7362L29.4556 15.3862C29.4845 15.5787 29.4989 15.7647 29.4989 15.9439V17.056C29.4989 17.2353 29.4701 17.4212 29.4123 17.6138L31.7088 19.2638C32.3154 19.7313 32.7054 20.3225 32.8787 21.0375C33.052 21.7525 32.9364 22.4263 32.532 23.0588L30.4522 26.4412C30.0478 27.0737 29.4845 27.5138 28.7623 27.7613C28.0402 28.0088 27.318 27.9812 26.5958 27.6787L23.9961 26.6062C23.6783 26.8263 23.3461 27.0325 22.9995 27.225C22.6528 27.4175 22.3062 27.5825 21.9596 27.72L21.5696 30.4425C21.454 31.1575 21.1149 31.7625 20.5522 32.2575C19.9895 32.7525 19.3176 33 18.5365 33H14.4635ZM16.5867 22.275C18.2621 22.275 19.692 21.7113 20.8763 20.5837C22.0607 19.4563 22.6528 18.095 22.6528 16.5C22.6528 14.905 22.0607 13.5437 20.8763 12.4162C19.692 11.2887 18.2621 10.725 16.5867 10.725C14.8824 10.725 13.445 11.2887 12.2745 12.4162C11.104 13.5437 10.5193 14.905 10.5205 16.5C10.5216 18.095 11.1069 19.4563 12.2762 20.5837C13.4455 21.7113 14.8824 22.275 16.5867 22.275Z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div id="viewport">
+      <canvas id="canvas"></canvas>
+      <video id="video"></video>
+      <div id="robot-marker"></div>
+    </div>
+  </div>
+</body>
+
 </html>

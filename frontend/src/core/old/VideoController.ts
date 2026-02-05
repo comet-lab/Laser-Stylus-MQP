@@ -1,6 +1,8 @@
-import { DrawingTracker } from './drawing/DrawingTracker';
-import { ShapeType } from './types';
-import { WebSocketHandler, WebSocketMessage } from './api/WebSocketHandler';
+//frontend/src/core/VideoController.ts
+
+import { CanvasManager } from '../../ui/CanvasManager';
+import { ShapeType } from '../../ui/types';
+import { WebSocketHandler, WebSocketMessage } from '../../services/WebSocketHandler';
 
 // --- Global Type Definitions ---
 declare global {
@@ -140,7 +142,7 @@ class VideoStreamController {
 
     // --- Sub-Systems ---
     private wsHandler: WebSocketHandler;        // Handles JSON messaging with server
-    private drawingTracker: DrawingTracker | null = null; // Handles Fabric.js canvas logic
+    private canvasManager: CanvasManager | null = null; // Handles Fabric.js canvas logic
     private reader: any = null;                 // Handles WebRTC video stream
     private readonly TARGET_WIDTH = 1700;
 
@@ -219,17 +221,17 @@ class VideoStreamController {
                     this.ui.video.requestVideoFrameCallback(this.updateCanvasLoop.bind(this));
 
                     // Initialize the drawing layer now that video size is known
-                    this.initDrawingTracker();
+                    this.initCanvasManager();
                 }
             },
         });
     }
 
-    private initDrawingTracker() {
-        if (this.drawingTracker) this.drawingTracker.dispose();
+    private initCanvasManager() {
+        if (this.canvasManager) this.canvasManager.dispose();
 
-        // DrawingTracker manages the Fabric.js layer on top of the video
-        this.drawingTracker = new DrawingTracker(
+        // CanvasManager manages the Fabric.js layer on top of the video
+        this.canvasManager = new CanvasManager(
             this.ui.canvas,
             this.ui.video,
             `http://${window.location.hostname}:443`,
@@ -246,7 +248,7 @@ class VideoStreamController {
 
     /**
      * Main Render Loop
-     * Draws the video frame onto the canvas, then lets DrawingTracker draw overlay shapes.
+     * Draws the video frame onto the canvas, then lets CanvasManager draw overlay shapes.
      * Uses requestVideoFrameCallback for optimal synchronization with video refresh rate.
      */
     private updateCanvasLoop() {
@@ -254,8 +256,8 @@ class VideoStreamController {
 
         // Only render Fabric.js overlay if we are NOT in Real-Time mode
         // (In Real-Time mode, the loop handles rendering differently to reduce latency)
-        if (this.ui.processingModeSwitch && !this.ui.processingModeSwitch.checked && this.drawingTracker) {
-            this.drawingTracker.render();
+        if (this.ui.processingModeSwitch && !this.ui.processingModeSwitch.checked && this.canvasManager) {
+            this.canvasManager.render();
         }
 
         this.ui.video.requestVideoFrameCallback(this.updateCanvasLoop.bind(this));
@@ -323,9 +325,9 @@ class VideoStreamController {
             if (!this.ui.heatAreaBtn.disabled) this.selectThermalTool('heat');
         });
         this.ui.resetHeatAreaBtn.addEventListener('click', async () => {
-            if (!this.drawingTracker) return;
+            if (!this.canvasManager) return;
             this.ui.resetHeatAreaBtn.disabled = true;
-            try { await this.drawingTracker.resetHeatArea(); }
+            try { await this.canvasManager.resetHeatArea(); }
             catch (e) { console.error(e); this.ui.resetHeatAreaBtn.disabled = false; }
         });
 
@@ -335,8 +337,8 @@ class VideoStreamController {
         this.ui.eraserBrushBtn.addEventListener('click', () => this.handleEraserSelection());
 
         this.ui.brushSizeSlider.addEventListener('input', () => {
-            if (this.state.selectedBrushType && this.drawingTracker) {
-                this.drawingTracker.setFixturesBrush(
+            if (this.state.selectedBrushType && this.canvasManager) {
+                this.canvasManager.setFixturesBrush(
                     this.state.selectedBrushType,
                     parseInt(this.ui.brushSizeSlider.value),
                     this.state.isEraserActive
@@ -376,9 +378,9 @@ class VideoStreamController {
         this.ui.executeBtn.addEventListener('click', () => this.executePath());
         this.ui.clearBtn.addEventListener('click', () => this.clearDrawing());
         this.ui.clearMarkersBtn.addEventListener('click', async () => {
-            if (this.drawingTracker) {
-                this.drawingTracker.clearMarkers();
-                await this.drawingTracker.submitHeatMarkers(this.drawingTracker.getHeatMarkersInVideoSpace());
+            if (this.canvasManager) {
+                this.canvasManager.clearMarkers();
+                await this.canvasManager.submitHeatMarkers(this.canvasManager.getHeatMarkersInVideoSpace());
             }
         });
 
@@ -403,9 +405,9 @@ class VideoStreamController {
 
         // --- View Transforms ---
         this.ui.saveView.addEventListener('click', async () => {
-            if (this.drawingTracker) {
-                // Send transform settings to DrawingTracker
-                await this.drawingTracker.updateViewSettings(this.ui.transformedModeSwitch.checked, false);
+            if (this.canvasManager) {
+                // Send transform settings to CanvasManager
+                await this.canvasManager.updateViewSettings(this.ui.transformedModeSwitch.checked, false);
             }
         });
 
@@ -421,12 +423,12 @@ class VideoStreamController {
         window.addEventListener('resize', () => {
             this.handleResize();
 
-            if (this.drawingTracker) {
+            if (this.canvasManager) {
                 const newWidth = this.ui.viewport.offsetWidth;
                 const newHeight = this.ui.viewport.offsetHeight;
 
                 if (this.ui.canvas.width !== newWidth || this.ui.canvas.height !== newHeight) {
-                    this.drawingTracker.updateCanvasSize(newWidth, newHeight);
+                    this.canvasManager.updateCanvasSize(newWidth, newHeight);
                 }
             }
         });
@@ -458,7 +460,7 @@ class VideoStreamController {
 
         //Update Thermal/Heat Data
         if (state.averageHeat !== undefined) this.updateAverageHeat(state.averageHeat);
-        if (state.heat_markers && this.drawingTracker) this.drawingTracker.updateMarkerTemperatures(state.heat_markers);
+        if (state.heat_markers && this.canvasManager) this.canvasManager.updateMarkerTemperatures(state.heat_markers);
 
         //Update Hardware Toggles
         if (state.isLaserOn !== undefined) {
@@ -562,10 +564,10 @@ class VideoStreamController {
 
         if (isRealTime) {
             this.ui.batchUiElements.forEach(el => el.classList.add('hidden-mode'));
-            this.drawingTracker?.disableDrawing();
+            this.canvasManager?.disableDrawing();
         } else {
             this.ui.batchUiElements.forEach(el => el.classList.remove('hidden-mode'));
-            this.drawingTracker?.disableDrawing();
+            this.canvasManager?.disableDrawing();
         }
 
         // Reset tool selections
@@ -588,8 +590,8 @@ class VideoStreamController {
         // --- TEARDOWN: Cleanup Previous Mode ---
         if (this.state.currentMode === 'fixtures' && modeId !== 'fixturesBtn') {
             // If leaving Fixtures mode, clear temporary brushes
-            if (this.drawingTracker && this.drawingTracker.canApplyFixtures()) {
-                this.drawingTracker.clearFixtures();
+            if (this.canvasManager && this.canvasManager.canApplyFixtures()) {
+                this.canvasManager.clearFixtures();
                 this.state.selectedBrushType = null;
                 this.state.isEraserActive = false;
                 this.ui.roundBrushBtn.classList.remove('selected');
@@ -598,7 +600,7 @@ class VideoStreamController {
             }
         }
         if (this.state.currentMode === 'thermal' && modeId !== 'thermalBtn') {
-            this.drawingTracker?.disableMarkerMode();
+            this.canvasManager?.disableMarkerMode();
             this.ui.markerBtn.classList.remove('selected');
         }
 
@@ -618,15 +620,15 @@ class VideoStreamController {
             this.ui.fixturesUiElements.forEach(el => el.classList.remove('hidden'));
 
             // Toggle Tracker Logic
-            this.drawingTracker?.disableDrawing();
-            this.drawingTracker?.enableFixturesMode();
+            this.canvasManager?.disableDrawing();
+            this.canvasManager?.enableFixturesMode();
             this.updateFixturesButtonState();
 
             // CASE 2: Thermal Mode
         } else if (modeId === 'thermalBtn') {
             this.state.currentMode = 'thermal';
 
-            this.drawingTracker?.showMarkers();
+            this.canvasManager?.showMarkers();
             this.updateThermalButtonState();
 
             // Toggle UI Visibility
@@ -636,17 +638,17 @@ class VideoStreamController {
 
             this.ui.drawingUiElements.forEach(el => el.classList.add('hidden'));
             this.ui.fixturesUiElements.forEach(el => el.classList.add('hidden'));
-            this.drawingTracker?.disableFixturesMode();
-            this.drawingTracker?.disableDrawing();
+            this.canvasManager?.disableFixturesMode();
+            this.canvasManager?.disableDrawing();
 
             // Keep fixtures visible but not editable
-            if (this.drawingTracker?.hasFixtures()) this.drawingTracker?.showFixtures();
+            if (this.canvasManager?.hasFixtures()) this.canvasManager?.showFixtures();
             this.ui.thermalUiElements.forEach(el => el.classList.remove('hidden'));
 
             // Restore marker tool if it was selected
             if (this.state.selectedShape === 'marker') {
                 this.ui.markerBtn.classList.add('selected');
-                this.drawingTracker?.enableMarkerMode();
+                this.canvasManager?.enableMarkerMode();
             }
 
             // CASE 3: Drawing Mode (Default)
@@ -661,30 +663,30 @@ class VideoStreamController {
             this.ui.markerBtn.classList.remove('selected');
 
             // Toggle Tracker Logic
-            this.drawingTracker?.disableMarkerMode();
-            this.drawingTracker?.disableHeatAreaMode();
+            this.canvasManager?.disableMarkerMode();
+            this.canvasManager?.disableHeatAreaMode();
 
             this.ui.drawingUiElements.forEach(el => el.classList.remove('hidden'));
             this.ui.fixturesUiElements.forEach(el => el.classList.add('hidden'));
             this.ui.thermalUiElements.forEach(el => el.classList.add('hidden'));
 
-            this.drawingTracker?.disableFixturesMode();
-            if (this.drawingTracker?.hasFixtures()) this.drawingTracker?.showFixtures();
+            this.canvasManager?.disableFixturesMode();
+            if (this.canvasManager?.hasFixtures()) this.canvasManager?.showFixtures();
 
             // Restore drawing state
             if (this.state.drawnShapeType) {
                 // If a shape exists, we can't draw a new one yet
-                this.drawingTracker?.disableDrawing();
+                this.canvasManager?.disableDrawing();
                 this.ui.toggleButtons.forEach(btn => btn.classList.remove('selected'));
                 this.highlightShapeBtn(this.state.drawnShapeType);
             } else if (this.state.selectedShape && this.state.selectedShape !== 'marker') {
                 // If a tool is selected but no shape drawn, enable drawing
-                this.drawingTracker?.setShapeType(this.state.selectedShape);
-                this.drawingTracker?.enableDrawing();
+                this.canvasManager?.setShapeType(this.state.selectedShape);
+                this.canvasManager?.enableDrawing();
                 this.ui.toggleButtons.forEach(btn => btn.classList.remove('selected'));
                 this.highlightShapeBtn(this.state.selectedShape);
             } else {
-                this.drawingTracker?.disableDrawing();
+                this.canvasManager?.disableDrawing();
                 this.ui.toggleButtons.forEach(btn => btn.classList.remove('selected'));
             }
             this.updateDrawButtonState();
@@ -707,17 +709,17 @@ class VideoStreamController {
     private selectThermalTool(tool: 'marker' | 'heat') {
         this.ui.markerBtn.classList.remove('selected');
         this.ui.heatAreaBtn.classList.remove('selected');
-        this.drawingTracker?.disableDrawing();
-        this.drawingTracker?.disableMarkerMode();
-        this.drawingTracker?.disableHeatAreaMode();
+        this.canvasManager?.disableDrawing();
+        this.canvasManager?.disableMarkerMode();
+        this.canvasManager?.disableHeatAreaMode();
 
         if (tool === 'marker') {
             this.ui.markerBtn.classList.add('selected');
-            this.drawingTracker?.enableMarkerMode();
+            this.canvasManager?.enableMarkerMode();
             this.state.selectedShape = 'marker';
         } else {
             this.ui.heatAreaBtn.classList.add('selected');
-            this.drawingTracker?.enableHeatAreaMode();
+            this.canvasManager?.enableHeatAreaMode();
             this.state.selectedShape = null;
         }
     }
@@ -732,7 +734,7 @@ class VideoStreamController {
             this.ui.squareBrushBtn.classList.remove('selected');
             this.state.selectedBrushType = null;
             this.state.isEraserActive = false;
-            this.drawingTracker?.disableFixturesBrush();
+            this.canvasManager?.disableFixturesBrush();
         } else {
             // Activate new brush
             this.ui.roundBrushBtn.classList.remove('selected');
@@ -744,7 +746,7 @@ class VideoStreamController {
 
             this.state.selectedBrushType = brushType;
             this.state.isEraserActive = false;
-            this.drawingTracker?.setFixturesBrush(brushType, parseInt(this.ui.brushSizeSlider.value), false);
+            this.canvasManager?.setFixturesBrush(brushType, parseInt(this.ui.brushSizeSlider.value), false);
         }
         this.updateFixturesButtonState();
     }
@@ -757,7 +759,7 @@ class VideoStreamController {
             this.ui.eraserBrushBtn.classList.remove('selected');
             this.state.selectedBrushType = null;
             this.state.isEraserActive = false;
-            this.drawingTracker?.disableFixturesBrush();
+            this.canvasManager?.disableFixturesBrush();
         } else {
             // Activate Eraser
             this.ui.roundBrushBtn.classList.remove('selected');
@@ -766,22 +768,22 @@ class VideoStreamController {
 
             this.state.selectedBrushType = 'round'; // Eraser is effectively a round brush
             this.state.isEraserActive = true;
-            this.drawingTracker?.setFixturesBrush('round', parseInt(this.ui.brushSizeSlider.value), true);
+            this.canvasManager?.setFixturesBrush('round', parseInt(this.ui.brushSizeSlider.value), true);
         }
         this.updateFixturesButtonState();
     }
 
     private async clearFixtures() {
-        if (!this.drawingTracker) return;
+        if (!this.canvasManager) return;
         this.ui.clearBoundaryBtn.disabled = true;
 
         try {
-            this.drawingTracker.clearFixtures();
-            await this.drawingTracker.clearFixturesOnServer();
+            this.canvasManager.clearFixtures();
+            await this.canvasManager.clearFixturesOnServer();
         } catch (e) { console.error(e); }
 
         // Reset brush state after clearing
-        this.drawingTracker.disableFixturesBrush();
+        this.canvasManager.disableFixturesBrush();
         this.state.selectedBrushType = null;
         this.state.isEraserActive = false;
 
@@ -792,16 +794,16 @@ class VideoStreamController {
     }
 
     private async applyFixtures() {
-        if (!this.drawingTracker) return;
+        if (!this.canvasManager) return;
         this.ui.applyFixturesBtn.disabled = true;
         this.ui.clearBoundaryBtn.disabled = true;
 
         try {
             // Serialize fixtures and send to backend
-            await this.drawingTracker.executeFixtures();
+            await this.canvasManager.executeFixtures();
 
             // Turn off editing brushes
-            this.drawingTracker.disableFixturesBrush();
+            this.canvasManager.disableFixturesBrush();
             this.state.selectedBrushType = null;
             this.state.isEraserActive = false;
 
@@ -873,8 +875,8 @@ class VideoStreamController {
             // Deselect logic
             button.classList.remove('selected');
             this.state.selectedShape = null;
-            this.drawingTracker?.disableDrawing();
-            this.drawingTracker?.disableMarkerMode();
+            this.canvasManager?.disableDrawing();
+            this.canvasManager?.disableMarkerMode();
         } else {
             // Select logic
             this.ui.toggleButtons.forEach(btn => btn.classList.remove('selected'));
@@ -883,15 +885,15 @@ class VideoStreamController {
 
             if (this.ui.processingModeSwitch.checked) {
                 // Real-time mode: clear old drawings immediately
-                this.drawingTracker?.clearDrawing();
+                this.canvasManager?.clearDrawing();
                 this.state.drawnShapeType = null;
             } else {
                 // Batch mode
-                if (this.drawingTracker) {
-                    if (shape === 'marker') this.drawingTracker.enableMarkerMode();
+                if (this.canvasManager) {
+                    if (shape === 'marker') this.canvasManager.enableMarkerMode();
                     else {
-                        this.drawingTracker.setShapeType(shape);
-                        this.drawingTracker.enableDrawing();
+                        this.canvasManager.setShapeType(shape);
+                        this.canvasManager.enableDrawing();
                     }
                 }
             }
@@ -900,7 +902,7 @@ class VideoStreamController {
     }
 
     private async executePath() {
-        if (!this.drawingTracker) return;
+        if (!this.canvasManager) return;
 
         const speed = parseFloat(this.ui.speedInput.value);
         let density = 0;
@@ -913,18 +915,18 @@ class VideoStreamController {
 
         try {
             // Send path data to backend
-            await this.drawingTracker.executePath(speed, String(this.state.selectedRasterPattern), density, this.state.fillEnabled);
+            await this.canvasManager.executePath(speed, String(this.state.selectedRasterPattern), density, this.state.fillEnabled);
 
             // Clean up UI after successful execution
-            this.drawingTracker.clearDrawing();
+            this.canvasManager.clearDrawing();
             this.state.drawnShapeType = null;
             this.ui.toggleButtons.forEach(btn => btn.disabled = false);
             this.updateDrawButtonState();
 
             // Re-enable drawing tool if one was selected
             if (this.state.selectedShape && this.state.selectedShape !== 'marker') {
-                this.drawingTracker.setShapeType(this.state.selectedShape);
-                this.drawingTracker.enableDrawing();
+                this.canvasManager.setShapeType(this.state.selectedShape);
+                this.canvasManager.enableDrawing();
             }
             this.ui.preparePopup.classList.remove('active');
         } catch (e) {
@@ -935,19 +937,19 @@ class VideoStreamController {
     }
 
     private clearDrawing() {
-        this.drawingTracker?.clearDrawing();
+        this.canvasManager?.clearDrawing();
         this.state.drawnShapeType = null;
         this.updateDrawButtonState();
 
         // Reset state to allow drawing again immediately
-        if (this.drawingTracker && this.state.selectedShape && this.state.selectedShape !== 'marker') {
-            this.drawingTracker.setShapeType(this.state.selectedShape);
-            this.drawingTracker.enableDrawing();
+        if (this.canvasManager && this.state.selectedShape && this.state.selectedShape !== 'marker') {
+            this.canvasManager.setShapeType(this.state.selectedShape);
+            this.canvasManager.enableDrawing();
         }
     }
 
     private onShapeComplete() {
-        // Called by DrawingTracker when user releases mouse after drawing a shape
+        // Called by CanvasManager when user releases mouse after drawing a shape
         if (this.state.selectedShape && this.state.selectedShape !== 'marker') {
             this.state.drawnShapeType = this.state.selectedShape;
             this.updateDrawButtonState();
@@ -960,8 +962,8 @@ class VideoStreamController {
 
     private openSettings() {
         // If a shape exists, clear it before opening settings to avoid state conflicts
-        if (this.drawingTracker && this.drawingTracker.hasShape()) {
-            this.drawingTracker.clearDrawing();
+        if (this.canvasManager && this.canvasManager.hasShape()) {
+            this.canvasManager.clearDrawing();
             this.state.selectedShape = null;
             this.state.drawnShapeType = null;
             this.ui.toggleButtons.forEach(btn => btn.classList.remove('selected'));
@@ -1040,8 +1042,8 @@ class VideoStreamController {
     }
 
     private updateFixturesButtonState() {
-        const hasFixtures = this.drawingTracker?.hasFixtures() ?? false;
-        const canApply = this.drawingTracker?.canApplyFixtures() ?? false;
+        const hasFixtures = this.canvasManager?.hasFixtures() ?? false;
+        const canApply = this.canvasManager?.canApplyFixtures() ?? false;
 
         this.ui.clearBoundaryBtn.disabled = !hasFixtures;
         this.ui.applyFixturesBtn.disabled = !canApply;
@@ -1052,8 +1054,8 @@ class VideoStreamController {
     }
 
     private updateThermalButtonState() {
-        if (!this.drawingTracker) return;
-        this.ui.clearMarkersBtn.disabled = !this.drawingTracker.hasMarkers();
+        if (!this.canvasManager) return;
+        this.ui.clearMarkersBtn.disabled = !this.canvasManager.hasMarkers();
     }
 
 

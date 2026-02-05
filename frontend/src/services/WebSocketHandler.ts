@@ -1,3 +1,5 @@
+//frontend/src/services/WebSocketHandler.ts
+
 // Define the state interface matching your backend example_data
 export interface WebSocketMessage {
     x: number;
@@ -8,8 +10,9 @@ export interface WebSocketMessage {
     rz: number;
     laserX: number;
     laserY: number;
-    averageHeat: number; 
+    maxHeat: number; 
     beamWaist: number;
+    height: number;
     speed: number;
     isLaserOn: boolean;
     isRobotOn: boolean;
