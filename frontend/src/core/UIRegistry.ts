@@ -76,6 +76,8 @@ export interface UIRegistry {
     thermalTools: HTMLElement;
     roundBrushBtn: HTMLButtonElement;
     squareBrushBtn: HTMLButtonElement;
+    heightSizeSlider: HTMLInputElement;
+    brushHeightDisplay: HTMLElement;
     brushSizeSlider: HTMLInputElement;
     clearBoundaryBtn: HTMLButtonElement;
     applyFixturesBtn: HTMLButtonElement;
@@ -163,15 +165,17 @@ export function createUIRegistry(): UIRegistry {
         rasterDensityInput:  document.getElementById('densityRaster')      as HTMLInputElement,
 
         // Virtual Fixtures
-        fixturesTools:    document.getElementById('fixtures-tools')   as HTMLElement,
-        drawingTools:     document.getElementById('drawing-tools')    as HTMLElement,
-        thermalTools:     document.getElementById('thermal-tools')    as HTMLElement,
-        roundBrushBtn:    document.getElementById('roundBrushBtn')    as HTMLButtonElement,
-        squareBrushBtn:   document.getElementById('squareBrushBtn')   as HTMLButtonElement,
-        brushSizeSlider:  document.getElementById('brushSizeSlider')  as HTMLInputElement,
-        clearBoundaryBtn: document.getElementById('clearBoundaryBtn') as HTMLButtonElement,
-        applyFixturesBtn: document.getElementById('applyFixturesBtn') as HTMLButtonElement,
-        eraserBrushBtn:   document.getElementById('eraserBtn')        as HTMLButtonElement,
+        fixturesTools:      document.getElementById('fixtures-tools')    as HTMLElement,
+        drawingTools:       document.getElementById('drawing-tools')     as HTMLElement,
+        thermalTools:       document.getElementById('thermal-tools')     as HTMLElement,
+        roundBrushBtn:      document.getElementById('roundBrushBtn')     as HTMLButtonElement,
+        squareBrushBtn:     document.getElementById('squareBrushBtn')    as HTMLButtonElement,
+        heightSizeSlider:   document.getElementById('heightSizeSlider')  as HTMLInputElement,
+        brushHeightDisplay: document.getElementById('brushHeightDisplay') as HTMLElement,
+        brushSizeSlider:    document.getElementById('brushSizeSlider')   as HTMLInputElement,
+        clearBoundaryBtn:   document.getElementById('clearBoundaryBtn')  as HTMLButtonElement,
+        applyFixturesBtn:   document.getElementById('applyFixturesBtn')  as HTMLButtonElement,
+        eraserBrushBtn:     document.getElementById('eraserBtn')         as HTMLButtonElement,
 
         fixturesUiElements: document.querySelectorAll('.fixtures-ui-only'),
         drawingUiElements:  document.querySelectorAll('.drawing-ui-only'),

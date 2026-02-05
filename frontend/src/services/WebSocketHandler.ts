@@ -12,6 +12,7 @@ export interface WebSocketMessage {
     laserY: number;
     averageHeat: number; 
     beamWaist: number;
+    height: number;
     speed: number;
     isLaserOn: boolean;
     isRobotOn: boolean;

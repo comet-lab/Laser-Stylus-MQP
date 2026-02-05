@@ -293,6 +293,12 @@ class AppController {
         this.ui.squareBrushBtn.addEventListener('click', () => this.toolHandler.handleBrushSelection('square'));
         this.ui.eraserBrushBtn.addEventListener('click', () => this.toolHandler.handleEraserSelection());
         this.ui.brushSizeSlider.addEventListener('input', () => this.toolHandler.handleBrushSizeChange());
+        this.ui.heightSizeSlider.addEventListener('input', () => {
+            const heightValue = parseInt(this.ui.heightSizeSlider.value);
+            this.ui.brushHeightDisplay.textContent = String(heightValue);
+            console.log('Sending height:', heightValue);
+            this.wsHandler.updateState({ height: heightValue });
+        });
         this.ui.clearBoundaryBtn.addEventListener('click', () => this.toolHandler.clearFixtures());
         this.ui.applyFixturesBtn.addEventListener('click', () => this.toolHandler.applyFixtures());
 
