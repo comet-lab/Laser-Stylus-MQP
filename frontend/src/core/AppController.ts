@@ -116,6 +116,9 @@ class AppController {
         // TODO: REMOVE BEFORE SHIPPING
         (window as any).controller = this;
 
+        //Handle resize before initialisation to avoid drawing glitches
+        this.settingsManager.handleResize();
+
         this.init();
     }
 
@@ -128,7 +131,6 @@ class AppController {
         this.setupWebSocket();
         this.bindEvents();
         this.setupInitialState();
-        this.settingsManager.handleResize();
     }
 
     private setupInitialState(): void {

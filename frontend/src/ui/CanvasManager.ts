@@ -126,12 +126,10 @@ export class CanvasManager {
         });
         this.fCanvas.on('path:created', (e: any) => {
             if (e.path) {
-                const center = e.path.getCenterPoint();
                 e.path.set({
                     ...this.SHAPE_DEFAULTS,
                     strokeUniform: false
                 });
-                e.path.setPositionByOrigin(center, 'center', 'center');
                 e.path.setCoords();
             }
             this.hasPlacedShape = true;
