@@ -293,12 +293,6 @@ class AppController {
         this.ui.squareBrushBtn.addEventListener('click', () => this.toolHandler.handleBrushSelection('square'));
         this.ui.eraserBrushBtn.addEventListener('click', () => this.toolHandler.handleEraserSelection());
         this.ui.brushSizeSlider.addEventListener('input', () => this.toolHandler.handleBrushSizeChange());
-        this.ui.heightSizeSlider.addEventListener('input', () => {
-            const heightValue = parseInt(this.ui.heightSizeSlider.value);
-            this.ui.brushHeightDisplay.textContent = String(heightValue);
-            console.log('Sending height:', heightValue);
-            this.wsHandler.updateState({ height: heightValue });
-        });
         this.ui.clearBoundaryBtn.addEventListener('click', () => this.toolHandler.clearFixtures());
         this.ui.applyFixturesBtn.addEventListener('click', () => this.toolHandler.applyFixtures());
 
@@ -312,6 +306,14 @@ class AppController {
             this.ui.robotBtn.style.pointerEvents = 'none';
             if (this.state.robotConfirmationTimeout) clearTimeout(this.state.robotConfirmationTimeout);
             this.hardware.changeRobotState(!this.ui.robotBtn.classList.contains('active'));
+        });
+
+        // Height Slider 
+        this.ui.heightSlider.addEventListener('input', () => {
+            const heightValue = parseInt(this.ui.heightSlider.value);
+            this.ui.heightDisplay.textContent = String(heightValue);
+            console.log('Sending height:', heightValue);
+            this.wsHandler.updateState({ height: heightValue });
         });
 
         // --- Shape drawing tools ---
@@ -398,8 +400,8 @@ class AppController {
         }
 
         // --- Thermal / heat data ---
-        if (state.averageHeat !== undefined) {
-            this.updateAverageHeat(state.averageHeat);
+        if (state.maxHeat !== undefined) {
+            this.updateMaxHeat(state.maxHeat);
         }
         if (state.heat_markers && this.canvasManager) {
             this.canvasManager.updateMarkerTemperatures(state.heat_markers);
@@ -415,9 +417,9 @@ class AppController {
     }
 
     /** Formats the heat value and writes it into the thermal display element. */
-    private updateAverageHeat(heat: number | null | undefined): void {
-        if (!this.ui.averageHeatDisplay) return;
-        this.ui.averageHeatDisplay.textContent =
+    private updateMaxHeat(heat: number | null | undefined): void {
+        if (!this.ui.maxHeatDisplay) return;
+        this.ui.maxHeatDisplay.textContent =
             (heat === null || heat === undefined || isNaN(heat))
                 ? 'N/A'
                 : `${heat.toFixed(1)}°C`;

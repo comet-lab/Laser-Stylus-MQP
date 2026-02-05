@@ -187,12 +187,34 @@ pre {
   letter-spacing: 1px;
 }
 
+.height-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 30px;
+  width: 100%;
+}
+
+.height-label {
+  color: #e0f2e0;
+  font-size: 0.8rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.height-number {
+  font-size: 1.2rem;
+}
+
 .vertical-slider-container {
-  height: 180px;
+  height: 210px;
   width: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
+  padding-top: 20px;
 }
 
 .styled-range {
@@ -217,7 +239,8 @@ pre {
 }
 
 .vertical-range {
-  width: 160px;
+  width: 210px;
+  min-width: 210px;
   height: 6px;
   transform: rotate(-90deg);
   transform-origin: center;
@@ -304,7 +327,7 @@ pre {
   transform: translate(-50%, -50%);
 }
 
-#average-heat-container {
+#max-heat-container {
   font-weight: bold;
   color: #e0f2e0;
   margin-left: auto;

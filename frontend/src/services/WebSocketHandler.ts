@@ -10,7 +10,7 @@ export interface WebSocketMessage {
     rz: number;
     laserX: number;
     laserY: number;
-    averageHeat: number; 
+    maxHeat: number; 
     beamWaist: number;
     height: number;
     speed: number;

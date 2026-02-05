@@ -230,8 +230,8 @@
           <span class="btn-text">RESET HEATMAP</span>
         </button>
 
-        <div id="average-heat-container" class="thermal-ui hidden">
-          MAX HEAT: <span id="average-heat-display">0°C</span>
+        <div id="max-heat-container" class="thermal-ui hidden">
+          MAX HEAT: <span id="max-heat-display">0°C</span>
         </div>
       </div>
 
@@ -311,11 +311,11 @@
                 <path d="M1.5 24.5L24.5 1.5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
             </button>
-            <div class="brush-container">
-              <span class="brush-label">Height: </span>
-              <span class="brush-label" id="brushHeightDisplay">0</span>
+            <div class="height-container">
+              <span class="height-label">Height</span>
+              <span class="height-label height-number" id="heightDisplay">0</span>
               <div class="vertical-slider-container">
-                <input type="range" id="heightSizeSlider" min="0" max="40" value="0"
+                <input type="range" id="heightSlider" min="0" max="40" value="0"
                   class="styled-range vertical-range">
               </div>
             </div>

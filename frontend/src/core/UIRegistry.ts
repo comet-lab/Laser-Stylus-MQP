@@ -76,8 +76,6 @@ export interface UIRegistry {
     thermalTools: HTMLElement;
     roundBrushBtn: HTMLButtonElement;
     squareBrushBtn: HTMLButtonElement;
-    heightSizeSlider: HTMLInputElement;
-    brushHeightDisplay: HTMLElement;
     brushSizeSlider: HTMLInputElement;
     clearBoundaryBtn: HTMLButtonElement;
     applyFixturesBtn: HTMLButtonElement;
@@ -89,12 +87,16 @@ export interface UIRegistry {
     thermalUiElements: NodeListOf<HTMLElement>;
 
     // --- Thermal Data ---
-    averageHeatDisplay: HTMLElement;
+    maxHeatDisplay: HTMLElement;
     heatAreaBtn: HTMLButtonElement;
     resetHeatAreaBtn: HTMLButtonElement;
 
     // --- Main Mode Switchers ---
     modeButtons: NodeListOf<HTMLElement>;
+
+    // Universal UI Elements
+    heightSlider: HTMLInputElement;
+    heightDisplay: HTMLElement;
 }
 
 /**
@@ -170,8 +172,6 @@ export function createUIRegistry(): UIRegistry {
         thermalTools:       document.getElementById('thermal-tools')     as HTMLElement,
         roundBrushBtn:      document.getElementById('roundBrushBtn')     as HTMLButtonElement,
         squareBrushBtn:     document.getElementById('squareBrushBtn')    as HTMLButtonElement,
-        heightSizeSlider:   document.getElementById('heightSizeSlider')  as HTMLInputElement,
-        brushHeightDisplay: document.getElementById('brushHeightDisplay') as HTMLElement,
         brushSizeSlider:    document.getElementById('brushSizeSlider')   as HTMLInputElement,
         clearBoundaryBtn:   document.getElementById('clearBoundaryBtn')  as HTMLButtonElement,
         applyFixturesBtn:   document.getElementById('applyFixturesBtn')  as HTMLButtonElement,
@@ -182,11 +182,15 @@ export function createUIRegistry(): UIRegistry {
         thermalUiElements:  document.querySelectorAll('.thermal-ui'),
 
         // Thermal Data
-        averageHeatDisplay: document.getElementById('average-heat-display') as HTMLElement,
+        maxHeatDisplay: document.getElementById('max-heat-display') as HTMLElement,
         heatAreaBtn:        document.getElementById('heatAreaBtn')         as HTMLButtonElement,
         resetHeatAreaBtn:   document.getElementById('resetHeatAreaBtn')    as HTMLButtonElement,
 
         // Main Mode Switchers
         modeButtons: document.querySelectorAll('.mode-btn'),
+
+        // Universal UI Elements
+        heightSlider:       document.getElementById('heightSlider')      as HTMLInputElement,
+        heightDisplay:      document.getElementById('heightDisplay')     as HTMLElement,
     };
 }
