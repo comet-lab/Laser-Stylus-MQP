@@ -61,19 +61,21 @@ class Camera_Registration(System_Calibration):
         # pathToCWD = os.getcwd()        
         
         # Create checkerboard
-        self.robot_controller.load_edit_pose()
+        # self.robot_controller.load_edit_pose()
         
-        self.create_checkerboard(gridShape = np.array([9, 8]), \
-                                 saveLocation=self.calibration_folder, debug=debug)
+        # self.create_checkerboard(gridShape = np.array([9, 8]), \
+        #                          saveLocation=self.calibration_folder, debug=debug)
+        
+        self.read_calibration()
         
         self.laser_controller.set_output(False)
         
         
-        self.reprojection_test('color', self.cam_M['color'], gridShape = np.array([2, 2]), laserDuration = .15, \
-                        debug=debug, height=0)
+        # self.reprojection_test('color', self.cam_M['color'], gridShape = np.array([2, 2]), laserDuration = .15, \
+        #                 debug=debug, height=0)
         
-        self.reprojection_test('thermal', self.cam_M['thermal'], gridShape = np.array([2, 2]), laserDuration = .15, \
-                        debug=debug, height=0)
+        # self.reprojection_test('thermal', self.cam_M['thermal'], gridShape = np.array([2, 2]), laserDuration = .15, \
+        #                 debug=debug, height=0)
         
         self.laser_alignment()
         # self.therm_cam.deinitialize_cam()
@@ -263,14 +265,12 @@ class Camera_Registration(System_Calibration):
             print("Firing...")
             self.laser_controller.set_output(True)
             time.sleep(laserDuration)
-            
-            
+            self.laser_controller.set_output(False)
             
             
             ### Get images ##
             therm_img = self.therm_cam.get_latest()['thermal']
             color_img = self.rgbd_cam.get_latest()['color']
-            self.laser_controller.set_output(False)
             
             
             ## Thermal image pixel
@@ -462,18 +462,21 @@ class Camera_Registration(System_Calibration):
         heat_img[ly_v, lx_v] = therm_img[ty[valid], tx[valid]].astype(np.float32)
 
 
-        # Normalize heat for colormap (robust to NaNs)
-        finite = np.isfinite(heat_img)
-        if finite is not None and np.any(finite):
-            vmin = np.nanmin(heat_img)
-            vmax = np.nanmax(heat_img)
-            if vmax - vmin < 1e-6:
-                norm = np.zeros_like(heat_img, dtype=np.uint8)
-            else:
-                norm = np.zeros_like(heat_img, dtype=np.uint8)
-                norm[finite] = (255.0 * (heat_img[finite] - vmin) / (vmax - vmin)).astype(np.uint8)
-        else:
-            norm = np.zeros_like(heat_img, dtype=np.uint8)
+        # --- Fixed temperature range ---
+        T_MIN = 20.0
+        T_MAX = 150.0   # anything above this saturates
+
+        # Clip temperatures
+        heat_clipped = np.clip(heat_img, T_MIN, T_MAX)
+
+        # Normalize to [0,255] using FIXED range
+        norm = np.zeros_like(heat_clipped, dtype=np.uint8)
+        finite = np.isfinite(heat_clipped)
+
+        if np.any(finite):
+            norm[finite] = (
+                255.0 * (heat_clipped[finite] - T_MIN) / (T_MAX - T_MIN)
+            ).astype(np.uint8)
 
         # Colorize
         heat_color = cv2.applyColorMap(norm, colormap)
@@ -486,8 +489,6 @@ class Camera_Registration(System_Calibration):
         roi_bgr = disp[y0:y1 + 1, x0:x1 + 1]
         disp[y0:y1 + 1, x0:x1 + 1] = cv2.addWeighted(heat_color, alpha, roi_bgr, 1.0 - alpha, 0)
         return disp, sel, vmin, vmax
-    
-    
     
     
     def tracking_display(self, disp, cam_type = 'color', warped = True):
@@ -909,6 +910,7 @@ if __name__ == '__main__':
     
     laser_controller = Laser_Arduino()  # controls whether laser is on or off
     laser_on = False
+    laser_controller.vf_valid_flag = True
     laser_controller.set_output(laser_on)
     
     ##################################################################################
@@ -949,12 +951,12 @@ if __name__ == '__main__':
    
     
     camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_controller)
-    # camera_reg.run()
+    camera_reg.run()
     rgbd_cam.set_default_setting()
     # robot_controller.load_edit_pose()
     # camera_reg.view_rgbd_therm_registration()
     # camera_reg.transformed_view(cam_type="thermal")
-    camera_reg.live_control_view('color', warped=True, tracking=True)
+    # camera_reg.live_control_view('color', warped=True, tracking=True)
     # camera_reg.view_rgbd_therm_heat_overlay()
     # camera_reg.draw_traj()
     therm_cam.deinitialize_cam()

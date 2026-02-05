@@ -66,7 +66,7 @@ class Handler:
         distance_field = cv2.GaussianBlur(distance_field, (0,0), 10)
         dx, dy = cv2.Sobel(distance_field, cv2.CV_32F, 1, 0, ksize=3), cv2.Sobel(distance_field, cv2.CV_32F, 0, 1, ksize=3)
         
-        return inverted_virtual_fixture, dx, dy, distance_field
+        return virtual_fixture.astype(bool), dx, dy, distance_field
 
     def _input_downtime(self):  
         return time.time() - self.last_update_time
@@ -125,7 +125,8 @@ class Handler:
             laser_on = self.desired_state.isLaserOn and self.vf_valid_flag
             
             self.laser_obj.vf_valid_flag = self.vf_valid_flag # should be handle on its own, double precaution
-            self.laser_obj.set_output(laser_on)
+            if not self.robot_controller.is_trajectory_running():
+                self.laser_obj.set_output(laser_on)
             
     def _do_current_position(self):
         now = time.time()
@@ -228,10 +229,12 @@ class Handler:
             
         # self.laser_obj.set_output(False)
 
-    def _do_live_control(self, height_change):
+    def _do_live_control(self, height_diff):
         # If no new message in 120 ms, stop
         # print(height_change)
-        if(self._input_downtime() > .12 and not height_change):
+        # print(f"[INPUT DOWN TIME] {self._input_downtime()}")
+        # print(f"[Height Diff] {np.abs(height_diff)}")
+        if(self._input_downtime() > .12 and np.abs(height_diff) < 0.001): # 1mm
             # print("trigger")
             self._do_hold_pose()
         else:
@@ -252,7 +255,7 @@ class Handler:
                 
             target_pose = np.eye(4)
             target_pose[:3, -1] = target_world_point
-            target_vel = self.robot_controller.live_control(target_pose, 0.05, KP = 3.0)
+            target_vel = self.robot_controller.live_control(target_pose, 0.05, KP = 5.0, KD=0.5)
             # TODO Multiply velocity controller in unit component direction * max(min_speed, min(1, (distance / max_distance)))
             
             
@@ -281,8 +284,8 @@ class Handler:
             # "Path event?", self.desired_state.pathEvent,
             # "traj_running?", self.robot_controller.is_trajectory_running())
             height_diff = self.working_height - self.robot_controller.current_robot_to_world_position()[-1]
-            height_change = np.abs(height_diff) > 0.0005 # 0.5 mm
-            # print(f"[Robot Height] Height Difference: {height_diff:.3f}")
+            height_change = np.abs(height_diff) > 0.0005 # 1 mm
+            # print(f"[Robot Height] Height Change: {height_change}")
             
             if(self.desired_state.fixtures_mask is not None):
                 self._read_fixtures()
@@ -295,6 +298,7 @@ class Handler:
                and not self.robot_controller.is_trajectory_running()):
                 self.desired_state.x = None
                 self.desired_state.y = None
+                self.laser_obj.set_output(False)
                 print("Raster Trigger")
                 raster = self._read_raster()
                 if len(raster) < 1:
@@ -309,6 +313,7 @@ class Handler:
             elif(self.desired_state.path is not None and len(self.desired_state.path) > 1
                  and not self.robot_controller.is_trajectory_running()):
                 print("Path Trigger")
+                self.laser_obj.set_output(False)
                 path = self._read_path()
                 traj = self._do_create_path(path)
                 self._do_path(traj)
@@ -317,16 +322,15 @@ class Handler:
                 self.desired_state.y = None
                 self.desired_state.path = None
                 
-            elif(((self.desired_state.x is not None and self.desired_state.y is not None) 
-                 or height_change) # 5 mm
-                 and not self.robot_controller.is_trajectory_running()):
+            elif(((self.desired_state.x is not None and self.desired_state.y is not None) or height_change)
+                   and not self.robot_controller.is_trajectory_running()):
                 
                 # :
                     # TODO check outside boundary
                     # Disable laser
                     # Pull laser back into closest valid position
                     # print(f"Live controller trigger {self.desired_state.x}, {self.desired_state.y}")
-                self._do_live_control(height_change)
+                self._do_live_control(height_diff)
                 self.desired_state.path = None
                     
                     

@@ -329,7 +329,7 @@ class Robot_Controller():
         current_pose, _ = self.get_current_state()
         return current_pose[:3, -1] - self.home_pose[:3, -1]
             
-    def live_control(self, target_pose_home, max_vel, KP = 5.0, KD = 0.01):
+    def live_control(self, target_pose_home, max_vel, KP = 5.0, KD = 0.05):
         current_pose, current_velocity = self.get_current_state()
         current_pose = current_pose[:3, -1] - self.home_pose[:3, -1]
         position_error = target_pose_home[:3, -1] - current_pose

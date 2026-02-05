@@ -39,18 +39,7 @@ class System_Calibration():
         self.rgb_cali_folder = "/calibration_info/rgb_cali/"
         self.therm_cali_folder = "/calibration_info/thermal_cali/"
         
-        print("\n--------------------System Calibration-----------------")
-        print("[System Calibration] RGBD Camera to robot calibration info:")
-        self.cam_M = {}
-        self.cam_M['color'] = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder)
-        print("[System Calibration] Thermal Camera to robot calibration info:")
-        self.cam_M['thermal'] = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder)
-        # self.world_therm_M = np.linalg.inv(self.cam_M['thermal']).astype(np.float32)
-        
-        img_points = CameraCalibration.load_pts(self.directory +  self.rgb_cali_folder + "laser_spots.csv")
-        obj_points = CameraCalibration.load_pts(self.directory + self.therm_cali_folder  + "laser_spots.csv")
-        print("[System Calibration]  RGBD camera to thermal camera calibration info:")
-        self.rgbd_therm_M = self.rgbd_therm_cali.load_homography(M_pix_per_m = 1, img_points=img_points, obj_points=obj_points)
+        self.read_calibration()
         
         
         self.cam_transforms = {}
@@ -102,6 +91,20 @@ class System_Calibration():
             return self.cam_transforms[cam_type].world_m_to_img_px(world_points)
 
     # --- --- #
+    
+    def read_calibration(self):
+        print("\n--------------------System Calibration-----------------")
+        print("[System Calibration] RGBD Camera to robot calibration info:")
+        self.cam_M = {}
+        self.cam_M['color'] = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder)
+        print("[System Calibration] Thermal Camera to robot calibration info:")
+        self.cam_M['thermal'] = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder)
+        # self.world_therm_M = np.linalg.inv(self.cam_M['thermal']).astype(np.float32)
+        
+        img_points = CameraCalibration.load_pts(self.directory +  self.rgb_cali_folder + "laser_spots.csv")
+        obj_points = CameraCalibration.load_pts(self.directory + self.therm_cali_folder  + "laser_spots.csv")
+        print("[System Calibration]  RGBD camera to thermal camera calibration info:")
+        self.rgbd_therm_M = self.rgbd_therm_cali.load_homography(M_pix_per_m = 1, img_points=img_points, obj_points=obj_points)
     
     def reprojection_test(self, cam_type, M, gridShape = np.array([2, 6]),
                          laserDuration = .15, debug=False, height = 0.001):

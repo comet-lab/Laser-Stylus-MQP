@@ -51,6 +51,15 @@ class ThermalCam(Camera):
                 self.thread_ready.wait()
                 images = self.start_recording(1)  # returns a list of images
                 # Take that image and extract temperature info
+                # if len(images) == 0:
+                #     continue
+                if not images:          # covers [] and None
+                    continue
+
+                img0 = images[0]
+                if img0 is None:
+                    continue
+            
                 tempInfo = np.subtract(images[0]/self.temp_scale, 273.15) 
                 ts = time.time() - t
                 item = {"thermal": tempInfo, "ts": ts}
