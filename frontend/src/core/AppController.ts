@@ -256,6 +256,7 @@ class AppController {
         });
 
         // --- Real-time drawing pointer events ---
+        this.ui.realTimePen.addEventListener('click', () => this.toolHandler.handleRealTimeToolSelection(this.ui.realTimePen, 'pen'));
         this.ui.viewport.addEventListener('pointerdown', (e) => this.realTime.handleStart(e));
         this.ui.viewport.addEventListener('pointermove', (e) => this.realTime.handleMove(e));
         this.ui.viewport.addEventListener('pointerup', (e) => this.realTime.handleEnd(e));

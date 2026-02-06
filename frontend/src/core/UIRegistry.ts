@@ -47,6 +47,7 @@ export interface UIRegistry {
 
     // --- Element Groups (NodeLists) ---
     batchUiElements: NodeListOf<HTMLElement>;
+    realTimeUIElements: NodeListOf<HTMLElement>;
     toggleButtons: NodeListOf<HTMLButtonElement>;
     sidebarButtons: NodeListOf<HTMLButtonElement>;
     settingsPanels: NodeListOf<HTMLElement>;
@@ -56,6 +57,7 @@ export interface UIRegistry {
 
     // --- Shape Drawing Tools ---
     penBtn: HTMLButtonElement;
+    realTimePen: HTMLButtonElement;
     squareBtn: HTMLButtonElement;
     circleBtn: HTMLButtonElement;
     triangleBtn: HTMLButtonElement;
@@ -143,6 +145,7 @@ export function createUIRegistry(): UIRegistry {
 
         // Element Groups
         batchUiElements:  document.querySelectorAll('.batch-ui'),
+        realTimeUIElements:  document.querySelectorAll('.real-time-ui'),
         toggleButtons:    document.querySelectorAll('#middle-icon-section .icon-btn') as NodeListOf<HTMLButtonElement>,
         sidebarButtons:   document.querySelectorAll('.settings-sidebar .sidebar-btn') as NodeListOf<HTMLButtonElement>,
         settingsPanels:   document.querySelectorAll('.settings-main .settings-panel') as NodeListOf<HTMLElement>,
@@ -152,6 +155,7 @@ export function createUIRegistry(): UIRegistry {
 
         // Shape Drawing Tools
         penBtn:          document.getElementById('penBtn')          as HTMLButtonElement,
+        realTimePen:     document.getElementById('realTimePen')     as HTMLButtonElement,
         squareBtn:       document.getElementById('squareBtn')       as HTMLButtonElement,
         circleBtn:       document.getElementById('circleBtn')       as HTMLButtonElement,
         triangleBtn:     document.getElementById('triangleBtn')     as HTMLButtonElement,

@@ -72,6 +72,20 @@ export class ToolHandler {
         this.updateDrawButtonState();
     }
 
+    handleRealTimeToolSelection(button: HTMLButtonElement, tool: 'pen'): void {
+        if (button.disabled) return;
+
+        // Toggle logic: If already selected, turn it off.
+        if (this.state.activeRealTimeTool === tool) {
+            this.state.activeRealTimeTool = null;
+            button.classList.remove('selected');
+        } else {
+            //Disable other tools if there are more at some point
+            this.state.activeRealTimeTool = tool;
+            button.classList.add('selected');
+        }
+    }
+
     // ===================================================================
     // Thermal tools
     // ===================================================================

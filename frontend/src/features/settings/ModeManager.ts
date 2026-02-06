@@ -38,9 +38,11 @@ export class ModeManager {
 
         if (isRealTime) {
             this.ui.batchUiElements.forEach(el => el.classList.add('hidden-mode'));
+            this.ui.realTimeUIElements.forEach(el => el.classList.remove('hidden-mode'));
             cm?.disableDrawing();
         } else {
             this.ui.batchUiElements.forEach(el => el.classList.remove('hidden-mode'));
+            this.ui.realTimeUIElements.forEach(el => el.classList.add('hidden-mode'));
             cm?.disableDrawing();
         }
 

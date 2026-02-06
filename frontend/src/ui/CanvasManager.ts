@@ -96,8 +96,10 @@ export class CanvasManager {
         this.fCanvas = new fabric.Canvas(canvas, {
             selection: false,
             preserveObjectStacking: true,
-            containerClass: 'fabric-canvas-container'
+            containerClass: 'fabric-canvas-container',
+            enablePointerEvents: true
         });
+
 
         this.prevWidth = canvas.width;
         this.prevHeight = canvas.height;
@@ -110,6 +112,7 @@ export class CanvasManager {
         const brush = new fabric.PencilBrush(this.fCanvas);
         brush.width = 6;
         brush.color = '#007AFF';
+
         this.fCanvas.freeDrawingBrush = brush;
 
         this.fCanvas.on('mouse:down', (opt) => {
