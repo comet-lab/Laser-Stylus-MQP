@@ -49,15 +49,15 @@ export class CanvasManager {
     // --- CONFIG: Visual Defaults ---
     private readonly SHAPE_DEFAULTS = {
         fill: 'transparent',
-        stroke: '#007AFF',
+        stroke: 'rgba(0, 122, 255, 0.7)',
         strokeWidth: 6,
         strokeUniform: true,
         strokeLineCap: 'round' as const,
         strokeLineJoin: 'round' as const,
         objectCaching: false,
-        cornerColor: '#007AFF',
+        cornerColor: 'rgba(0, 122, 255, 0.7)',
         cornerStrokeColor: '#ffffff',
-        borderColor: '#007AFF',
+        borderColor: 'rgba(0, 122, 255, 0.7)',
         cornerStyle: 'circle' as const,
         cornerSize: 12,
         touchCornerSize: 24,
@@ -96,8 +96,10 @@ export class CanvasManager {
         this.fCanvas = new fabric.Canvas(canvas, {
             selection: false,
             preserveObjectStacking: true,
-            containerClass: 'fabric-canvas-container'
+            containerClass: 'fabric-canvas-container',
+            enablePointerEvents: true
         });
+
 
         this.prevWidth = canvas.width;
         this.prevHeight = canvas.height;
@@ -109,7 +111,8 @@ export class CanvasManager {
 
         const brush = new fabric.PencilBrush(this.fCanvas);
         brush.width = 6;
-        brush.color = '#007AFF';
+        brush.color = 'rgba(0, 122, 255, 0.7)';
+
         this.fCanvas.freeDrawingBrush = brush;
 
         this.fCanvas.on('mouse:down', (opt) => {

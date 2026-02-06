@@ -22,6 +22,7 @@ export interface AppState {
 
     // --- Real-time Mode State ---
     isRealTimeDrawing: boolean;
+    activeRealTimeTool: 'pen' | null;
     latestRealTimePos: { x: number; y: number } | null;
 
     // --- Raster / Fill State ---
@@ -48,6 +49,7 @@ export function createAppState(): AppState {
         drawnShapeType:   null,
 
         isRealTimeDrawing: false,
+        activeRealTimeTool: null,
         latestRealTimePos: null,
 
         fillEnabled:            false,

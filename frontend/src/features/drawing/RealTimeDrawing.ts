@@ -27,7 +27,7 @@ export class RealTimeDrawing {
 
     handleStart(e: PointerEvent): void {
         // Only active when the real-time switch is ON and the pen tool is selected
-        if (!this.ui.processingModeSwitch.checked || this.state.selectedShape !== 'freehand') return;
+        if (!this.ui.processingModeSwitch.checked || this.state.activeRealTimeTool !== 'pen') return;
 
         e.preventDefault();
         this.ui.canvas.setPointerCapture(e.pointerId);   // keep tracking even if pointer leaves canvas
