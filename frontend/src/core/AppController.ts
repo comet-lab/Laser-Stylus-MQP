@@ -352,12 +352,16 @@ class AppController {
             this.state.selectedRasterPattern = 'spiral_raster';
         });
 
-        // --- View-transform save ---
-        this.ui.saveView.addEventListener('click', async () => {
+        // --- View-transform  ---
+        this.ui.transformedModeSwitch.addEventListener('change', async () => {
             if (this.canvasManager) {
-                await this.canvasManager.updateViewSettings(this.ui.transformedModeSwitch.checked, false);
+                await this.canvasManager.updateViewSettings(
+                    this.ui.transformedModeSwitch.checked,
+                    false
+                );
             }
         });
+
 
         // --- Layout position controls ---
         this.ui.layoutTopBtn.addEventListener('click', () => this.settingsManager.setMenuPosition('top'));
