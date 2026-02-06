@@ -1018,16 +1018,50 @@ export class CanvasManager {
     }
 
     public updateMarkerTemperatures(markersData: { x: number, y: number, temp?: number }[]): void {
-        if (markersData.length !== this.markerObjects.length) {
-            return;
-        }
-        this.markerObjects.forEach((markerGroup, index) => {
-            const data = markersData[index];
-            if (data && data.temp !== undefined) {
+        const vw = this.video.videoWidth;
+        const vh = this.video.videoHeight;
+        const cw = this.fCanvas.getWidth();
+        const ch = this.fCanvas.getHeight();
+
+        //Threshold: If a data point is further than 30 pixels, ignore it.
+        //This prevents Marker C from accidentally grabbing Marker B's data if B was deleted.
+        const MATCH_THRESHOLD = 2; 
+
+        this.markerObjects.forEach(markerGroup => {
+            //Get the visual position of this specific marker
+            const mx = (markerGroup as any)._tipX;
+            const my = (markerGroup as any)._tipY;
+
+            //Find the closest data point from the server for this marker
+            let bestMatch = null;
+            let minDistance = Infinity;
+
+            for (const data of markersData) {
+                // Convert server video-coordinates back to canvas-coordinates for comparison
+                const dataCx = (data.x / vw) * cw;
+                const dataCy = (data.y / vh) * ch;
+
+                const dist = Math.sqrt(Math.pow(dataCx - mx, 2) + Math.pow(dataCy - my, 2));
+
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    bestMatch = data;
+                }
+            }
+
+            //Only update if the closest data point is actually close enough, filter locally deleted markers
+            if (bestMatch && minDistance < MATCH_THRESHOLD && bestMatch.temp !== undefined) {
                 const textObj = (markerGroup as any)._textObj as fabric.Text;
-                textObj.set('text', `${data.temp.toFixed(1)}°`);
+                const newText = `${bestMatch.temp.toFixed(1)}°`;
+                
+                // Only render if text changed
+                if (textObj.text !== newText) {
+                    textObj.set('text', newText);
+                    markerGroup.dirty = true;
+                }
             }
         });
+
         this.fCanvas.requestRenderAll();
     }
 
