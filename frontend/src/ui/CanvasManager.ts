@@ -152,7 +152,7 @@ export class CanvasManager {
         this.fixturesCanvas.height = mainCanvas.height;
         this.fixturesCanvas.style.opacity = '0.6';
         this.fixturesCtx = this.fixturesCanvas.getContext('2d', { willReadFrequently: true });
-        mainCanvas.parentElement?.appendChild(this.fixturesCanvas);
+        mainCanvas.parentElement?.prepend(this.fixturesCanvas);
     }
 
     // =========================================================================
@@ -180,11 +180,19 @@ export class CanvasManager {
             this.fixturesCanvas.classList.add('active');
             this.fixturesCanvas.style.pointerEvents = 'auto';
         }
+
+        //Disable the top layer of canvas to allow pointer events through to fixtures canvas
+        this.fCanvas.upperCanvasEl.style.pointerEvents = 'none';
+        this.fCanvas.lowerCanvasEl.style.pointerEvents = 'none';
     }
 
     public disableFixturesMode(): void {
         this.isFixturesMode = false;
         this.disableFixturesBrush();
+
+        //Re-enable the top layer of the canvas for markers/shapes
+        this.fCanvas.upperCanvasEl.style.pointerEvents = 'auto';
+        this.fCanvas.lowerCanvasEl.style.pointerEvents = 'auto';
 
         if (this.fixturesCanvas) {
             if (this.hasFixtures()) {
