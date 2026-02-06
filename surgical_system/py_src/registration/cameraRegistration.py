@@ -405,7 +405,7 @@ class Camera_Registration(System_Calibration):
         
         
         if mask is None and roi is None:
-            return disp, None, None, None
+            return disp, None, therm_img, None
         
 
             
@@ -427,7 +427,7 @@ class Camera_Registration(System_Calibration):
             sel = mask_bool
 
         if not np.any(sel):
-            return disp, sel, None, None
+            return disp, sel, therm_img, None
 
         
         # Bounding Box
@@ -490,7 +490,7 @@ class Camera_Registration(System_Calibration):
         # Alpha blend overlay 
         roi_bgr = disp[y0:y1 + 1, x0:x1 + 1]
         disp[y0:y1 + 1, x0:x1 + 1] = cv2.addWeighted(heat_color, alpha, roi_bgr, 1.0 - alpha, 0)
-        return disp, sel, vmin, vmax
+        return disp, sel, therm_img, vmax
     
     
     def tracking_display(self, disp, cam_type = 'color', warped = True):

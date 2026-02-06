@@ -126,8 +126,7 @@ class Handler:
             laser_on = self.desired_state.isLaserOn and self.vf_valid_flag
             
             self.laser_obj.vf_valid_flag = self.vf_valid_flag # should be handle on its own, double precaution
-            if not self.robot_controller.is_trajectory_running():
-                self.laser_obj.set_output(laser_on)
+            
             
     def _do_current_position(self):
         now = time.time()
@@ -172,9 +171,9 @@ class Handler:
                     
     def get_heat_overlay(self, img):
         mask = self._read_mask(self.desired_state.heat_mask)
-        heat_img, selection, min_temp, max_temp = self.cam_reg.heat_overlay(img, mask, invert=True)
+        heat_img, selection, therm_img, max_temp = self.cam_reg.heat_overlay(img, mask, invert=True)
         if selection is not None and selection.size != 0:
-            self.desired_state.maxHeat = float(max_temp) if max_temp is not None else -100.0 #TODO find average heat of current robot kernal pixel
+            self.desired_state.maxHeat = float(max_temp) if max_temp is not None else float(np.max(therm_img)) #TODO find average heat of current robot kernal pixel
         # print(f"Max temp: {max_temp}")
         return heat_img
             
@@ -250,6 +249,7 @@ class Handler:
                     pixel, 
                     warped_view, 
                     z = self.working_height)[0]
+                self.laser_obj.set_output(True)
             else:
                 target_world_point = self.robot_controller.current_robot_to_world_position()
                 target_world_point[-1] = self.working_height
@@ -326,13 +326,10 @@ class Handler:
             elif(((self.desired_state.x is not None and self.desired_state.y is not None) or height_change)
                    and not self.robot_controller.is_trajectory_running()):
                 
-                # :
-                    # TODO check outside boundary
-                    # Disable laser
-                    # Pull laser back into closest valid position
                     # print(f"Live controller trigger {self.desired_state.x}, {self.desired_state.y}")
                 self._do_live_control(height_diff)
                 self.desired_state.path = None
+            # elif(not self.robot_controller.is_trajectory_running())
                     
                     
                     
