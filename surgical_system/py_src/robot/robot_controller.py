@@ -168,7 +168,7 @@ class Robot_Controller():
                     "Radius": -1,
                     "Passes": 1,
                     "MaxVelocity": max_velocity, # [m/s]
-                    "MaxAcceleration": 0.0,#[m/s/s]
+                    "MaxAcceleration": 1.5,#[m/s/s]
                     "Durations":[-1]} #time per step
         return TrajectoryController(path_info, debug=True)
     
@@ -191,9 +191,9 @@ class Robot_Controller():
         print("Heading to starting location")
         current_pose = np.array(self.go_to_pose(start_pose @ self.home_pose))
         
-        time_step = 0.02
-        elapsedTime = 0.0
-        t = time.monotonic()
+        time_step = 0.005
+        t_start = time.monotonic()
+        t_prev  = t_start
 
         target_vel = np.zeros(3)
         
@@ -205,35 +205,41 @@ class Robot_Controller():
         target_pos_list = np.empty((data_num, 3))
         i = 0
         try:
-            while (elapsedTime < total_time) and (not self._stop_traj.is_set()):
+            while (not self._stop_traj.is_set()):
                 now = time.monotonic()
+                elapsed = now - t_start
+                dt = now - t_prev
+                if elapsed >= total_time:
+                    break
+
+                if dt < time_step:
+                    continue
+                t_prev = now
+                
                 self.laser_obj.set_output(laser_on)
-                if (now - t) >= time_step:
-                    elapsedTime += (now - t)
-                    t = now
+                
+                movement = traj.update(elapsed)
+                target_vel = movement['velocity']
+                target_pos = movement['position']
 
-                    movement = traj.update(elapsedTime)
-                    target_vel = movement['velocity']
-                    target_pos = movement['position']
+                # print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel, f" | Target Pos: ", target_pos)
+                
+                target_pose = np.eye(4)
+                target_pose[:3, -1] = target_pos
+                velocity_correction = self.live_control(target_pose, 0.2, KP = 2, KD=3.0) #TODO CHANGE MAX SPEED
+                print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
+                command_vel = target_vel + velocity_correction
+                state = self.set_velocity(command_vel, [0, 0, 0]) 
+                
+                
+                pos, vel = state[:3], state[7:10]
 
-                    # print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel, f" | Target Pos: ", target_pos)
-                    
-                    target_pose = np.eye(4)
-                    target_pose[:3, -1] = target_pos
-                    velocity_correction = self.live_control(target_pose, 0.2, KP = 10, KD=3) #TODO CHANGE MAX SPEED
-                    # print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
-                    command_vel = target_vel + velocity_correction
-                    state = self.set_velocity(target_vel, [0, 0, 0]) 
-                    
-                    
-                    pos, vel = state[:3], state[7:10]
-
-                    if i < data_num:
-                        actual_vel_list[i, :] = vel[:3] if i != 0 else np.zeros(3)
-                        target_vel_list[i, :] = command_vel
-                        actual_pos_list[i, :] = pos[:3] - self.home_pose[:3, -1]
-                        target_pos_list[i, :] = target_pos
-                        i += 1
+                if i < data_num:
+                    actual_vel_list[i, :] = vel[:3] if i != 0 else np.zeros(3)
+                    target_vel_list[i, :] = command_vel
+                    actual_pos_list[i, :] = pos[:3] - self.home_pose[:3, -1]
+                    target_pos_list[i, :] = target_pos
+                    i += 1
 
             # stop robot on exit (normal or stopped)
             self.laser_obj.set_output(False)
@@ -335,7 +341,7 @@ class Robot_Controller():
         position_error = target_pose_home[:3, -1] - current_pose
         vel_vector = np.array(current_velocity[:3])
         # print("[Live Controller] KD Control : ", vel_vector * KD)
-        target_vel = position_error * KP - vel_vector * KD
+        target_vel = position_error * KP #- vel_vector * KD
         mag = np.linalg.norm(target_vel)
         
         if mag == 0:

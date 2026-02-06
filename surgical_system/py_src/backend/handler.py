@@ -77,6 +77,7 @@ class Handler:
         status.isLaserOn = self.desired_state.isLaserOn # TODO Separate variable for on & enabled? Need read-only portions of schema?
         status.isRobotOn = self.desired_state.isRobotOn # TODO get from ???
         status.heat_markers = self.desired_state.heat_markers
+        # print(self.desired_state.heat_markers)
         status.maxHeat = self.desired_state.maxHeat
         status.laserX, status.laserY = int(self.desired_state.laserX), int(self.desired_state.laserY)
         return status.to_str()
@@ -172,9 +173,9 @@ class Handler:
     def get_heat_overlay(self, img):
         mask = self._read_mask(self.desired_state.heat_mask)
         heat_img, selection, min_temp, max_temp = self.cam_reg.heat_overlay(img, mask, invert=True)
-        if selection is not None:
+        if selection is not None and selection.size != 0:
             self.desired_state.maxHeat = float(max_temp) if max_temp is not None else -100.0 #TODO find average heat of current robot kernal pixel
-            # print(f"Max temp: {max_temp}")
+        # print(f"Max temp: {max_temp}")
         return heat_img
             
     

@@ -115,6 +115,16 @@ class TrajectoryController():
             v_way[i] = (position[i] - position[i-1]) / dt
         
         a_way = np.zeros_like(position)
+        
+        # for i in range(1, self.n_points - 1):
+        #     a_prev = (v_way[i]   - v_way[i-1]) / dt
+        #     a_next = (v_way[i+1] - v_way[i])   / dt
+        #     a = 0.5 * (a_prev + a_next)
+
+        #     # acceleration clamp
+        #     # a = np.clip(a, -self.MAX_ACCELERATION, self.MAX_ACCELERATION)
+        #     a_way[i] = a
+        
         self.trajectories = np.empty((self.n_points - 1, self.n_dims), dtype=object)
         for i in range(self.n_points - 1):
             t0 = durations[i]
