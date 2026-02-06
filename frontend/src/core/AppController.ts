@@ -207,15 +207,11 @@ class AppController {
     // ===================================================================
 
     /**
-     * Draws the latest video frame onto the canvas, then asks
-     * CanvasManager to composite its overlay (shapes, fixtures, markers).
-     *
-     * In Real-Time mode the overlay is skipped here because the
-     * RealTimeDrawing loop handles rendering at a different cadence.
+     * In batch mode, render the canvas for every video frame to show the latest state.
+     * Then, request the next video frame for the video element behind the canvas and repeat.
+     * Real time mode just updates the video element behind the canvas.
      */
     private updateCanvasLoop(): void {
-        this.ui.ctx.drawImage(this.ui.video, 0, 0, this.ui.canvas.width, this.ui.canvas.height);
-
         if (this.ui.processingModeSwitch && !this.ui.processingModeSwitch.checked && this.canvasManager) {
             this.canvasManager.render();
         }
