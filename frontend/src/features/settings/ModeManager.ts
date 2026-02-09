@@ -118,6 +118,7 @@ export class ModeManager {
         this.ui.fixturesTools.classList.remove('hidden');
         this.ui.thermalUiElements.forEach(el  => el.classList.add('hidden'));
         this.ui.drawingUiElements.forEach(el  => el.classList.add('hidden'));
+        this.ui.realTimeUIElements.forEach(el => el.classList.add('hidden-mode'))
         this.ui.fixturesUiElements.forEach(el => el.classList.remove('hidden'));
 
         // CanvasManager state
@@ -137,6 +138,7 @@ export class ModeManager {
         this.ui.thermalTools.classList.remove('hidden');
         this.ui.fixturesTools.classList.add('hidden');
         this.ui.drawingUiElements.forEach(el  => el.classList.add('hidden'));
+        this.ui.realTimeUIElements.forEach(el => el.classList.add('hidden-mode'))
         this.ui.fixturesUiElements.forEach(el => el.classList.add('hidden'));
         this.ui.thermalUiElements.forEach(el  => el.classList.remove('hidden'));
 
@@ -162,6 +164,7 @@ export class ModeManager {
         this.ui.heatAreaBtn.classList.remove('selected');
         this.ui.markerBtn.classList.remove('selected');
         this.ui.drawingUiElements.forEach(el  => el.classList.remove('hidden'));
+        this.ui.realTimeUIElements.forEach(el => el.classList.remove('hidden-mode'))
         this.ui.fixturesUiElements.forEach(el => el.classList.add('hidden'));
         this.ui.thermalUiElements.forEach(el  => el.classList.add('hidden'));
 

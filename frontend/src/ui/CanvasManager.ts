@@ -1090,7 +1090,7 @@ export class CanvasManager {
         formData.append('pixels', JSON.stringify(videoPixels));
         formData.append('is_fill', isFillEnabled.toString());
 
-        // 2. Only generate raster image if fill is enabled
+        // 2. Generate raster image IF fill is enabled
         if (isFillEnabled) {
             const width = this.fCanvas.getWidth();
             const height = this.fCanvas.getHeight();
@@ -1100,6 +1100,7 @@ export class CanvasManager {
             const ctx = tempCanvas.getContext('2d', { willReadFrequently: true, alpha: false });
             if (!ctx) throw new Error("Could not create temp context");
 
+            // No smoothing for sharp mask edges
             ctx.imageSmoothingEnabled = false;
             (ctx as any).mozImageSmoothingEnabled = false;
             (ctx as any).webkitImageSmoothingEnabled = false;
@@ -1109,115 +1110,32 @@ export class CanvasManager {
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, width, height);
 
-            // Black fill for shapes
-            ctx.fillStyle = "#000000";
-            ctx.strokeStyle = "transparent";
-
+            // Render objects using Fabric's internal engine to handle rotation/scaling
             this.fCanvas.getObjects().forEach(obj => {
                 if ((obj as any)._isMarker) return; // Skip markers
-                ctx.save();
-                if (obj instanceof fabric.Path) {
-                    ctx.beginPath();
-                    const pathData = (obj as any).path;
-                    let lastX = 0, lastY = 0;
-                    pathData.forEach((cmd: any) => {
-                        const type = cmd[0];
-                        switch (type) {
-                            case 'M':
-                                lastX = Math.round(cmd[1]);
-                                lastY = Math.round(cmd[2]);
-                                ctx.moveTo(lastX + 0.5, lastY + 0.5);
-                                break;
-                            case 'L':
-                                const x = Math.round(cmd[1]);
-                                const y = Math.round(cmd[2]);
-                                ctx.lineTo(x + 0.5, y + 0.5);
-                                lastX = x;
-                                lastY = y;
-                                break;
-                            case 'Q':
-                                const qx = Math.round(cmd[3]);
-                                const qy = Math.round(cmd[4]);
-                                ctx.quadraticCurveTo(Math.round(cmd[1]) + 0.5, Math.round(cmd[2]) + 0.5, qx + 0.5, qy + 0.5);
-                                lastX = qx;
-                                lastY = qy;
-                                break;
-                            case 'C':
-                                const cx = Math.round(cmd[5]);
-                                const cy = Math.round(cmd[6]);
-                                ctx.bezierCurveTo(
-                                    Math.round(cmd[1]) + 0.5, Math.round(cmd[2]) + 0.5,
-                                    Math.round(cmd[3]) + 0.5, Math.round(cmd[4]) + 0.5,
-                                    cx + 0.5, cy + 0.5
-                                );
-                                lastX = cx;
-                                lastY = cy;
-                                break;
-                            case 'Z':
-                                ctx.closePath();
-                                break;
-                        }
-                    });
-                    ctx.fill();
-                } else if (obj instanceof fabric.Rect) {
-                    const rect = obj as fabric.Rect;
-                    const left = Math.round(rect.left || 0);
-                    const top = Math.round(rect.top || 0);
-                    const width = Math.round((rect.width || 0) * (rect.scaleX || 1));
-                    const height = Math.round((rect.height || 0) * (rect.scaleY || 1));
-                    ctx.fillRect(left + 0.5, top + 0.5, width, height);
-                } else if (obj instanceof fabric.Triangle) {
-                    const triangle = obj as fabric.Triangle;
-                    const matrix = triangle.calcTransformMatrix();
-                    const w = triangle.width;
-                    const h = triangle.height;
-                    const localPoints = [
-                        new fabric.Point(0, -h / 2),
-                        new fabric.Point(w / 2, h / 2),
-                        new fabric.Point(-w / 2, h / 2)
-                    ];
-                    const vertices = localPoints.map(p => p.transform(matrix));
-                    ctx.beginPath();
-                    ctx.moveTo(Math.round(vertices[0].x) + 0.5, Math.round(vertices[0].y) + 0.5);
-                    ctx.lineTo(Math.round(vertices[1].x) + 0.5, Math.round(vertices[1].y) + 0.5);
-                    ctx.lineTo(Math.round(vertices[2].x) + 0.5, Math.round(vertices[2].y) + 0.5);
-                    ctx.closePath();
-                    ctx.fill();
-                } else if (obj instanceof fabric.Ellipse) {
-                    const ellipse = obj as fabric.Ellipse;
-                    const center = ellipse.getCenterPoint();
-                    const rx = Math.round(ellipse.rx * ellipse.scaleX);
-                    const ry = Math.round(ellipse.ry * ellipse.scaleY);
-                    ctx.beginPath();
-                    ctx.ellipse(
-                        center.x, center.y,
-                        rx, ry,
-                        (ellipse.angle || 0) * Math.PI / 180,
-                        0, 2 * Math.PI
-                    );
-                    ctx.fill();
-                } else if (obj instanceof fabric.Line) {
-                    // Lines cannot be filled in raster mode usually, but if needed:
-                    const line = obj as fabric.Line;
-                    ctx.beginPath();
-                    ctx.moveTo(Math.round(line.x1 || 0) + 0.5, Math.round(line.y1 || 0) + 0.5);
-                    ctx.lineTo(Math.round(line.x2 || 0) + 0.5, Math.round(line.y2 || 0) + 0.5);
-                    ctx.stroke(); // Fallback for line visibility
-                }
-                ctx.restore();
-            });
+                if (obj instanceof fabric.Line) return; // Skip Lines for Raster!
 
-            const imageData = ctx.getImageData(0, 0, width, height);
-            const data = imageData.data;
-            for (let i = 0; i < data.length; i += 4) {
-                if (data[i] < 255 || data[i + 1] < 255 || data[i + 2] < 255) {
-                    data[i] = 0;
-                    data[i + 1] = 0;
-                    data[i + 2] = 0;
-                    data[i + 3] = 255;
+                // Save original state
+                const originalFill = obj.fill;
+                const originalStroke = obj.stroke;
+
+                // Set mask style (Black = Raster Area)
+                if (obj instanceof fabric.Line) {
+                    // Lines have no fill, so we must draw the stroke in black
+                    obj.stroke = '#000000';
+                    obj.fill = 'transparent';
+                } else {
+                    obj.fill = '#000000';
+                    obj.stroke = 'transparent';
                 }
-            }
-            ctx.putImageData(imageData, 0, 0);
+
+                // Render with transforms applied automatically
+                obj.render(ctx);
+
+                // Restore state
+                obj.fill = originalFill;
+                obj.stroke = originalStroke;
+            });
 
             const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
             if (!blob) throw new Error("Failed to generate image blob");
@@ -1238,6 +1156,9 @@ export class CanvasManager {
         for (const obj of objects) {
             if ((obj as any)._isMarker) continue;
 
+            // Get the object's transform matrix (handles Rotation, Scale, Position)
+            const matrix = obj.calcTransformMatrix();
+
             if (obj instanceof fabric.Path) {
                 const pathObj = obj as any;
                 if (pathObj.path) {
@@ -1249,15 +1170,24 @@ export class CanvasManager {
                         if (type === 'M') {
                             lastX = x; lastY = y;
                         } else if (type === 'L' || type === 'Q') {
+                            // Generate pixels in LOCAL object space
                             const gen = Utils.generateLinePixels(lastX, lastY, x, y);
-                            for (const p of gen) pixels.push(p);
+                            
+                            // Transform every pixel to WORLD canvas space
+                            for (const p of gen) {
+                                const pt = new fabric.Point(p.x, p.y);
+                                const transformed = pt.transform(matrix);
+                                pixels.push({ x: transformed.x, y: transformed.y });
+                            }
                             lastX = x; lastY = y;
                         }
                     }
                 }
             } else if (obj instanceof fabric.Triangle) {
+                // Triangles and Polygons can rely on their transformed vertices
                 const triangle = obj as fabric.Triangle;
-                const matrix = triangle.calcTransformMatrix();
+                // calcTransformMatrix is already accounted for if we transform local points
+                // Fabric's `triangle` width/height are pre-transform.
                 const w = triangle.width;
                 const h = triangle.height;
                 const localPoints = [
@@ -1266,41 +1196,59 @@ export class CanvasManager {
                     new fabric.Point(-w / 2, h / 2)
                 ];
                 const vertices = localPoints.map(p => p.transform(matrix));
+                
                 for (let i = 0; i < vertices.length; i++) {
                     const start = vertices[i];
                     const end = vertices[(i + 1) % vertices.length];
                     const gen = Utils.generateLinePixels(start.x, start.y, end.x, end.y);
                     for (const p of gen) pixels.push(p);
                 }
-            } else if (obj.type === 'ellipse' || obj.type === 'circle') {
+            } else if (obj instanceof fabric.Ellipse) {
+                // Ellipses need manual calculation with rotation, or we just sample points and transform them
+                // Sampling and transforming is safer for all affine transforms (skew/scale).
                 const ellipse = obj as fabric.Ellipse;
-                const center = ellipse.getCenterPoint();
-                const rx = ellipse.rx * ellipse.scaleX;
-                const ry = ellipse.ry * ellipse.scaleY;
-                const rotation = (ellipse.angle || 0) * (Math.PI / 180);
-                const steps = Math.max(120, Math.floor((rx + ry) * 2));
-                let prevX = 0, prevY = 0;
+                const rx = ellipse.rx;
+                const ry = ellipse.ry;
+                // We use local rx/ry, then apply the matrix which contains scale/rotation
+                
+                const steps = Math.max(120, Math.floor((rx + ry) * 2)); // Dynamic resolution
+                let prevP: fabric.Point | null = null;
+                
                 for (let i = 0; i <= steps; i++) {
                     const t = (i / steps) * 2 * Math.PI;
-                    const rawX = rx * Math.cos(t);
-                    const rawY = ry * Math.sin(t);
-                    const rotX = rawX * Math.cos(rotation) - rawY * Math.sin(rotation);
-                    const rotY = rawX * Math.sin(rotation) + rawY * Math.cos(rotation);
-                    const finalX = center.x + rotX;
-                    const finalY = center.y + rotY;
-                    if (i > 0) {
-                        const gen = Utils.generateLinePixels(prevX, prevY, finalX, finalY);
+                    const localX = rx * Math.cos(t);
+                    const localY = ry * Math.sin(t);
+                    
+                    const localPt = new fabric.Point(localX, localY);
+                    // Standard Ellipse origin is center, so this works perfectly
+                    const finalPt = localPt.transform(matrix);
+
+                    if (prevP) {
+                        const gen = Utils.generateLinePixels(prevP.x, prevP.y, finalPt.x, finalPt.y);
                         for (const p of gen) pixels.push(p);
                     }
-                    prevX = finalX;
-                    prevY = finalY;
+                    prevP = finalPt;
                 }
+            } else if (obj instanceof fabric.Line) {
+                // 1. Get the line's start/end points relative to its center
+                const line = obj as fabric.Line;
+                const points = line.calcLinePoints(); // {x1, y1, x2, y2}
+
+                // 2. Transform them to world coordinates using the matrix
+                const start = new fabric.Point(points.x1, points.y1).transform(matrix);
+                const end   = new fabric.Point(points.x2, points.y2).transform(matrix);
+
+                // 3. Generate pixels between the REAL start and end
+                const gen = Utils.generateLinePixels(start.x, start.y, end.x, end.y);
+                for (const p of gen) pixels.push(p);
+
             } else {
-                const coords = obj.getCoords();
+                // Generic Fallback (Rects, Lines) -> Use getCoords() which returns the 4 corners (Transformed)
+                const coords = obj.getCoords(); // Returns [TL, TR, BR, BL] absolute coordinates
                 for (let i = 0; i < coords.length; i++) {
                     const start = coords[i];
                     const end = coords[(i + 1) % coords.length];
-                    if (obj.type === 'line' && i === coords.length - 1) continue;
+                    
                     const gen = Utils.generateLinePixels(start.x, start.y, end.x, end.y);
                     for (const p of gen) pixels.push(p);
                 }
