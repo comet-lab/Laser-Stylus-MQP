@@ -227,7 +227,7 @@ class Robot_Controller():
                 target_pose = np.eye(4)
                 target_pose[:3, -1] = target_pos
                 velocity_correction = self.live_control(target_pose, 0.2, KP = 2, KD=3.0) #TODO CHANGE MAX SPEED
-                print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
+                # print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
                 command_vel = target_vel + velocity_correction
                 state = self.set_velocity(command_vel, [0, 0, 0]) 
                 
@@ -286,6 +286,7 @@ class Robot_Controller():
             self._stop_traj.set()
             self._traj_thread = None
             print("traj done")
+            self.robot_stop()
         # return [actual_vel_list,
         #         target_vel_list,
         #         actual_pos_list,

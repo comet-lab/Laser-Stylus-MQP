@@ -179,9 +179,8 @@ class Handler:
             
     
     def _read_path(self):
-        # TODO determine cam type from desired state
-        # TODO convert path from List
         path = np.array([[d['x'], d['y']] for d in self.desired_state.path])
+        print(path)
         return path
     
     def _do_create_path(self, path):
@@ -249,7 +248,7 @@ class Handler:
                     pixel, 
                     warped_view, 
                     z = self.working_height)[0]
-                self.laser_obj.set_output(True)
+                self.laser_obj.set_output(self.desired_state.isLaserOn)
             else:
                 target_world_point = self.robot_controller.current_robot_to_world_position()
                 target_world_point[-1] = self.working_height

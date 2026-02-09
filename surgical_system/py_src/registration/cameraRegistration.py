@@ -270,6 +270,7 @@ class Camera_Registration(System_Calibration):
             
             ### Get images ##
             therm_img = self.therm_cam.get_latest()['thermal']
+            time.sleep(0.2) # laser may still be firing
             color_img = self.rgbd_cam.get_latest()['color']
             
             
@@ -373,7 +374,7 @@ class Camera_Registration(System_Calibration):
         cv2.arrowedLine(
             overlay,
             tuple(pts_i[0, 0]),
-            tuple(pts_i[30, 0]),
+            tuple(pts_i[3, 0]),
             BLACK,
             1, #  thickness,
             cv2.LINE_AA,  
