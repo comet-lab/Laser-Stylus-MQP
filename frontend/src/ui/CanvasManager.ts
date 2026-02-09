@@ -1081,7 +1081,7 @@ export class CanvasManager {
             y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
         }));
 
-        this.downloadJson(videoPixels, 'path-debug.json');
+        //this.downloadJson(videoPixels, 'path-debug.json');
 
         const formData = new FormData();
         formData.append('speed', (Number(speed) / 1000).toString());
@@ -1147,12 +1147,9 @@ export class CanvasManager {
         return this.postFormData('/api/execute', formData);
     }
 
-    public async updateViewSettings(isTransformedViewOn: boolean, isThermalViewOn: boolean = false): Promise<any> {
-        return this.postJson('/api/view_settings', { isTransformedViewOn, isThermalViewOn });
-    }
-
+    //HELPER FOR IF YOU WANT TO DOWNLOAD THE GENERATED PATH FOR DEBUGGING
     private downloadJson(data: any, filename: string): void {
-        const jsonStr = JSON.stringify(data, null, 2); // Pretty print with 2 spaces
+        const jsonStr = JSON.stringify(data, null, 2);
         const blob = new Blob([jsonStr], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         
@@ -1164,6 +1161,10 @@ export class CanvasManager {
         
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    }
+
+    public async updateViewSettings(isTransformedViewOn: boolean, isThermalViewOn: boolean = false): Promise<any> {
+        return this.postJson('/api/view_settings', { isTransformedViewOn, isThermalViewOn });
     }
 
     private generatePixelPath(): Position[] {
