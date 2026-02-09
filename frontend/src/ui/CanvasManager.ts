@@ -285,10 +285,10 @@ export class CanvasManager {
 
     private restoreDrawingState(): void {
         if (!this.fixturesCtx || !this.rawDrawingBackup) return;
-        
+
         // Put the raw cyan pixels back
         this.fixturesCtx.putImageData(this.rawDrawingBackup, 0, 0);
-        
+
         // Reset flags
         this.fixturesApplied = false;
         this.rawDrawingBackup = null;
@@ -360,9 +360,9 @@ export class CanvasManager {
         this.fixturesCtx.clearRect(0, 0, this.fixturesCanvas.width, this.fixturesCanvas.height);
         this.fixturesApplied = false;
         this.rawDrawingBackup = null; // Clear backup
-        
+
         this.fixturesCtx.globalCompositeOperation = 'source-over';
-        
+
         if (!this.isFixturesMode) {
             this.fixturesCanvas.classList.remove('active');
         } else {
@@ -379,7 +379,7 @@ export class CanvasManager {
 
     public async executeFixtures(): Promise<any> {
         if (!this.fixturesCanvas || !this.fixturesCtx) throw new Error("Fixtures canvas not initialized");
-        
+
         const width = this.fixturesCanvas.width;
         const height = this.fixturesCanvas.height;
 
@@ -445,7 +445,7 @@ export class CanvasManager {
                         visualPixels[i + 3] = 255; // Alpha
                     } else {
                         // Inner Safe Zone: Transparent (Show Video)
-                        visualPixels[i + 3] = 0; 
+                        visualPixels[i + 3] = 0;
                     }
                 } else {
                     // --- FORBIDDEN ZONE (Empty) ---
@@ -467,15 +467,15 @@ export class CanvasManager {
 
         //Send mask to server
         maskCtx.putImageData(maskImageData, 0, 0);
-        
+
         const blob = await new Promise<Blob | null>(resolve => maskCanvas.toBlob(resolve, 'image/png'));
         if (!blob) throw new Error("Failed to generate fixtures blob");
-        
+
         const result = await this.uploadFixtures(blob);
-        
+
         //Mark as applied so we know to restore backup on next draw
-        this.fixturesApplied = true; 
-        
+        this.fixturesApplied = true;
+
         return result;
     }
 
@@ -1025,7 +1025,7 @@ export class CanvasManager {
 
         //Threshold: If a data point is further than 30 pixels, ignore it.
         //This prevents Marker C from accidentally grabbing Marker B's data if B was deleted.
-        const MATCH_THRESHOLD = 2; 
+        const MATCH_THRESHOLD = 2;
 
         this.markerObjects.forEach(markerGroup => {
             //Get the visual position of this specific marker
@@ -1053,7 +1053,7 @@ export class CanvasManager {
             if (bestMatch && minDistance < MATCH_THRESHOLD && bestMatch.temp !== undefined) {
                 const textObj = (markerGroup as any)._textObj as fabric.Text;
                 const newText = `${bestMatch.temp.toFixed(1)}°`;
-                
+
                 // Only render if text changed
                 if (textObj.text !== newText) {
                     textObj.set('text', newText);
@@ -1080,6 +1080,8 @@ export class CanvasManager {
             x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
             y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
         }));
+
+        this.downloadJson(videoPixels, 'path-debug.json');
 
         const formData = new FormData();
         formData.append('speed', (Number(speed) / 1000).toString());
@@ -1149,6 +1151,21 @@ export class CanvasManager {
         return this.postJson('/api/view_settings', { isTransformedViewOn, isThermalViewOn });
     }
 
+    private downloadJson(data: any, filename: string): void {
+        const jsonStr = JSON.stringify(data, null, 2); // Pretty print with 2 spaces
+        const blob = new Blob([jsonStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
     private generatePixelPath(): Position[] {
         const objects = this.fCanvas.getObjects();
         const pixels: Position[] = [];
@@ -1161,21 +1178,22 @@ export class CanvasManager {
 
             if (obj instanceof fabric.Path) {
                 const pathObj = obj as any;
+                const pathOffset = pathObj.pathOffset || { x: 0, y: 0 };
                 if (pathObj.path) {
                     let lastX = 0, lastY = 0;
                     for (const cmd of pathObj.path) {
                         const type = cmd[0];
                         const x = cmd[1];
                         const y = cmd[2];
+
                         if (type === 'M') {
                             lastX = x; lastY = y;
                         } else if (type === 'L' || type === 'Q') {
-                            // Generate pixels in LOCAL object space
                             const gen = Utils.generateLinePixels(lastX, lastY, x, y);
-                            
-                            // Transform every pixel to WORLD canvas space
+
                             for (const p of gen) {
-                                const pt = new fabric.Point(p.x, p.y);
+                                // SUBTRACT OFFSET BEFORE TRANSFORMING
+                                const pt = new fabric.Point(p.x - pathOffset.x, p.y - pathOffset.y);
                                 const transformed = pt.transform(matrix);
                                 pixels.push({ x: transformed.x, y: transformed.y });
                             }
@@ -1196,7 +1214,7 @@ export class CanvasManager {
                     new fabric.Point(-w / 2, h / 2)
                 ];
                 const vertices = localPoints.map(p => p.transform(matrix));
-                
+
                 for (let i = 0; i < vertices.length; i++) {
                     const start = vertices[i];
                     const end = vertices[(i + 1) % vertices.length];
@@ -1210,15 +1228,15 @@ export class CanvasManager {
                 const rx = ellipse.rx;
                 const ry = ellipse.ry;
                 // We use local rx/ry, then apply the matrix which contains scale/rotation
-                
+
                 const steps = Math.max(120, Math.floor((rx + ry) * 2)); // Dynamic resolution
                 let prevP: fabric.Point | null = null;
-                
+
                 for (let i = 0; i <= steps; i++) {
                     const t = (i / steps) * 2 * Math.PI;
                     const localX = rx * Math.cos(t);
                     const localY = ry * Math.sin(t);
-                    
+
                     const localPt = new fabric.Point(localX, localY);
                     // Standard Ellipse origin is center, so this works perfectly
                     const finalPt = localPt.transform(matrix);
@@ -1236,7 +1254,7 @@ export class CanvasManager {
 
                 // 2. Transform them to world coordinates using the matrix
                 const start = new fabric.Point(points.x1, points.y1).transform(matrix);
-                const end   = new fabric.Point(points.x2, points.y2).transform(matrix);
+                const end = new fabric.Point(points.x2, points.y2).transform(matrix);
 
                 // 3. Generate pixels between the REAL start and end
                 const gen = Utils.generateLinePixels(start.x, start.y, end.x, end.y);
@@ -1248,7 +1266,7 @@ export class CanvasManager {
                 for (let i = 0; i < coords.length; i++) {
                     const start = coords[i];
                     const end = coords[(i + 1) % coords.length];
-                    
+
                     const gen = Utils.generateLinePixels(start.x, start.y, end.x, end.y);
                     for (const p of gen) pixels.push(p);
                 }
