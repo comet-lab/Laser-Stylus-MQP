@@ -59,8 +59,8 @@ async def execute_bundled_command(
     raster_type: str = Form(None),
     density: float = Form(...),
     pixels: str = Form(...),
-    is_fill: bool = Form(...), # NEW: Capture the boolean sent from frontend
-    file: Optional[UploadFile] = File(None) # CHANGED: Defaults to None, making it optional
+    is_fill: bool = Form(...),
+    file: Optional[UploadFile] = File(None)
 ):
     try:
         pixel_list = json.loads(pixels)

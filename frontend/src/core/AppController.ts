@@ -207,15 +207,10 @@ class AppController {
     // ===================================================================
 
     /**
-     * In batch mode, render the canvas for every video frame to show the latest state.
-     * Then, request the next video frame for the video element behind the canvas and repeat.
-     * Real time mode just updates the video element behind the canvas.
+     * Request the next video frame for the video element behind the canvas and repeat.
+     * Fabric handles the rendering of the drawing layer, so related code has been removed from this loop
      */
     private updateCanvasLoop(): void {
-        if (this.ui.processingModeSwitch && !this.ui.processingModeSwitch.checked && this.canvasManager) {
-            this.canvasManager.render();
-        }
-
         this.ui.video.requestVideoFrameCallback(this.updateCanvasLoop.bind(this));
     }
 
