@@ -22,6 +22,7 @@ export interface UIRegistry {
     previewPopup: HTMLElement;
     previewTimeDisplay: HTMLElement;
     previewCanvas: HTMLCanvasElement;
+    previewVideo: HTMLVideoElement;
 
     // --- Action Buttons ---
     settingsBtn: HTMLButtonElement;
@@ -127,6 +128,7 @@ export function createUIRegistry(): UIRegistry {
         previewPopup: document.getElementById('previewPopup') as HTMLElement,
         previewCanvas: document.getElementById('previewCanvas') as HTMLCanvasElement,
         previewTimeDisplay: document.getElementById('previewTimeDisplay') as HTMLElement,
+        previewVideo: document.getElementById('previewVideo') as HTMLVideoElement,
 
         // Action Buttons
         settingsBtn:      document.getElementById('settingsBtn')      as HTMLButtonElement,

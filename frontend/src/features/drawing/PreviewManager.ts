@@ -30,6 +30,11 @@ export class PreviewManager {
         this.ui.previewBtn.disabled = true;
         this.ui.previewTimeDisplay.textContent = "Calculating...";
 
+        if (this.ui.video.srcObject) {
+            this.ui.previewVideo.srcObject = this.ui.video.srcObject;
+            this.ui.previewVideo.play().catch(e => console.warn("Preview play error", e));
+        }
+
         //Perform layout calculation
         this.updateLayout(cm);
 
@@ -41,6 +46,7 @@ export class PreviewManager {
     public closePreview(): void {
         this.ui.previewPopup.classList.remove('active');
         this.ui.overlay.classList.remove('active'); 
+        this.ui.previewVideo.srcObject = null;
         this.stopAnimation();
     }
 

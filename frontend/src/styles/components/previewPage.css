@@ -95,19 +95,26 @@
 }
 
 /* --- Viewport Area --- */
+#previewVideo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;   /* Crucial: matches main video distortion so paths align */
+  z-index: 1;         /* Sit behind the canvas (which is z-index: 2) */
+  pointer-events: none;
+}
+
+/* Update this existing class to remove the background image logic */
 .preview-viewport {
   position: relative;
   flex-grow: 1;
   width: 100%;
   height: 100%;
   background-color: #000;
-  /* Forces the snapshot to stretch exactly like the main video.
-     This ensures the aspect ratio distortion matches the calculated path. */
-  background-size: 100% 100%; 
-  background-repeat: no-repeat;
-  background-position: center;
-  
   overflow: hidden;
+  /* Remove background-size, background-repeat, etc. */
 }
 
 /* The Canvas layer for drawing the path lines */
