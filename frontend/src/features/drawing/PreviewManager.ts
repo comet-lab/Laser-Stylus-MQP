@@ -93,7 +93,7 @@ export class PreviewManager {
         this.ui.previewCanvas.height = viewportH;
 
         //Update background snapshot
-        const dataUrl = cm.getCanvasDataURL();
+        const dataUrl = cm.getVideoSnapshotDataURL();
         const container = this.ui.previewCanvas.parentElement;
         if (container) {
             container.style.backgroundImage = `url(${dataUrl})`;

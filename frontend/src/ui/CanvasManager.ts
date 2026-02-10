@@ -177,6 +177,25 @@ export class CanvasManager {
         return this.fCanvas.toDataURL();
     }
 
+    public getVideoSnapshotDataURL(): string {
+        //Create a temp canvas at the exact video resolution
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = this.video.videoWidth;
+        tempCanvas.height = this.video.videoHeight;
+        const ctx = tempCanvas.getContext('2d');
+
+        if (ctx) {
+            //Draw the video frame first (background)
+            ctx.drawImage(this.video, 0, 0, tempCanvas.width, tempCanvas.height);
+
+            //Draw the Fabric canvas on top (foreground)
+            //We use the raw canvas element from Fabric
+            ctx.drawImage(this.fCanvas.toCanvasElement(), 0, 0, tempCanvas.width, tempCanvas.height);
+        }
+
+        return tempCanvas.toDataURL('image/jpeg', 0.8); // JPEG is faster/smaller for video frames
+    }
+
     public async getPreviewPath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<{ duration: number, path: Position[] }> {
         //Generate Pixel Path (Same as execute)
         const pixels = this.generatePixelPath();
@@ -421,7 +440,7 @@ export class CanvasManager {
 
     public hasFixtures(): boolean {
         if (!this.fixturesCanvas || !this.fixturesCtx) return false;
-        
+
         // --- GUARD CLAUSE: Prevent crash if canvas has 0 size ---
         if (this.fixturesCanvas.width === 0 || this.fixturesCanvas.height === 0) {
             return false;
