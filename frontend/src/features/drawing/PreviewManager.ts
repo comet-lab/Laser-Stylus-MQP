@@ -86,8 +86,8 @@ export class PreviewManager {
             viewportW = viewportH * videoRatio;
         }
 
-        // 5. Apply dimensions to DOM
-        // The popup gets (viewport height + header height)
+        //Apply dimensions to DOM
+        //The popup gets (viewport height + header height)
         this.ui.previewPopup.style.left = `${targetLeft}px`;
         this.ui.previewPopup.style.top = `${prepareRect.top}px`;
         this.ui.previewPopup.style.width = `${viewportW}px`;
@@ -97,15 +97,6 @@ export class PreviewManager {
         //Matches the viewport exactly
         this.ui.previewCanvas.width = viewportW;
         this.ui.previewCanvas.height = viewportH;
-
-        //Update background snapshot
-        const dataUrl = cm.getVideoSnapshotDataURL();
-        const container = this.ui.previewCanvas.parentElement;
-        if (container) {
-            container.style.backgroundImage = `url(${dataUrl})`;
-            // Force stretch to match main viewport behavior
-            container.style.backgroundSize = '100% 100%'; 
-        }
 
         //Calculate Scale Factors
         //Now caleY maps video -> viewport (excluding header)
