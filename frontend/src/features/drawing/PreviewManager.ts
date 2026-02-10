@@ -10,15 +10,23 @@ export class PreviewManager {
     private durationSeconds: number = 0;
     private animationFrameId: number | null = null;
     
-    // Exact scaling factor (Video -> Preview)
+    //Exact scaling factor (Video -> Preview)
     private scaleX: number = 1;
     private scaleY: number = 1;
+
+    //Store marker size to perform manual centering in the loop
+    private markerSize: number = 24;
 
     constructor(
         private readonly ui: UIRegistry,
         private readonly state: AppState,
         private getCanvasManager: () => CanvasManager | null,
-    ) {}
+    ) {
+        //Force border-box and remove CSS transform to give JS full control
+        this.ui.previewMarker.style.boxSizing = 'border-box';
+        this.ui.previewMarker.style.transform = 'none';
+        this.ui.previewMarker.style.margin = '0';
+    }
 
     public async openPreview(): Promise<void> {
         const cm = this.getCanvasManager();
@@ -30,13 +38,14 @@ export class PreviewManager {
         this.ui.previewBtn.disabled = true;
         this.ui.previewTimeDisplay.textContent = "Calculating...";
 
+        // Set the video source for the background
         if (this.ui.video.srcObject) {
             this.ui.previewVideo.srcObject = this.ui.video.srcObject;
             this.ui.previewVideo.play().catch(e => console.warn("Preview play error", e));
         }
 
         //Perform layout calculation
-        this.updateLayout(cm);
+        this.updateLayout();
 
         //Fetch data and start
         await this.updatePreviewData();
@@ -55,7 +64,7 @@ export class PreviewManager {
      * Enforces aspect ratio of the video.
      * Calculates position based on the prepare menu's right-margin.
      */
-    private updateLayout(cm: CanvasManager): void {
+    private updateLayout(): void {
         const videoW = this.ui.video.videoWidth || 1;
         const videoH = this.ui.video.videoHeight || 1;
         const videoRatio = videoW / videoH;
@@ -86,6 +95,10 @@ export class PreviewManager {
             viewportW = viewportH * videoRatio;
         }
 
+        // Round to integers to ensure pixel-perfect canvas alignment
+        viewportW = Math.floor(viewportW);
+        viewportH = Math.floor(viewportH);
+
         //Apply dimensions to DOM
         //The popup gets (viewport height + header height)
         this.ui.previewPopup.style.left = `${targetLeft}px`;
@@ -105,9 +118,18 @@ export class PreviewManager {
 
         //Update marker size
         const baseMarkerSize = 24; 
-        const scaledSize = Math.max(8, baseMarkerSize * (viewportW / 1920)); 
-        this.ui.previewMarker.style.width = `${scaledSize}px`;
-        this.ui.previewMarker.style.height = `${scaledSize}px`;
+        let scaledSize = Math.max(8, baseMarkerSize * (viewportW / 1920));
+        
+        //Snap size to an EVEN INTEGER. 
+        //An odd size (e.g. 13px) means the center is at 6.5px.
+        scaledSize = Math.round(scaledSize);
+        if (scaledSize % 2 !== 0) scaledSize += 1;
+
+        //Update local state so the loop knows the exact size
+        this.markerSize = scaledSize;
+
+        this.ui.previewMarker.style.width = `${this.markerSize}px`;
+        this.ui.previewMarker.style.height = `${this.markerSize}px`;
     }
 
     public async updatePreviewData(): Promise<void> {
@@ -117,7 +139,7 @@ export class PreviewManager {
         this.stopAnimation();
 
         if (this.ui.previewPopup.classList.contains('active')) {
-            this.updateLayout(cm);
+            this.updateLayout();
         }
 
         const speed = parseFloat(this.ui.speedInput.value) || 10;
@@ -126,13 +148,25 @@ export class PreviewManager {
         const isFill = this.state.fillEnabled;
 
         try {
-            const response = await cm.getPreviewPath(speed, rasterType, density, isFill);
+            //Get snapshot of the original drawing (Fabric canvas only)
+            const snapshotUrl = cm.getCanvasDataURL();
+            const snapshotImg = new Image();
+            
+            //Load snapshot and fetch simulation path in parallel
+            const [_, response] = await Promise.all([
+                new Promise(resolve => {
+                    snapshotImg.onload = resolve;
+                    snapshotImg.src = snapshotUrl;
+                }),
+                cm.getPreviewPath(speed, rasterType, density, isFill)
+            ]);
             
             this.pathData = response.path;
             this.durationSeconds = response.duration;
             this.ui.previewTimeDisplay.textContent = `Est. Time: ${this.durationSeconds.toFixed(1)}s`;
 
-            this.drawPathOverlay(); 
+            //Draw Snapshot (Original) + Path (Overlay)
+            this.drawPathOverlay(snapshotImg); 
             this.startAnimation();
         } catch (e) {
             console.error(e);
@@ -140,12 +174,19 @@ export class PreviewManager {
         }
     }
 
-    private drawPathOverlay(): void {
+    private drawPathOverlay(backgroundImage?: HTMLImageElement): void {
         const ctx = this.ui.previewCanvas.getContext('2d');
-        if (!ctx || this.pathData.length < 2) return;
+        if (!ctx) return; 
 
         ctx.clearRect(0, 0, this.ui.previewCanvas.width, this.ui.previewCanvas.height);
         
+        // Draw original user drawing (Scaled to fit viewport)
+        if (backgroundImage) {
+            ctx.drawImage(backgroundImage, 0, 0, this.ui.previewCanvas.width, this.ui.previewCanvas.height);
+        }
+
+        if (this.pathData.length < 2) return;
+
         ctx.beginPath();
         //Cyan path matching the robot's intent
         ctx.strokeStyle = '#00ffff'; 
@@ -195,8 +236,13 @@ export class PreviewManager {
         const domX = point.x * this.scaleX;
         const domY = point.y * this.scaleY;
 
-        this.ui.previewMarker.style.left = `${domX}px`;
-        this.ui.previewMarker.style.top = `${domY}px`;
+        //Manual centering calculation
+        //top/left = center - (size / 2)
+        //This avoids CSS transform ambiguity and ensures integer alignment
+        const offset = this.markerSize / 2;
+        
+        this.ui.previewMarker.style.left = `${domX - offset}px`;
+        this.ui.previewMarker.style.top = `${domY - offset}px`;
 
         this.animationFrameId = requestAnimationFrame(() => this.loop());
     }

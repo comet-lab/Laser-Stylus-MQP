@@ -101,12 +101,11 @@
   left: 0;
   width: 100%;
   height: 100%;
-  object-fit: fill;   /* Crucial: matches main video distortion so paths align */
-  z-index: 1;         /* Sit behind the canvas (which is z-index: 2) */
+  object-fit: fill;
+  z-index: 1;
   pointer-events: none;
 }
 
-/* Update this existing class to remove the background image logic */
 .preview-viewport {
   position: relative;
   flex-grow: 1;
@@ -114,7 +113,6 @@
   height: 100%;
   background-color: #000;
   overflow: hidden;
-  /* Remove background-size, background-repeat, etc. */
 }
 
 /* The Canvas layer for drawing the path lines */
@@ -137,5 +135,5 @@
   background-color: transparent;
   border: 3px solid #70ff57;
   border-radius: 50%;
-  transform: translate(-50%, -50%);
+  box-sizing: border-box;
 }
