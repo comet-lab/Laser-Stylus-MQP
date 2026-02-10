@@ -22,6 +22,23 @@
 <body>
   <div id="app-scaler">
     <div id="overlay"></div>
+    <div id="previewPopup">
+      <div class="preview-header">
+        <div class="preview-info">
+          <h3>Simulation</h3>
+          <span id="previewTimeDisplay">Est. Time: -- s</span>
+        </div>
+        <button id="previewCloseBtn">
+          <svg width="24" height="24" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6L18 18" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+      <div class="preview-viewport" id="previewContainer">
+        <canvas id="previewCanvas"></canvas>
+        <div id="previewMarker"></div>
+      </div>
+    </div>
     <div id="preparePopup">
       <div class="prepare-header">
         <h2>Prepare Path</h2>
@@ -34,61 +51,84 @@
       </div>
       <div class="prepare-body">
         <div class="control-group">
-          <label for="speedInput" class="input-label">Robot Speed (mm/s)</label>
-          <div class="input-wrapper">
-            <input type="number" id="speedInput" class="styled-input" value="10" step="10" min="1" max="100"
-              placeholder="e.g. 10">
+
+          <!-- Speed Input - NO container -->
+          <div class="speed-input-wrapper">
+            <label for="speedInput" class="input-label">Robot Speed (mm/s)</label>
+            <div class="input-wrapper">
+              <input type="number" id="speedInput" class="styled-input" value="10" step="10" min="1" max="100"
+                placeholder="e.g. 10">
+            </div>
           </div>
 
+          <!-- Fill Shape Toggle Container -->
+          <div class="fill-toggle-container">
+            <span class="input-label">Fill Shape</span>
+            <div class="segment-control" style="width: 140px;">
+              <button id="fillOff" class="segment-btn active">Off</button>
+              <button id="fillOn" class="segment-btn">On</button>
+            </div>
+          </div>
+
+          <!-- Accordion Panel (outside container) -->
           <div class="fill-accordion-container">
-
-            <button id="fillAccordionToggle" class="fill-accordion-toggle">
-              <span class="fill-toggle-text">Fill Shape</span>
-              <div class="fill-toggle-icon">
-                <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M1.41 0.589996L6 5.17L10.59 0.589996L12 2L6 8L0 2L1.41 0.589996Z" fill="currentColor" />
-                </svg>
-              </div>
-            </button>
-
             <div id="fillSettingsPanel" class="fill-settings-panel">
               <div class="fill-settings-inner">
 
-                <p class="fill-setting-label">Raster Pattern:</p>
-                <div class="segment-control">
-                  <button id="rasterA" class="segment-btn active">Line</button>
-                  <button id="rasterB" class="segment-btn">Spiral</button>
+                <!-- Raster Pattern Section -->
+                <div class="raster-pattern-section">
+                  <label class="fill-setting-label">Raster Pattern</label>
+                  <div class="segment-control raster-pattern-control">
+                    <button id="rasterA" class="segment-btn active">Line</button>
+                    <button id="rasterB" class="segment-btn">Spiral</button>
+                  </div>
                 </div>
 
-                <div class="density-wrapper">
-                  <label for="densityRaster" class="fill-setting-label">Density:</label>
-                  <input type="number" id="densityRaster" class="styled-input-density" value="10" step="1" min="1"
-                    max="20" placeholder="10">
+                <!-- Density Section -->
+                <div class="density-section">
+                  <div class="density-wrapper">
+                    <label for="densityRaster" class="fill-setting-label">Density:</label>
+                    <input type="number" id="densityRaster" class="styled-input-density" value="10" step="1" min="1"
+                      max="20" placeholder="10">
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
+          <!-- Preview Button -->
+          <div class="preview-action-container">
+            <button id="previewPathBtn" class="action-btn">
+              <span class="btn-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+              </span>
+              <span class="btn-text">PREVIEW PATH</span>
+            </button>
+          </div>
 
-        <div id="bottomButtons">
-          <button id="prepareCancelBtn" class="action-btn action-btn-cancel">
-            <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M8 0C3.589 0 0 3.589 0 8C0 12.411 3.589 16 8 16C12.411 16 16 12.411 16 8C16 3.589 12.411 0 8 0ZM3 8C3 7.168 3.224 6.396 3.584 5.705L10.295 12.416C9.58866 12.7939 8.80103 12.9943 8 13C5.243 13 3 10.757 3 8ZM12.416 10.295L5.705 3.584C6.41134 3.20614 7.19897 3.00571 8 3C10.757 3 13 5.243 13 8C13 8.832 12.776 9.604 12.416 10.295Z" />
-            </svg>
-            <span class="btn-text">CANCEL</span>
-          </button>
-
-          <button id="executeBtn" class="action-btn action-btn-execute" data-state="ready">
-            <span class="btn-icon">
-              <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+          <!-- Bottom Buttons -->
+          <div id="bottomButtons">
+            <button id="prepareCancelBtn" class="action-btn action-btn-cancel">
+              <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
                 <path
-                  d="M10 0C15.523 0 20 4.477 20 10C20 15.523 15.523 20 10 20C4.477 20 0 15.523 0 10C0 4.477 4.477 0 10 0ZM10 13C9.73478 13 9.48043 13.1054 9.29289 13.2929C9.10536 13.4804 9 13.7348 9 14C9 14.2652 9.10536 14.5196 9.29289 14.7071C9.48043 14.8946 9.73478 15 10 15C10.2652 15 10.5196 14.8946 10.7071 14.7071C10.8946 14.5196 11 14.2652 11 14C11 13.7348 10.8946 13.4804 10.7071 13.2929C10.5196 13.1054 10.2652 13 10 13ZM10 4C9.75507 4.00003 9.51866 4.08996 9.33563 4.25272C9.15259 4.41547 9.03566 4.63975 9.007 4.883L9 5V11C9.00028 11.2549 9.09788 11.5 9.27285 11.6854C9.44782 11.8707 9.68695 11.9822 9.94139 11.9972C10.1958 12.0121 10.4464 11.9293 10.6418 11.7657C10.8373 11.6021 10.9629 11.3701 10.993 11.117L11 11V5C11 4.73478 10.8946 4.48043 10.7071 4.29289C10.5196 4.10536 10.2652 4 10 4Z" />
+                  d="M8 0C3.589 0 0 3.589 0 8C0 12.411 3.589 16 8 16C12.411 16 16 12.411 16 8C16 3.589 12.411 0 8 0ZM3 8C3 7.168 3.224 6.396 3.584 5.705L10.295 12.416C9.58866 12.7939 8.80103 12.9943 8 13C5.243 13 3 10.757 3 8ZM12.416 10.295L5.705 3.584C6.41134 3.20614 7.19897 3.00571 8 3C10.757 3 13 5.243 13 8C13 8.832 12.776 9.604 12.416 10.295Z" />
               </svg>
-            </span>
-            <span class="btn-text">EXECUTE</span>
-          </button>
+              <span class="btn-text">CANCEL</span>
+            </button>
+
+            <button id="executeBtn" class="action-btn action-btn-execute" data-state="ready">
+              <span class="btn-icon">
+                <svg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M10 0C15.523 0 20 4.477 20 10C20 15.523 15.523 20 10 20C4.477 20 0 15.523 0 10C0 4.477 4.477 0 10 0ZM10 13C9.73478 13 9.48043 13.1054 9.29289 13.2929C9.10536 13.4804 9 13.7348 9 14C9 14.2652 9.10536 14.5196 9.29289 14.7071C9.48043 14.8946 9.73478 15 10 15C10.2652 15 10.5196 14.8946 10.7071 14.7071C10.8946 14.5196 11 14.2652 11 14C11 13.7348 10.8946 13.4804 10.7071 13.2929C10.5196 13.1054 10.2652 13 10 13ZM10 4C9.75507 4.00003 9.51866 4.08996 9.33563 4.25272C9.15259 4.41547 9.03566 4.63975 9.007 4.883L9 5V11C9.00028 11.2549 9.09788 11.5 9.27285 11.6854C9.44782 11.8707 9.68695 11.9822 9.94139 11.9972C10.1958 12.0121 10.4464 11.9293 10.6418 11.7657C10.8373 11.6021 10.9629 11.3701 10.993 11.117L11 11V5C11 4.73478 10.8946 4.48043 10.7071 4.29289C10.5196 4.10536 10.2652 4 10 4Z" />
+                </svg>
+              </span>
+              <span class="btn-text">EXECUTE</span>
+            </button>
+          </div>
+
         </div>
       </div>
     </div>
@@ -292,8 +332,7 @@
             <button id="realTimePen" class="icon-btn icon-btn-fill real-time-ui hidden-mode">
               <svg width="22" height="22" viewBox="0 0 17 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                 <path
-                  d="M5.0458 11L1.0458 14C0.0458035 14.88 -0.0941965 16.12 0.0458035 17C0.175804 18 0.955804 19.22 2.0458 19.68C3.6158 20.35 5.1358 19.9 6.0858 18.92L15.0458 11C16.9058 9.62 16.0458 7 14.0458 7H8.0458L15.5058 2.61C15.9458 2.29 16.1258 1.82 16.1058 1.37C16.0458 0.67 15.5058 0 14.6458 0H14.5858C14.2358 0 13.9058 0.11 13.6058 0.29L1.0458 7C0.235804 7.46 -0.0141965 8.24 0.0458035 9C0.0958035 10.03 0.785804 11 2.0458 11M1.0458 16.5C1.0458 15.837 1.3092 15.2011 1.77804 14.7322C2.24688 14.2634 2.88276 14 3.5458 14C4.20884 14 4.84473 14.2634 5.31357 14.7322C5.78241 15.2011 6.0458 15.837 6.0458 16.5C6.0458 17.163 5.78241 17.7989 5.31357 18.2678C4.84473 18.7366 4.20884 19 3.5458 19C2.88276 19 2.24688 18.7366 1.77804 18.2678C1.3092 17.7989 1.0458 17.163 1.0458 16.5Z"
-                  />
+                  d="M5.0458 11L1.0458 14C0.0458035 14.88 -0.0941965 16.12 0.0458035 17C0.175804 18 0.955804 19.22 2.0458 19.68C3.6158 20.35 5.1358 19.9 6.0858 18.92L15.0458 11C16.9058 9.62 16.0458 7 14.0458 7H8.0458L15.5058 2.61C15.9458 2.29 16.1258 1.82 16.1058 1.37C16.0458 0.67 15.5058 0 14.6458 0H14.5858C14.2358 0 13.9058 0.11 13.6058 0.29L1.0458 7C0.235804 7.46 -0.0141965 8.24 0.0458035 9C0.0958035 10.03 0.785804 11 2.0458 11M1.0458 16.5C1.0458 15.837 1.3092 15.2011 1.77804 14.7322C2.24688 14.2634 2.88276 14 3.5458 14C4.20884 14 4.84473 14.2634 5.31357 14.7322C5.78241 15.2011 6.0458 15.837 6.0458 16.5C6.0458 17.163 5.78241 17.7989 5.31357 18.2678C4.84473 18.7366 4.20884 19 3.5458 19C2.88276 19 2.24688 18.7366 1.77804 18.2678C1.3092 17.7989 1.0458 17.163 1.0458 16.5Z" />
               </svg>
 
             </button>
@@ -332,7 +371,8 @@
               <span class="height-label">Height</span>
               <span class="height-label height-number" id="heightDisplay">0</span>
               <div class="height-vertical-slider-container">
-                <input type="range" id="heightSlider" min="0" max="40" value="0" class="styled-range height-vertical-range">
+                <input type="range" id="heightSlider" min="0" max="40" value="0"
+                  class="styled-range height-vertical-range">
               </div>
             </div>
           </div>

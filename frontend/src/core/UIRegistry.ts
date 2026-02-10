@@ -19,6 +19,9 @@ export interface UIRegistry {
     overlay: HTMLElement;
     settingsPopup: HTMLElement;
     preparePopup: HTMLElement;
+    previewPopup: HTMLElement;
+    previewTimeDisplay: HTMLElement;
+    previewCanvas: HTMLCanvasElement;
 
     // --- Action Buttons ---
     settingsBtn: HTMLButtonElement;
@@ -26,6 +29,8 @@ export interface UIRegistry {
     prepareBtn: HTMLButtonElement;
     prepareCloseBtn: HTMLButtonElement;
     prepareCancelBtn: HTMLButtonElement;
+    previewBtn: HTMLButtonElement;
+    previewCloseBtn: HTMLButtonElement;
     executeBtn: HTMLButtonElement;
     clearBtn: HTMLButtonElement;
 
@@ -54,6 +59,7 @@ export interface UIRegistry {
 
     // --- Visual Markers ---
     robotMarker: HTMLElement;
+    previewMarker: HTMLElement;
 
     // --- Shape Drawing Tools ---
     penBtn: HTMLButtonElement;
@@ -66,7 +72,8 @@ export interface UIRegistry {
     clearMarkersBtn: HTMLButtonElement;
 
     // --- Raster / Fill Settings ---
-    fillAccordionToggle: HTMLButtonElement;
+    fillOffBtn: HTMLButtonElement;
+    fillOnBtn: HTMLButtonElement;
     fillSettingsPanel: HTMLElement;
     rasterBtnA: HTMLButtonElement;
     rasterBtnB: HTMLButtonElement;
@@ -115,8 +122,11 @@ export function createUIRegistry(): UIRegistry {
 
         // Modals & Overlays
         overlay:        document.getElementById('overlay')           as HTMLElement,
-        settingsPopup:  document.getElementById('settingsPopup')    as HTMLElement,
-        preparePopup:   document.getElementById('preparePopup')     as HTMLElement,
+        settingsPopup:  document.getElementById('settingsPopup')     as HTMLElement,
+        preparePopup:   document.getElementById('preparePopup')      as HTMLElement,
+        previewPopup: document.getElementById('previewPopup') as HTMLElement,
+        previewCanvas: document.getElementById('previewCanvas') as HTMLCanvasElement,
+        previewTimeDisplay: document.getElementById('previewTimeDisplay') as HTMLElement,
 
         // Action Buttons
         settingsBtn:      document.getElementById('settingsBtn')      as HTMLButtonElement,
@@ -124,6 +134,8 @@ export function createUIRegistry(): UIRegistry {
         prepareBtn:       document.getElementById('prepareBtn')       as HTMLButtonElement,
         prepareCloseBtn:  document.getElementById('prepareCloseBtn')  as HTMLButtonElement,
         prepareCancelBtn: document.getElementById('prepareCancelBtn') as HTMLButtonElement,
+        previewBtn:       document.getElementById('previewPathBtn')   as HTMLButtonElement,
+        previewCloseBtn:  document.getElementById('previewCloseBtn')  as HTMLButtonElement,
         executeBtn:       document.getElementById('executeBtn')       as HTMLButtonElement,
         clearBtn:         document.getElementById('clearBtn')         as HTMLButtonElement,
 
@@ -152,6 +164,7 @@ export function createUIRegistry(): UIRegistry {
 
         // Visual Markers
         robotMarker: document.getElementById('robot-marker') as HTMLElement,
+        previewMarker: document.getElementById('previewMarker') as HTMLElement,
 
         // Shape Drawing Tools
         penBtn:          document.getElementById('penBtn')          as HTMLButtonElement,
@@ -164,7 +177,8 @@ export function createUIRegistry(): UIRegistry {
         clearMarkersBtn: document.getElementById('clearMarkersBtn') as HTMLButtonElement,
 
         // Raster / Fill Settings
-        fillAccordionToggle: document.getElementById('fillAccordionToggle') as HTMLButtonElement,
+        fillOffBtn: document.getElementById('fillOff') as HTMLButtonElement,
+        fillOnBtn:  document.getElementById('fillOn')  as HTMLButtonElement,
         fillSettingsPanel:   document.getElementById('fillSettingsPanel')   as HTMLElement,
         rasterBtnA:          document.getElementById('rasterA')            as HTMLButtonElement,
         rasterBtnB:          document.getElementById('rasterB')            as HTMLButtonElement,

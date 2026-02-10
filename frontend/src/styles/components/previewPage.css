@@ -1,0 +1,165 @@
+/* frontend/src/styles/components/previewPage.css */
+
+/* ============================================
+   PREVIEW PATH MODAL
+   ============================================ */
+
+/* Note: Top/Left/Width/Height are set by PreviewManager.ts 
+   to ensure the Aspect Ratio exactly matches the video feed
+   and to align it with the Prepare Menu.
+*/
+#previewPopup {
+  position: fixed;
+  z-index: 101; 
+  display: none;
+  flex-direction: column;
+  
+  background-color: #000; /* Pure black background for the container */
+  border: 2px solid #2c343b;
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9);
+  color: #e0f2e0;
+  overflow: hidden;
+}
+
+#previewPopup.active {
+  display: flex;
+}
+
+/* --- Header Section --- */
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background-color: #151b21;
+  border-bottom: 2px solid #2c343b;
+  flex-shrink: 0;
+}
+
+.preview-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.preview-info h3 {
+  margin: 0;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  color: #e0f2e0;
+}
+
+/* The time display text */
+#previewTimeDisplay {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 14px;
+  color: #70ff57; /* Green accent */
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  margin-left: 0; 
+}
+
+/* --- Close Button --- */
+#previewCloseBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background-color: #2c343b;
+  color: #e0f2e0;
+  border: 3px solid transparent;
+  transition: all 0.15s ease-out;
+  cursor: pointer;
+}
+
+#previewCloseBtn:hover {
+  filter: brightness(110%);
+}
+
+#previewCloseBtn:active {
+  background-color: #455256;
+  border-color: #e0f2e0;
+  box-shadow: inset 2px 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+#previewCloseBtn svg {
+  fill: #e0f2e0;
+  stroke: #e0f2e0;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+/* --- Viewport Area --- */
+.preview-viewport {
+  position: relative;
+  flex-grow: 1;
+  width: 100%;
+  height: 100%;
+  
+  /* Background Snapshot Handling */
+  background-color: #000;
+  
+  /* CRITICAL FIX: Forces the snapshot to stretch exactly like the main video.
+     This ensures the aspect ratio distortion matches the calculated path. */
+  background-size: 100% 100%; 
+  background-repeat: no-repeat;
+  background-position: center;
+  
+  overflow: hidden;
+}
+
+/* The Canvas layer for drawing the path lines */
+#previewCanvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* --- Simulation Marker (The moving dot) --- */
+#previewMarker {
+  position: absolute;
+  z-index: 10;
+  display: none;
+  pointer-events: none;
+  
+  /* Visuals */
+  background-color: transparent;
+  border: 3px solid #70ff57; /* Reduced to 2px for cleaner look at scale */
+  border-radius: 50%;
+  
+  /* Center pivot */
+  transform: translate(-50%, -50%);
+}
+
+.fill-header {
+  width: 70%; /* Matches input width */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+/* Ensure segments inside the prepare menu look consistent */
+.fill-accordion-container .segment-control {
+    background-color: #0f1419;
+    border: 1px solid #2c343b;
+}
+
+/* --- Preview Path Button --- */
+.preview-action-container {
+  width: 100%;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #2c343b;
+  display: flex;
+  justify-content: center;
+}

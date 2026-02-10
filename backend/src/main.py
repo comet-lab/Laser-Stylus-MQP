@@ -5,7 +5,11 @@ import base64
 from robot import RobotSchema
 from manager import ConnectionManager
 import json
-from typing import Optional # Import Optional
+from typing import Optional
+import random
+import math
+from typing import Optional, List, Dict, Any
+import httpx
 
 app = FastAPI()
 
@@ -158,6 +162,114 @@ async def update_heat_area(file: UploadFile = File(...)):
     return {
         "status": "success", 
         "message": "Heat area mask saved and dispatched"
+    }
+    
+    
+# ============================================================================
+#  PATH GENERATION HELPERS
+# ============================================================================
+
+def generate_fake_raster_path(pixel_list: List[Dict[str, float]], density: float) -> List[Dict[str, float]]:
+    """
+    Fallback simulation: creates a zig-zag pattern within the bounding box.
+    """
+    if not pixel_list: return []
+
+    # 1. Calculate Bounding Box
+    xs = [p['x'] for p in pixel_list]
+    ys = [p['y'] for p in pixel_list]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+
+    generated_path = []
+    
+    # Calculate step size (inverted: higher density = smaller step)
+    step = max(10.0, 200.0 / (density if density > 0 else 1)) 
+    
+    current_y = min_y
+    going_right = True
+    point_resolution = 10.0 
+
+    while current_y <= max_y:
+        start_x = min_x if going_right else max_x
+        end_x = max_x if going_right else min_x
+        
+        # Interpolation Logic
+        dist = abs(end_x - start_x)
+        num_sub_steps = int(dist / point_resolution)
+        direction = 1 if end_x > start_x else -1
+        
+        if num_sub_steps < 1:
+            generated_path.append({"x": start_x, "y": current_y})
+            generated_path.append({"x": end_x, "y": current_y})
+        else:
+            for i in range(num_sub_steps + 1):
+                x_pos = start_x + (i * point_resolution * direction)
+                if direction > 0: x_pos = min(x_pos, end_x)
+                else:             x_pos = max(x_pos, end_x)
+                generated_path.append({"x": x_pos, "y": current_y})
+
+        current_y += step
+        going_right = not going_right
+        
+    return generated_path
+
+# ============================================================================
+#  PREVIEW ENDPOINT
+# ============================================================================
+
+@app.post("/api/preview")
+async def preview_path(
+    speed: float = Form(...),
+    raster_type: str = Form(None),
+    density: float = Form(...),
+    pixels: str = Form(...),
+    is_fill: bool = Form(...),
+    file: Optional[UploadFile] = File(None)
+):
+    try:
+        pixel_list = json.loads(pixels)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid pixel data format")
+
+    final_path = []
+    duration = 0
+
+    # ==============================================================================
+    # TODO: ROBOT INTEGRATION SECTION
+    # ==============================================================================
+    #Construct payload to send to backend, similar to execution
+    #Send to backend to generate the path
+    #Wait for the response containing path and duration
+    #Take that path, and do what's necessary
+    # ==============================================================================
+
+    # --- CURRENT SIMULATION LOGIC ---
+    # For now, we simulate the path locally so the UI works.
+    if is_fill:
+        final_path = generate_fake_raster_path(pixel_list, density)
+    else:
+        final_path = pixel_list[::5] # Simple vector outline
+
+    # Calculate simulated duration
+    total_distance = 0
+    if len(final_path) > 1:
+        for i in range(1, len(final_path)):
+            dx = final_path[i]['x'] - final_path[i-1]['x']
+            dy = final_path[i]['y'] - final_path[i-1]['y']
+            total_distance += math.sqrt(dx*dx + dy*dy)
+
+    fake_speed_factor = speed * 10
+    if fake_speed_factor == 0: fake_speed_factor = 1
+    duration = (total_distance / fake_speed_factor) + random.uniform(0.5, 1.5)
+    # --- END SIMULATION LOGIC ---
+
+    #Return necessary values to frontend for visualization
+    return {
+        "status": "success",
+        "duration": duration,
+        "path": final_path,
+        "message": "Preview generated (Simulation)"
     }
 
 ws_ui_name = os.getenv("UI_WEBSOCKET_NAME", "ui")

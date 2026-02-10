@@ -76,7 +76,7 @@
   justify-content: center;
   align-items: center;
   padding: 1.5rem 2rem;
-  gap: 2rem;
+  gap: 1rem;
   box-sizing: border-box;
 }
 
@@ -85,32 +85,41 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 1rem;
 }
 
 .input-label {
   display: block;
   color: #E0F2E0;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   font-family: 'IBM Plex Sans', sans-serif;
   font-weight: 500;
   font-size: 1.2rem;
 }
 
+/* Speed Input - NO container, just label and input */
+.speed-input-wrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .input-wrapper {
   position: relative;
   height: fit-content;
-  width: 70%;
+  width: 100%;
 }
 
 .styled-input {
-  background: #161b22;
+  background: #161b2296;
   border: 2px solid #2c343b;
   color: #E0F2E0;
-  padding: 15px;
+  padding: 12px 15px;
   border-radius: 8px;
   width: 100%;
   font-family: 'IBM Plex Sans', sans-serif;
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   text-align: center;
   box-sizing: border-box;
   transition: border-color 0.2s;
@@ -136,105 +145,92 @@
 }
 
 /* ============================================
-   ACCORDION & SEGMENTED CONTROLS
+   FILL SHAPE TOGGLE CONTAINER
    ============================================ */
-.fill-accordion-container {
+.fill-toggle-container {
   width: 100%;
-  margin-top: 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-/* Toggle Button */
-.fill-accordion-toggle {
-  width: 70%;
-  background-color: #161b22;
+  background-color: #161b2296;
   border: 2px solid #2c343b;
   border-radius: 8px;
   padding: 12px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: #e0f2e0;
 }
 
-.fill-accordion-toggle:hover {
-  border-color: #e0f2e0;
-  background-color: #1c2128;
-  filter: none;
+.fill-toggle-container .input-label {
+  margin-bottom: 0;
 }
 
-.fill-accordion-toggle.active {
-  background-color: #2c343b;
-  border-color: #e0f2e0;
-  color: #e0f2e0;
-}
-
-.fill-toggle-text {
-  font-family: 'IBM Plex Sans', sans-serif;
-  font-weight: 700;
-  font-size: 16px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.fill-toggle-icon {
+/* ============================================
+   ACCORDION & SEGMENTED CONTROLS
+   ============================================ */
+.fill-accordion-container {
+  width: 100%;
   display: flex;
-  align-items: center;
-  transition: transform 0.3s ease;
-  color: #5c6b75;
+  flex-direction: column;
 }
 
-.fill-accordion-toggle.active .fill-toggle-icon {
-  transform: rotate(180deg);
-  color: #e0f2e0;
-}
-
-/* Accordion Panel */
+/* Fill Settings Panel */
 .fill-settings-panel {
-  width: 70%;
+  width: 100%;
   max-height: 0;
   overflow: hidden;
-  background-color: #151a1f;
+  background-color: #161b2296;
   border-radius: 8px;
   transition: max-height 0.3s ease-out, opacity 0.3s ease;
   opacity: 0;
   border: 2px solid transparent;
-  margin-top: 5px;
 }
 
 .fill-settings-panel.open {
-  max-height: 200px;
+  max-height: 250px;
   opacity: 1;
   border-color: #2c343b;
 }
 
 .fill-settings-inner {
-  padding: 15px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 18px;
   align-items: center;
 }
 
-/* Segmented Control (Line/Spiral) */
+/* Raster Pattern Section */
+.raster-pattern-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.raster-pattern-section .fill-setting-label {
+  font-size: 14px;
+  color: #e0f2e0;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Segmented Control (Off/On and Line/Spiral) */
 .segment-control {
   display: flex;
-  width: 100%;
   background-color: #0f1419;
   border-radius: 6px;
   padding: 3px;
   border: 1px solid #2c343b;
 }
 
+.segment-control.raster-pattern-control {
+  width: 80%;
+}
+
 .segment-btn {
   flex: 1;
   background: transparent;
   border: none;
-  padding: 8px;
+  padding: 10px 16px;
   color: #5c6b75;
   font-family: 'IBM Plex Sans', sans-serif;
   font-weight: 600;
@@ -242,6 +238,7 @@
   border-radius: 4px;
   transition: all 0.2s ease;
   text-transform: uppercase;
+  cursor: pointer;
 }
 
 .segment-btn:hover {
@@ -255,33 +252,51 @@
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
-/* Density Inputs */
+/* Density Section */
+.density-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
 .density-wrapper {
+  width: 80%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  gap: 10px;
+  justify-content: center;
+  gap: 15px;
+  background-color: #0f1419;
+  border: 1px solid #2c343b;
+  border-radius: 6px;
+  padding: 10px 15px;
 }
 
 .fill-setting-label {
   margin: 0;
-  font-size: 13px;
-  color: #9aa5b1;
-  font-weight: 500;
+  font-size: 14px;
+  color: #e0f2e0;
+  font-weight: 600;
+}
+
+.density-wrapper .fill-setting-label {
+  flex-shrink: 0;
 }
 
 .styled-input-density {
   width: 80px;
-  padding: 8px;
+  padding: 8px 12px;
   font-size: 14px;
-  background-color: #0f1419;
+  background-color: #161b22;
   border: 2px solid #2c343b;
   color: #E0F2E0;
-  border-radius: 8px;
+  border-radius: 6px;
   text-align: center;
-  box-sizing: content-box;
+  box-sizing: border-box;
   transition: border-color 0.2s;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 500;
 }
 
 .styled-input-density:focus {
@@ -294,4 +309,39 @@
 .styled-input-density::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
+}
+
+/* ============================================
+   PREVIEW PATH BUTTON
+   ============================================ */
+.preview-action-container {
+  width: 100%;
+  margin-bottom: 0;
+  display: flex;
+  justify-content: center;
+}
+
+#previewPathBtn {
+  width: 100%;
+  background-color: #1c2128;
+  border: 2px solid #2c343b;
+  color: #e0f2e0;
+  fill: #e0f2e0;
+  transition: all 0.2s ease;
+}
+
+#previewPathBtn:hover:not(:disabled) {
+  background-color: rgb(46, 53, 65);
+  border-color: #e0f2e0;
+  filter: none;
+}
+
+#previewPathBtn:active:not(:disabled) {
+  background-color: #0f1419;
+}
+
+#previewPathBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  border-color: #2c343b;
 }
