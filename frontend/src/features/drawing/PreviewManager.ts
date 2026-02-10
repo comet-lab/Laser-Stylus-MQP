@@ -24,16 +24,16 @@ export class PreviewManager {
         const cm = this.getCanvasManager();
         if (!cm) return;
 
-        // 1. Activate UI elements
+        //Activate UI elements
         this.ui.overlay.classList.add('active'); 
         this.ui.previewPopup.classList.add('active');
         this.ui.previewBtn.disabled = true;
         this.ui.previewTimeDisplay.textContent = "Calculating...";
 
-        // 2. Perform Layout Calculation
+        //Perform layout calculation
         this.updateLayout(cm);
 
-        // 3. Fetch Data & Start
+        //Fetch data and start
         await this.updatePreviewData();
         this.ui.previewBtn.disabled = false;
     }
@@ -46,34 +46,33 @@ export class PreviewManager {
 
     /**
      * Resizes and positions the Preview Window.
-     * Enforces aspect ratio of the VIDEO (Robot Space).
-     * Calculates position based on the Prepare Menu's right-margin.
+     * Enforces aspect ratio of the video.
+     * Calculates position based on the prepare menu's right-margin.
      */
     private updateLayout(cm: CanvasManager): void {
         const videoW = this.ui.video.videoWidth || 1;
         const videoH = this.ui.video.videoHeight || 1;
         const videoRatio = videoW / videoH;
 
-        // 1. Measure Header Height (static offset)
-        // We need to query the header inside the popup to know how much extra space to reserve
+        //Measure header height
+        // e need to query the header inside the popup to know how much extra space to reserve
         const header = this.ui.previewPopup.querySelector('.preview-header');
         const headerHeight = header ? header.getBoundingClientRect().height : 60; // Fallback to 60 if hidden
 
-        // 2. Calculate Positioning (Same as before)
+        //Calculate positioning (Same as before)
         const prepareRect = this.ui.preparePopup.getBoundingClientRect();
         const sidebarWidth = 65.5; 
         const rightGap = window.innerWidth - prepareRect.right;
         const targetLeft = sidebarWidth + rightGap;
 
-        // 3. Calculate Available Width for the CONTENT (Canvas/Video)
-        // This is the width of the cyan box in your mind
+        //Calculate available width for the content (Canvas/video)
         const availableWidth = prepareRect.left - targetLeft - rightGap;
         
-        // 4. Calculate Target Dimensions for the VIEWPORT ONLY
+        //Calculate target dimensions for the viewport only
         let viewportW = availableWidth;
         let viewportH = viewportW / videoRatio;
 
-        // Check vertical bounds (Window Height - Margins - Header Height)
+        //Check vertical bounds (Window height - margins - header height)
         const maxViewportHeight = window.innerHeight - (rightGap * 2) - headerHeight;
         
         if (viewportH > maxViewportHeight) {
@@ -81,33 +80,33 @@ export class PreviewManager {
             viewportW = viewportH * videoRatio;
         }
 
-        // 5. Apply Dimensions to DOM
-        // The Popup gets (Viewport Height + Header Height)
+        // 5. Apply dimensions to DOM
+        // The popup gets (viewport height + header height)
         this.ui.previewPopup.style.left = `${targetLeft}px`;
         this.ui.previewPopup.style.top = `${prepareRect.top}px`;
         this.ui.previewPopup.style.width = `${viewportW}px`;
         this.ui.previewPopup.style.height = `${viewportH + headerHeight}px`;
 
-        // 6. Update Internal Canvas Resolution
-        // Matches the viewport exactly
+        //Update internal canvas resolution
+        //Matches the viewport exactly
         this.ui.previewCanvas.width = viewportW;
         this.ui.previewCanvas.height = viewportH;
 
-        // 7. Update Background Snapshot
+        //Update background snapshot
         const dataUrl = cm.getCanvasDataURL();
         const container = this.ui.previewCanvas.parentElement;
         if (container) {
             container.style.backgroundImage = `url(${dataUrl})`;
-            // Force stretch to match Main Viewport behavior
+            // Force stretch to match main viewport behavior
             container.style.backgroundSize = '100% 100%'; 
         }
 
-        // 8. Calculate Scale Factors
-        // Now ScaleY maps Video -> Viewport (excluding header), which is correct
+        //Calculate Scale Factors
+        //Now caleY maps video -> viewport (excluding header)
         this.scaleX = viewportW / videoW;
         this.scaleY = viewportH / videoH;
 
-        // 9. Update Marker Size
+        //Update marker size
         const baseMarkerSize = 24; 
         const scaledSize = Math.max(8, baseMarkerSize * (viewportW / 1920)); 
         this.ui.previewMarker.style.width = `${scaledSize}px`;
@@ -151,7 +150,7 @@ export class PreviewManager {
         ctx.clearRect(0, 0, this.ui.previewCanvas.width, this.ui.previewCanvas.height);
         
         ctx.beginPath();
-        // Cyan path matching the robot's intent
+        //Cyan path matching the robot's intent
         ctx.strokeStyle = '#00ffff'; 
         ctx.lineWidth = 2; 
         ctx.lineJoin = 'round';

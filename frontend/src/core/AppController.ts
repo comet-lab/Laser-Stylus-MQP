@@ -237,7 +237,7 @@ class AppController {
         //Live preview window refresh
         const refreshPreview = () => {
             if (this.ui.previewPopup.classList.contains('active')) {
-                 this.previewManager.updatePreviewData();
+                this.previewManager.updatePreviewData();
             }
         };
 
@@ -246,8 +246,8 @@ class AppController {
 
         let debounceTimer: any;
         this.ui.rasterDensityInput.addEventListener('input', () => {
-             clearTimeout(debounceTimer);
-             debounceTimer = setTimeout(refreshPreview, 500);
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(refreshPreview, 500);
         });
 
         // Clicking the background overlay closes whichever modal is open
@@ -356,17 +356,19 @@ class AppController {
                 this.ui.fillOnBtn.classList.add('active');
                 this.ui.fillOffBtn.classList.remove('active');
                 this.ui.fillSettingsPanel.classList.add('open');
+                this.ui.fillSettingsPanel.parentElement?.classList.add('has-open-panel');
             } else {
                 this.ui.fillOnBtn.classList.remove('active');
                 this.ui.fillOffBtn.classList.add('active');
                 this.ui.fillSettingsPanel.classList.remove('open');
+                this.ui.fillSettingsPanel.parentElement?.classList.remove('has-open-panel');
             }
             refreshPreview();
         };
 
         this.ui.fillOnBtn.addEventListener('click', () => updateFillState(true));
         this.ui.fillOffBtn.addEventListener('click', () => updateFillState(false));
-        
+
         // Raster pattern buttons are mutually exclusive
         this.ui.rasterBtnA.addEventListener('click', () => {
             this.ui.rasterBtnA.classList.add('active');

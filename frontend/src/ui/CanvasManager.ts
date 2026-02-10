@@ -178,11 +178,11 @@ export class CanvasManager {
     }
 
     public async getPreviewPath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<{ duration: number, path: Position[] }> {
-        // 1. Generate Pixel Path (Same as execute)
+        //Generate Pixel Path (Same as execute)
         const pixels = this.generatePixelPath();
 
-        // 2. Normalize to Video Space
-        // We do this to ensure the preview matches what the robot "sees" relative to the camera frame
+        //Normalize to video space
+        //We do this to ensure the preview matches the camera frame
         const videoPixels = pixels.map(p => ({
             x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
             y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
@@ -200,10 +200,8 @@ export class CanvasManager {
             formData.append('raster_type', raster_type);
         }
 
-        // We don't strictly need the file for the dummy preview, 
-        // but if your backend validator requires it, we can send a dummy or the real blob.
-        // For the dummy endpoint in Python I marked 'file' as Optional, so we can skip it here.
-
+        //Probably want to send the file here as well, or whatever data we usually have for execute
+        //Right now it's just for the dummy path
         const response = await this.postFormData('/api/preview', formData);
 
         // Return exactly what the Python endpoint returns

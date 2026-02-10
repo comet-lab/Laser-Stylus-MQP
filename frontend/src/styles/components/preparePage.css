@@ -314,9 +314,12 @@
 /* ============================================
    PREVIEW PATH BUTTON
    ============================================ */
+/* --- Preview Path Button --- */
 .preview-action-container {
   width: 100%;
-  margin-bottom: 0;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #2c343b;
   display: flex;
   justify-content: center;
 }
@@ -345,3 +348,18 @@
   cursor: not-allowed;
   border-color: #2c343b;
 }
+
+
+.fill-header {
+  width: 70%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.fill-accordion-container .segment-control {
+    background-color: #0f1419;
+    border: 1px solid #2c343b;
+}
+

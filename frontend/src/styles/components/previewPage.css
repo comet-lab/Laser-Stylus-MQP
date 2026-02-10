@@ -14,7 +14,7 @@
   display: none;
   flex-direction: column;
   
-  background-color: #000; /* Pure black background for the container */
+  background-color: #000;
   border: 2px solid #2c343b;
   border-radius: 16px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9);
@@ -55,7 +55,7 @@
 #previewTimeDisplay {
   font-family: 'IBM Plex Sans', sans-serif;
   font-size: 14px;
-  color: #70ff57; /* Green accent */
+  color: #70ff57;
   font-weight: 500;
   letter-spacing: 0.5px;
   margin-left: 0; 
@@ -100,11 +100,8 @@
   flex-grow: 1;
   width: 100%;
   height: 100%;
-  
-  /* Background Snapshot Handling */
   background-color: #000;
-  
-  /* CRITICAL FIX: Forces the snapshot to stretch exactly like the main video.
+  /* Forces the snapshot to stretch exactly like the main video.
      This ensures the aspect ratio distortion matches the calculated path. */
   background-size: 100% 100%; 
   background-repeat: no-repeat;
@@ -130,36 +127,8 @@
   z-index: 10;
   display: none;
   pointer-events: none;
-  
-  /* Visuals */
   background-color: transparent;
-  border: 3px solid #70ff57; /* Reduced to 2px for cleaner look at scale */
+  border: 3px solid #70ff57;
   border-radius: 50%;
-  
-  /* Center pivot */
   transform: translate(-50%, -50%);
-}
-
-.fill-header {
-  width: 70%; /* Matches input width */
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 5px;
-}
-
-/* Ensure segments inside the prepare menu look consistent */
-.fill-accordion-container .segment-control {
-    background-color: #0f1419;
-    border: 1px solid #2c343b;
-}
-
-/* --- Preview Path Button --- */
-.preview-action-container {
-  width: 100%;
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #2c343b;
-  display: flex;
-  justify-content: center;
 }

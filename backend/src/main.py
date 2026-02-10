@@ -56,7 +56,7 @@ async def execute_fixtures(file: UploadFile = File(...)):
         "message": "Fixtures mask dispatched to robot"
     }
 
-# --- CORRECTED ENDPOINT ---
+# --- EXECUTION ENDOINT ---
 @app.post("/api/execute")
 async def execute_bundled_command(
     speed: float = Form(...),
@@ -175,7 +175,6 @@ def generate_fake_raster_path(pixel_list: List[Dict[str, float]], density: float
     """
     if not pixel_list: return []
 
-    # 1. Calculate Bounding Box
     xs = [p['x'] for p in pixel_list]
     ys = [p['y'] for p in pixel_list]
     min_x, max_x = min(xs), max(xs)
@@ -183,7 +182,6 @@ def generate_fake_raster_path(pixel_list: List[Dict[str, float]], density: float
 
     generated_path = []
     
-    # Calculate step size (inverted: higher density = smaller step)
     step = max(10.0, 200.0 / (density if density > 0 else 1)) 
     
     current_y = min_y
@@ -194,7 +192,6 @@ def generate_fake_raster_path(pixel_list: List[Dict[str, float]], density: float
         start_x = min_x if going_right else max_x
         end_x = max_x if going_right else min_x
         
-        # Interpolation Logic
         dist = abs(end_x - start_x)
         num_sub_steps = int(dist / point_resolution)
         direction = 1 if end_x > start_x else -1
@@ -214,10 +211,7 @@ def generate_fake_raster_path(pixel_list: List[Dict[str, float]], density: float
         
     return generated_path
 
-# ============================================================================
-#  PREVIEW ENDPOINT
-# ============================================================================
-
+# --- PREVIEW ENDPOINT ---
 @app.post("/api/preview")
 async def preview_path(
     speed: float = Form(...),
