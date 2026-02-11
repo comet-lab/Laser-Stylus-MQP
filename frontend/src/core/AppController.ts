@@ -11,6 +11,7 @@ import { ModeManager } from '../features/settings/ModeManager';
 import { ToolHandler } from '../features/drawing/ToolHandler';
 import { ExecutionManager } from '../features/drawing/ExecutionManager';
 import { SettingsManager } from '../features/settings/SettingsManager';
+import { PreviewManager } from '../features/drawing/PreviewManager';
 
 // ---------------------------------------------------------------------------
 // Global type augmentation – MediaMTXWebRTCReader lives on window at runtime
@@ -58,6 +59,7 @@ class AppController {
     private readonly toolHandler: ToolHandler;
     private readonly executionManager: ExecutionManager;
     private readonly settingsManager: SettingsManager;
+    private readonly previewManager: PreviewManager;
 
     // ---------------------------------------------------------------
     // Late-initialised (created once the video track arrives)
@@ -111,6 +113,8 @@ class AppController {
             this.hardware,
             () => this.toolHandler.updateDrawButtonState(),
         );
+
+        this.previewManager = new PreviewManager(this.ui, this.state, getCM);
 
         // TODO: Expose on window for quick console access during development
         // TODO: REMOVE BEFORE SHIPPING
@@ -227,6 +231,25 @@ class AppController {
         this.ui.prepareCloseBtn.addEventListener('click', () => this.ui.preparePopup.classList.remove('active'));
         this.ui.prepareCancelBtn.addEventListener('click', () => this.ui.preparePopup.classList.remove('active'));
 
+        this.ui.previewBtn.addEventListener('click', () => this.previewManager.openPreview());
+        this.ui.previewCloseBtn.addEventListener('click', () => this.previewManager.closePreview());
+
+        //Live preview window refresh
+        const refreshPreview = () => {
+            if (this.ui.previewPopup.classList.contains('active')) {
+                this.previewManager.updatePreviewData();
+            }
+        };
+
+        this.ui.rasterBtnA.addEventListener('click', refreshPreview);
+        this.ui.rasterBtnB.addEventListener('click', refreshPreview);
+
+        let debounceTimer: any;
+        this.ui.rasterDensityInput.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(refreshPreview, 500);
+        });
+
         // Clicking the background overlay closes whichever modal is open
         this.ui.overlay.addEventListener('click', () => {
             if (this.ui.settingsPopup.classList.contains('active')) this.settingsManager.closeSettings();
@@ -326,11 +349,25 @@ class AppController {
         this.ui.clearBtn.addEventListener('click', () => this.executionManager.clearDrawing());
 
         // --- Fill / Raster settings ---
-        this.ui.fillAccordionToggle.addEventListener('click', () => {
-            this.ui.fillSettingsPanel.classList.toggle('open');
-            this.ui.fillAccordionToggle.classList.toggle('active');
-            this.state.fillEnabled = this.ui.fillAccordionToggle.classList.contains('active');
-        });
+        const updateFillState = (isEnabled: boolean) => {
+            this.state.fillEnabled = isEnabled;
+
+            if (isEnabled) {
+                this.ui.fillOnBtn.classList.add('active');
+                this.ui.fillOffBtn.classList.remove('active');
+                this.ui.fillSettingsPanel.classList.add('open');
+                this.ui.fillSettingsPanel.parentElement?.classList.add('has-open-panel');
+            } else {
+                this.ui.fillOnBtn.classList.remove('active');
+                this.ui.fillOffBtn.classList.add('active');
+                this.ui.fillSettingsPanel.classList.remove('open');
+                this.ui.fillSettingsPanel.parentElement?.classList.remove('has-open-panel');
+            }
+            refreshPreview();
+        };
+
+        this.ui.fillOnBtn.addEventListener('click', () => updateFillState(true));
+        this.ui.fillOffBtn.addEventListener('click', () => updateFillState(false));
 
         // Raster pattern buttons are mutually exclusive
         this.ui.rasterBtnA.addEventListener('click', () => {
@@ -364,6 +401,9 @@ class AppController {
         // --- Window resize ---
         window.addEventListener('resize', () => {
             this.settingsManager.handleResize();
+            if (this.ui.previewPopup.classList.contains('active')) {
+                this.previewManager.updatePreviewData();
+            }
             if (this.canvasManager) {
                 const w = this.ui.viewport.offsetWidth;
                 const h = this.ui.viewport.offsetHeight;

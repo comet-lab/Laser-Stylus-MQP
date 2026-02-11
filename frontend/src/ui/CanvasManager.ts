@@ -169,6 +169,105 @@ export class CanvasManager {
     }
 
     // =========================================================================
+    // Preview Logic
+    // =========================================================================
+
+    // Return a snapshot of the current canvas state (markers/shapes)
+    public getCanvasDataURL(): string {
+        return this.fCanvas.toDataURL();
+    }
+
+    public getVideoSnapshotDataURL(): string {
+        //Create a temp canvas at the exact video resolution
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = this.video.videoWidth;
+        tempCanvas.height = this.video.videoHeight;
+        const ctx = tempCanvas.getContext('2d');
+
+        if (ctx) {
+            //Draw the video frame first (background)
+            ctx.drawImage(this.video, 0, 0, tempCanvas.width, tempCanvas.height);
+
+            //Draw the Fabric canvas on top (foreground)
+            //We use the raw canvas element from Fabric
+            ctx.drawImage(this.fCanvas.toCanvasElement(), 0, 0, tempCanvas.width, tempCanvas.height);
+        }
+
+        return tempCanvas.toDataURL('image/jpeg', 0.8); // JPEG is faster/smaller for video frames
+    }
+
+    public async getPreviewPath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<{ duration: number, path: Position[] }> {
+        //Generate Pixel Path (Same as execute)
+        const pixels = this.generatePixelPath();
+
+        //Normalize to video space
+        //We do this to ensure the preview matches the camera frame
+        const videoPixels = pixels.map(p => ({
+            x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
+            y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
+        }));
+
+        const formData = new FormData();
+        formData.append('speed', speed.toString());
+        formData.append('density', density.toString());
+        // JSON stringify the array for the backend
+        formData.append('pixels', JSON.stringify(videoPixels));
+        formData.append('is_fill', isFillEnabled.toString());
+
+        // Only append raster type if it exists
+        if (raster_type) {
+            formData.append('raster_type', raster_type);
+        }
+
+        //Probably want to send the file here as well, or whatever data we usually have for execute
+        //Right now it's just for the dummy path
+        const response = await this.postFormData('/api/preview', formData);
+
+        // Return exactly what the Python endpoint returns
+        return {
+            duration: response.duration,
+            path: response.path
+        };
+    }
+
+    //Helper for getPreviewPath and executePath
+    private async generateRasterBlob(): Promise<Blob> {
+        const width = this.fCanvas.getWidth();
+        const height = this.fCanvas.getHeight();
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = width;
+        tempCanvas.height = height;
+        const ctx = tempCanvas.getContext('2d', { willReadFrequently: true, alpha: false });
+        if (!ctx) throw new Error("Ctx error");
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+
+        this.fCanvas.getObjects().forEach(obj => {
+            if ((obj as any)._isMarker) return;
+            if (obj instanceof fabric.Line) return;
+
+            const originalFill = obj.fill;
+            const originalStroke = obj.stroke;
+
+            if (obj instanceof fabric.Line) {
+                obj.stroke = '#000000';
+                obj.fill = 'transparent';
+            } else {
+                obj.fill = '#000000';
+                obj.stroke = 'transparent';
+            }
+            obj.render(ctx);
+            obj.fill = originalFill;
+            obj.stroke = originalStroke;
+        });
+
+        const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+        if (!blob) throw new Error("Blob error");
+        return blob;
+    }
+
+    // =========================================================================
     // Fixtures Mode Logic
     // =========================================================================
 
@@ -341,6 +440,12 @@ export class CanvasManager {
 
     public hasFixtures(): boolean {
         if (!this.fixturesCanvas || !this.fixturesCtx) return false;
+
+        // --- GUARD CLAUSE: Prevent crash if canvas has 0 size ---
+        if (this.fixturesCanvas.width === 0 || this.fixturesCanvas.height === 0) {
+            return false;
+        }
+
         const imageData = this.fixturesCtx.getImageData(0, 0, this.fixturesCanvas.width, this.fixturesCanvas.height);
         const data = imageData.data;
         for (let i = 0; i < data.length; i += 4) {
@@ -1152,13 +1257,13 @@ export class CanvasManager {
         const jsonStr = JSON.stringify(data, null, 2);
         const blob = new Blob([jsonStr], { type: "application/json" });
         const url = URL.createObjectURL(blob);
-        
+
         const a = document.createElement('a');
         a.href = url;
         a.download = filename;
         document.body.appendChild(a);
         a.click();
-        
+
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }
