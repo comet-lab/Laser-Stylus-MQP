@@ -155,6 +155,7 @@ export class ModeManager {
     }
 
     private activateDrawingMode(cm: CanvasManager | null): void {
+        const isRealTime = this.ui.processingModeSwitch.checked;
         this.state.currentMode = 'drawing';
 
         // UI visibility
@@ -164,7 +165,9 @@ export class ModeManager {
         this.ui.heatAreaBtn.classList.remove('selected');
         this.ui.markerBtn.classList.remove('selected');
         this.ui.drawingUiElements.forEach(el  => el.classList.remove('hidden'));
-        this.ui.realTimeUIElements.forEach(el => el.classList.remove('hidden-mode'))
+        if (isRealTime) {
+            this.ui.realTimeUIElements.forEach(el => el.classList.remove('hidden-mode'))
+        }
         this.ui.fixturesUiElements.forEach(el => el.classList.add('hidden'));
         this.ui.thermalUiElements.forEach(el  => el.classList.add('hidden'));
 

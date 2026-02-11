@@ -213,6 +213,8 @@ pre {
   font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 1px;
+  user-select: none;
+  pointer-events: none;
 }
 
 .vertical-slider-container {
@@ -246,11 +248,15 @@ pre {
   font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 1px;
+  user-select: none;
+  pointer-events: none;
 }
 
 .height-number {
   font-size: 1.2rem;
   margin-bottom: 15px;
+  user-select: none;
+  pointer-events: none;
 }
 
 .height-vertical-slider-container {
