@@ -46,6 +46,28 @@ export class CanvasManager {
     private prevWidth: number;
     private prevHeight: number;
 
+    // --- State: Zoom ---
+    private zoom = 1;
+    private readonly MIN_ZOOM = 0.25;
+    private readonly MAX_ZOOM = 4;
+    private readonly ZOOM_STEP = 0.1;
+
+    private syncFixturesTransform(): void {
+    if (!this.fixturesCanvas) return;
+
+    const vpt = this.fCanvas.viewportTransform;
+    if (!vpt) return;
+
+    const [a, b, c, d, e, f] = vpt;
+
+    this.fixturesCanvas.style.transform =
+        `matrix(${a}, ${b}, ${c}, ${d}, ${e}, ${f})`;
+
+    this.fixturesCanvas.style.transformOrigin = '0 0';
+}
+
+
+
     // --- CONFIG: Visual Defaults ---
     private readonly SHAPE_DEFAULTS = {
         fill: 'transparent',
@@ -99,6 +121,33 @@ export class CanvasManager {
             containerClass: 'fabric-canvas-container',
             enablePointerEvents: true
         });
+
+        // Ctrl + Mouse Wheel Zoom
+        this.fCanvas.upperCanvasEl.addEventListener('wheel', (e: WheelEvent) => {
+    if (!e.ctrlKey) return;
+    if (this.isFixturesMode) return;
+
+    e.preventDefault();
+
+    let zoom = this.zoom;
+    zoom *= Math.pow(0.999, e.deltaY);
+    zoom = Math.min(this.MAX_ZOOM, Math.max(this.MIN_ZOOM, zoom));
+
+    const pointer = this.fCanvas.getPointer(e);
+
+    this.fCanvas.zoomToPoint(
+        new fabric.Point(pointer.x, pointer.y),
+        zoom
+    );
+
+    this.zoom = zoom;
+    this.syncFixturesTransform();
+    this.fCanvas.requestRenderAll();
+}, { passive: false });
+
+
+
+
 
 
         this.prevWidth = canvas.width;
