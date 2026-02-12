@@ -324,9 +324,9 @@ pre {
 .styled-range::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
+  width: 20px;
+  height: 40px;
+  border-radius: 18px;
   background: #e0f2e0;
   cursor: pointer;
   border: 2px solid #2c343b;
