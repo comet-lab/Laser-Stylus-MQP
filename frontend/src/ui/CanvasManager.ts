@@ -100,31 +100,6 @@ export class CanvasManager {
             enablePointerEvents: true
         });
 
-        // Ctrl + Mouse Wheel Zoom
-        this.fCanvas.upperCanvasEl.addEventListener('wheel', (e: WheelEvent) => {
-    if (!e.ctrlKey) return;
-    if (this.isFixturesMode) return;
-
-    e.preventDefault();
-
-    let zoom = this.zoom;
-    zoom *= Math.pow(0.999, e.deltaY);
-    zoom = Math.min(this.MAX_ZOOM, Math.max(this.MIN_ZOOM, zoom));
-
-    const pointer = this.fCanvas.getPointer(e);
-
-    this.fCanvas.zoomToPoint(
-        new fabric.Point(pointer.x, pointer.y),
-        zoom
-    );
-
-    this.zoom = zoom;
-    this.syncFixturesTransform();    
-    this.fCanvas.requestRenderAll();
-
-}, { passive: false });
-
-
 
         this.prevWidth = canvas.width;
         this.prevHeight = canvas.height;
