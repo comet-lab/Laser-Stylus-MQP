@@ -61,12 +61,15 @@ export class PreviewManager {
 
     public closePreview(): void {
         this.ui.previewPopup.classList.remove('active');
-        this.ui.overlay.classList.remove('active'); 
+        this.ui.overlay.classList.remove('active');
         
         //Stop the video stream to save resources
         this.ui.previewVideo.srcObject = null;
         
         this.stopAnimation();
+
+        // Re-enable the simulate button so the user can try again
+        this.ui.previewBtn.disabled = false;
     }
 
     private updateLayout(): void {

@@ -348,6 +348,9 @@ class AppController {
         this.ui.previewBtn.addEventListener('click', () => this.executionManager.previewPath());
         this.ui.executeBtn.addEventListener('click', () => this.executionManager.executePath());
         this.ui.clearBtn.addEventListener('click', () => this.executionManager.clearDrawing());
+        this.ui.clearBtn.addEventListener('click', () => {
+            this.ui.previewBtn.disabled = true;
+        });
 
         // --- Fill / Raster settings ---
         const updateFillState = (isEnabled: boolean) => {

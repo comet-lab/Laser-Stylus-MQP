@@ -35,6 +35,7 @@ export class ExecutionManager {
 
             // New shape drawn -> Invalidate previous path
             this.isPathPrepared = false;
+            this.ui.previewBtn.disabled = false;
 
             this.updateExecuteButtonState();
             this.updateDrawButtonState();
