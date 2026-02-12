@@ -28,7 +28,6 @@ html, body {
   padding: 0 !important;
   height: 100%;
   width: 100%;
-  touch-action: none;
 }
 
 body {
@@ -75,6 +74,7 @@ pre {
   width: 100%;
   background-color: #0f1419;
   gap: 10px;
+  z-index: 1000;
 }
 
 .status-message {
@@ -156,6 +156,7 @@ pre {
   width: 65.5px;
   flex-shrink: 0;
   background-color: #0f1419;
+  z-index: 1000;
 }
 
 #top-icon-section {
@@ -311,6 +312,13 @@ pre {
   background-color: #000;
 }
 
+#zoom-wrapper {
+  width: 100%;
+  height: 100%;
+  transform-origin: center center;
+  will-change: transform;
+}
+
 #video {
   position: absolute;
   top: 0;
@@ -323,11 +331,9 @@ pre {
 }
 
 #canvas {
-  position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
+  position: absolute;
+  top: 0;
+  left: 0;
   touch-action: none;
   /* This ensures canvas display size matches viewport */
 }
@@ -358,6 +364,7 @@ pre {
   height: 100% !important;
   z-index: 20;
 }
+
 
 .fabric-canvas-container .upper-canvas {
   z-index: 20 !important;
