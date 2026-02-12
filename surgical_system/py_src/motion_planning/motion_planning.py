@@ -232,6 +232,163 @@ class Motion_Planner():
         mask_in = cv2.erode(mask, kernel, iterations=1)
         return mask_in 
     
+    @staticmethod
+    def _unit(v, eps=1e-12):
+        n = np.linalg.norm(v)
+        return v / (n + eps), n
+    @staticmethod
+    def _angle_unwrap(a0, a1, ccw=True):
+        """
+        Return (a0, a1) adjusted so interpolation goes the desired direction.
+        """
+        if ccw:
+            while a1 < a0:
+                a1 += 2*np.pi
+        else:
+            while a1 > a0:
+                a1 -= 2*np.pi
+        return a0, a1
+    
+    @staticmethod
+    def smooth_corners_fillet(points, radius, n_arc=8, closed=False, max_frac=0.45):
+        """
+        Replace sharp corners with circular fillets.
+
+        Args:
+        points: (N,2) array-like polyline vertices, in order.
+        radius: fillet radius in same units as points.
+        n_arc: number of samples along each arc (>=2). Higher = smoother.
+        closed: if True, treat polyline as closed (wrap endpoints).
+        max_frac: cap fillet extent to at most this fraction of adjacent segment lengths.
+
+        Returns:
+        (M,2) ndarray of smoothed points.
+        """
+        pts = np.asarray(points, dtype=float)
+        if pts.ndim != 2 or pts.shape[1] != 2:
+            raise ValueError("points must be (N,2)")
+        if len(pts) < 3 or radius <= 0:
+            return pts.copy()
+
+        # Remove consecutive duplicates (common in toolpaths)
+        keep = [0]
+        for i in range(1, len(pts)):
+            if np.linalg.norm(pts[i] - pts[keep[-1]]) > 1e-9:
+                keep.append(i)
+        pts = pts[keep]
+        if len(pts) < 3:
+            return pts.copy()
+
+        def normal_for_turn(dir_vec, turn_sign):
+            # Left normal if turn_sign>0 else right normal
+            if turn_sign > 0:
+                return np.array([-dir_vec[1], dir_vec[0]])
+            else:
+                return np.array([dir_vec[1], -dir_vec[0]])
+
+        out = []
+
+        N = len(pts)
+        idxs = range(N) if closed else range(1, N-1)
+
+        def get(i):
+            return pts[i % N]
+
+        if not closed:
+            out.append(pts[0].copy())
+
+        for i in idxs:
+            p_prev = get(i-1)
+            p = get(i)
+            p_next = get(i+1)
+
+            # Directions along segments into and out of the corner
+            u_raw = p - p_prev
+            v_raw = p_next - p
+
+            u, lu = Motion_Planner._unit(u_raw)
+            v, lv = Motion_Planner._unit(v_raw)
+
+            # Degenerate segments
+            if lu < 1e-9 or lv < 1e-9:
+                if not closed:
+                    out.append(p.copy())
+                continue
+
+            # Turning angle
+            dot = float(np.clip(np.dot(u, v), -1.0, 1.0))
+            phi = np.arccos(dot)
+
+            # If nearly straight or nearly 180, keep point
+            if phi < 1e-4 or abs(np.pi - phi) < 1e-4:
+                if not closed:
+                    out.append(p.copy())
+                continue
+
+            # Distance from corner along each segment to tangent points
+            t = radius * np.tan(phi / 2.0)
+
+            # Clamp t so we don't exceed available segment lengths
+            t_max = max_frac * min(lu, lv)
+            if t > t_max:
+                t = t_max
+                # Adjust effective radius down accordingly (keeps tangency)
+                radius_eff = t / (np.tan(phi / 2.0) + 1e-12)
+            else:
+                radius_eff = radius
+
+            # Tangent points
+            pA = p - u * t
+            pB = p + v * t
+
+            # Turn direction (z-component of cross product in 2D)
+            turn_sign = np.sign(u[0]*v[1] - u[1]*v[0])
+            if turn_sign == 0:
+                # Colinear
+                if not closed:
+                    out.append(p.copy())
+                continue
+
+            n_u = normal_for_turn(u, turn_sign)
+            n_v = normal_for_turn(v, turn_sign)
+
+            # Centers from each tangent point (should coincide if un-clamped)
+            c1 = pA + n_u * radius_eff
+            c2 = pB + n_v * radius_eff
+            C = 0.5 * (c1 + c2)
+
+            # Angles for arc
+            a0 = np.arctan2(pA[1] - C[1], pA[0] - C[0])
+            a1 = np.arctan2(pB[1] - C[1], pB[0] - C[0])
+            ccw = (turn_sign > 0)
+            a0, a1 = Motion_Planner._angle_unwrap(a0, a1, ccw=ccw)
+
+            # Add: pA, arc samples (excluding endpoints), pB
+            if not out or np.linalg.norm(out[-1] - pA) > 1e-9:
+                out.append(pA)
+
+            # Sample arc
+            ts = np.linspace(a0, a1, max(2, int(n_arc)))
+            # Exclude endpoints so we don't duplicate pA/pB
+            for ang in ts[1:-1]:
+                out.append(C + radius_eff * np.array([np.cos(ang), np.sin(ang)]))
+
+            out.append(pB)
+
+        if not closed:
+            out.append(pts[-1].copy())
+            return np.vstack(out)
+
+        # Closed: ensure closure without duplicating the first point
+        out = np.vstack(out)
+        # Remove near-duplicates
+        cleaned = [out[0]]
+        for i in range(1, len(out)):
+            if np.linalg.norm(out[i] - cleaned[-1]) > 1e-9:
+                cleaned.append(out[i])
+        out = np.vstack(cleaned)
+        return out
+    
 def plot_polygon(poly, ax=None, color='blue', alpha=0.4, show_vertices=False):
     if ax is None:
         fig, ax = plt.subplots()
@@ -262,9 +419,12 @@ def plot_polygon(poly, ax=None, color='blue', alpha=0.4, show_vertices=False):
     ax.set_title("Shapely Polygon")
     plt.show()
     
+    
+    
+    
 
 def main():
-    img_path = "surgical_system/py_src/motion_planning/path1.png"
+    img_path = "surgical_system/py_src/motion_planning/path3.png"
     img = np.array(Image.open(img_path))
     img = Motion_Planner.fill_in_shape(img)
     img = cv2.resize(img, (1280, 720), interpolation=cv2.INTER_NEAREST)
@@ -283,6 +443,7 @@ def main():
         theta_deg=45.0,      # angle
         margin=10.0          # inward offset
     )
+    waypoints = Motion_Planner.smooth_corners_fillet(waypoints, radius=5, n_arc=10)
 
     # waypoints = Motion_Planner.segments_to_waypoints(segments, jump_threshold=5.0)
     plt.plot(waypoints[:, 0], waypoints[:, 1])
