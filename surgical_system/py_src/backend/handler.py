@@ -180,7 +180,6 @@ class Handler:
     
     def _read_path(self):
         path = np.array([[d['x'], d['y']] for d in self.desired_state.path])
-        print(path)
         return path
     
     def _do_create_path(self, path):
@@ -219,9 +218,11 @@ class Handler:
     def _do_hold_pose(self):
         current_pose, current_vel = self.robot_controller.get_current_state()
         # Stop robot, no drift
-        if np.linalg.norm(current_vel[:3]) > 2e-5:
+        if np.linalg.norm(current_vel[:3]) > 3e-5:
+            # print("Setting speed 0")
             self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
         else:
+            # print("holding")
             self.robot_controller.go_to_pose(current_pose, blocking=False)
         self.desired_state.x = None
         self.desired_state.y = None
@@ -284,7 +285,7 @@ class Handler:
             # "Path event?", self.desired_state.pathEvent,
             # "traj_running?", self.robot_controller.is_trajectory_running())
             height_diff = self.working_height - self.robot_controller.current_robot_to_world_position()[-1]
-            height_change = np.abs(height_diff) > 0.0001 # 1 mm
+            height_change = np.abs(height_diff) > 0.0001 #0.1 mm
             # print(f"[Robot Height] Height Change: {height_change}")
             
             if(self.desired_state.fixtures_mask is not None):

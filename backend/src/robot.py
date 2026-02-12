@@ -40,6 +40,12 @@ class RobotSchema:
     # Complex Data
     path: Optional[List[Dict[str, float]]] = None
     heat_markers: Optional[List[Dict[str, float]]] = None
+    
+    
+    # Planned Path Preview
+    # Speed, x, y 
+    path_preview: Optional[Dict[str, List[float]]] = None 
+    
 
     def flush(self) -> str:
         """
