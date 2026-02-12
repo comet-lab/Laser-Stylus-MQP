@@ -10,11 +10,11 @@ export class PreviewManager {
     private durationSeconds: number = 0;
     private animationFrameId: number | null = null;
     
-    // Exact scaling factor (Video -> Preview)
+    //Exact scaling factor (Video -> Preview)
     private scaleX: number = 1;
     private scaleY: number = 1;
 
-    // Store marker size to perform manual centering in the loop
+    //Store marker size to perform manual centering in the loop
     private markerSize: number = 24;
 
     constructor(
@@ -22,7 +22,7 @@ export class PreviewManager {
         private readonly state: AppState,
         private getCanvasManager: () => CanvasManager | null,
     ) {
-        // Force border-box and remove CSS transform to give JS full control
+        //Force border-box and remove CSS transform to give JS full control
         this.ui.previewMarker.style.boxSizing = 'border-box';
         this.ui.previewMarker.style.transform = 'none';
         this.ui.previewMarker.style.margin = '0';
@@ -32,11 +32,11 @@ export class PreviewManager {
         const cm = this.getCanvasManager();
         if (!cm) return;
 
-        // 1. Activate UI elements FIRST so they have dimensions in the DOM
+        //Activate UI elements FIRST so they have dimensions in the DOM
         this.ui.overlay.classList.add('active'); 
         this.ui.previewPopup.classList.add('active');
 
-        // 2. Set the video source for the background immediately
+        //Set the video source for the background immediately
         if (this.ui.video.srcObject) {
             this.ui.previewVideo.srcObject = this.ui.video.srcObject;
             this.ui.previewVideo.muted = true;
@@ -48,26 +48,22 @@ export class PreviewManager {
             }
         }
 
-        // 3. Perform layout calculation NOW that elements are visible
+        //Perform layout calculation NOW that elements are visible
         this.updateLayout();
 
-        // 4. Update status and disable button while fetching
+        //Update status and disable button while fetching
         this.ui.previewTimeDisplay.textContent = "Requesting...";
         this.ui.previewBtn.disabled = true;
 
-        // 5. Fetch data and start
+        //Fetch data and start
         await this.updatePreviewData();
-        
-        // Note: We do NOT re-enable the button here immediately if we are waiting for WebSocket
-        // The button enabling happens in startAnimation or handlePathFromWebSocket
     }
 
-    // ... (closePreview and updateLayout methods remain the same) ...
     public closePreview(): void {
         this.ui.previewPopup.classList.remove('active');
         this.ui.overlay.classList.remove('active'); 
         
-        // Stop the video stream to save resources
+        //Stop the video stream to save resources
         this.ui.previewVideo.srcObject = null;
         
         this.stopAnimation();
@@ -78,55 +74,55 @@ export class PreviewManager {
         const videoH = this.ui.video.videoHeight || 1;
         const videoRatio = videoW / videoH;
 
-        // Measure actual header height from DOM
+        //Measure actual header height from DOM
         const header = this.ui.previewPopup.querySelector('.preview-header');
         const headerHeight = header ? header.getBoundingClientRect().height : 60;
 
-        // Calculate positioning based on prepare popup
+        //Calculate positioning based on prepare popup
         const prepareRect = this.ui.preparePopup.getBoundingClientRect();
         const sidebarWidth = 65.5; 
         const rightGap = window.innerWidth - prepareRect.right;
         const targetLeft = sidebarWidth + rightGap;
 
-        // Calculate available width for viewport content
+        //Calculate available width for viewport content
         const availableWidth = prepareRect.left - targetLeft - rightGap;
         
-        // Start with maximum width, calculate height maintaining aspect ratio
+        //Start with maximum width, calculate height maintaining aspect ratio
         let viewportW = availableWidth;
         let viewportH = viewportW / videoRatio;
 
-        // Check vertical bounds (must fit in window with header)
+        //Check vertical bounds (must fit in window with header)
         const maxViewportHeight = window.innerHeight - (rightGap * 2) - headerHeight;
         
         if (viewportH > maxViewportHeight) {
-            // Height-constrained: recalculate width from max height
+            //Height-constrained: recalculate width from max height
             viewportH = maxViewportHeight;
             viewportW = viewportH * videoRatio;
         }
 
-        // Round to integers for pixel-perfect alignment
+        //Round to integers for pixel-perfect alignment
         viewportW = Math.floor(viewportW);
         viewportH = Math.floor(viewportH);
 
-        // Apply dimensions to popup (viewport + header)
+        //Apply dimensions to popup (viewport + header)
         this.ui.previewPopup.style.left = `${targetLeft}px`;
         this.ui.previewPopup.style.top = `${prepareRect.top}px`;
         this.ui.previewPopup.style.width = `${viewportW}px`;
         this.ui.previewPopup.style.height = `${viewportH + headerHeight}px`;
 
-        // Set canvas internal resolution to match viewport exactly
+        //Set canvas internal resolution to match viewport exactly
         this.ui.previewCanvas.width = viewportW;
         this.ui.previewCanvas.height = viewportH;
 
-        // Calculate scale factors for coordinate transformation
+        //Calculate scale factors for coordinate transformation
         this.scaleX = viewportW / videoW;
         this.scaleY = viewportH / videoH;
 
-        // Update marker size with even integer snapping
+        //Update marker size with even integer snapping
         const baseMarkerSize = 24; 
         let scaledSize = Math.max(8, baseMarkerSize * (viewportW / 1920));
         
-        // Force even number to prevent sub-pixel centering issues
+        //Force even number to prevent sub-pixel centering issues
         scaledSize = Math.round(scaledSize);
         if (scaledSize % 2 !== 0) scaledSize += 1;
 
@@ -141,7 +137,7 @@ export class PreviewManager {
 
         this.stopAnimation();
 
-        // Ensure layout is valid before processing
+        //Ensure layout is valid before processing
         if (this.ui.previewPopup.classList.contains('active')) {
             this.updateLayout();
         }
@@ -152,8 +148,8 @@ export class PreviewManager {
         const isFill = this.state.fillEnabled;
 
         try {
-            // Send request to backend
-            // In REAL mode, this returns an empty path. In FAKE mode, it returns the path.
+            //Send request to backend
+            //In REAL mode, this returns an empty path. In FAKE mode, it returns the path.
             const response = await cm.previewPath(speed, rasterType, density, isFill);
             
             if (response.path && response.path.length > 0) {
@@ -200,7 +196,6 @@ export class PreviewManager {
         this.pathData = path;
         
         // Estimate duration based on simple distance calc (since robot didn't send duration)
-        // Or you could add 'duration' to the WS message as well.
         const speed = parseFloat(this.ui.speedInput.value) || 10;
         let totalDistance = 0;
         for (let i = 1; i < path.length; i++) {
@@ -221,7 +216,6 @@ export class PreviewManager {
         this.startAnimation();
     }
 
-    // ... (drawPathOverlay, startAnimation, stopAnimation, loop remain the same) ...
     private drawPathOverlay(): void {
         const ctx = this.ui.previewCanvas.getContext('2d');
         if (!ctx) return; 

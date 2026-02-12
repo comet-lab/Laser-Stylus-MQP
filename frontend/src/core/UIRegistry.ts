@@ -33,13 +33,8 @@ export interface UIRegistry {
     // Popup buttons
     prepareCloseBtn: HTMLButtonElement;
     prepareCancelBtn: HTMLButtonElement;
-    
-    // NEW: The button inside the popup that runs the simulation
     previewBtn: HTMLButtonElement; 
-    
-    // The button inside the popup that fires the laser
     executeBtn: HTMLButtonElement;
-    
     previewCloseBtn: HTMLButtonElement;
     clearBtn: HTMLButtonElement;
 
@@ -141,8 +136,6 @@ export function createUIRegistry(): UIRegistry {
         prepareBtn:       document.getElementById('prepareBtn')       as HTMLButtonElement,
         prepareCloseBtn:  document.getElementById('prepareCloseBtn')  as HTMLButtonElement,
         prepareCancelBtn: document.getElementById('prepareCancelBtn') as HTMLButtonElement,
-        
-        // Use 'previewBtn' for the simulation button as requested
         previewBtn:       document.getElementById('previewBtn')       as HTMLButtonElement, 
         executeBtn:       document.getElementById('executeBtn')       as HTMLButtonElement,
         

@@ -97,7 +97,6 @@
   font-size: 1.2rem;
 }
 
-/* Speed Input - NO container, just label and input */
 .speed-input-wrapper {
   width: 100%;
   display: flex;
@@ -139,13 +138,12 @@
 
 #bottomButtons {
   display: flex;
-  flex-direction: column; /* Stack vertically */
+  flex-direction: column;
   gap: 12px;
   width: 100%;
   margin-top: 10px;
 }
 
-/* NEW: Layout for the bottom row (Cancel + Execute) */
 .bottom-btn-row {
   display: flex;
   flex-direction: row;
@@ -155,7 +153,7 @@
 
 /* Override button styles for this specific menu to ensure uniform sizing */
 #bottomButtons .action-btn {
-  height: 50px; /* Fixed uniform height */
+  height: 50px;
   margin: 0;
   flex-shrink: 0;
 }
@@ -171,11 +169,10 @@
   width: 50%;
 }
 
-/* Remove default width constraints from specific button types in this context */
 #bottomButtons .action-btn-prepare,
 #bottomButtons .action-btn-execute,
 #bottomButtons .action-btn-cancel {
-  width: auto; /* Let flexbox handle width */
+  width: auto;
 }
 
 /* ============================================
