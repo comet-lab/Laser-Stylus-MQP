@@ -395,8 +395,58 @@ class AppController {
                 zoomWrapper.style.transform = `scale(${zoomLevel})`;
             }
 
+            if (zoomLevel > 1) {
+                this.ui.viewport.style.overflow = 'auto';
+            } else {
+                this.ui.viewport.style.overflow = 'hidden';
+            }
+
 
         }, { passive: false });
+
+        // pinch zoom
+        zoomLevel = 1;
+
+        const zoomWrapper = document.getElementById('zoom-wrapper');
+        let initialDistance = 0;
+        let startZoom = 1;
+
+        function getDistance(touches: TouchList) {
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        this.ui.viewport.addEventListener('touchstart', (e: TouchEvent) => {
+            if (e.touches.length === 2) {
+                initialDistance = getDistance(e.touches);
+                startZoom = zoomLevel;
+            }
+        }, { passive: false });
+
+        this.ui.viewport.addEventListener('touchmove', (e: TouchEvent) => {
+            if (e.touches.length === 2 && zoomWrapper) {
+                e.preventDefault();
+
+                const currentDistance = getDistance(e.touches);
+                const scaleFactor = currentDistance / initialDistance;
+
+                zoomLevel = startZoom * scaleFactor;
+
+                // clamp zoom
+                zoomLevel = Math.min(Math.max(zoomLevel, MIN_ZOOM), MAX_ZOOM);
+
+                zoomWrapper.style.transform = `scale(${zoomLevel})`;
+
+                // show scrollbars when zoomed in, hide at default
+                if (zoomLevel > 1) {
+                    this.ui.viewport.style.overflow = 'auto';
+                } else {
+                    this.ui.viewport.style.overflow = 'hidden';
+                }
+            }
+        }, { passive: false });
+
 
     }
 
