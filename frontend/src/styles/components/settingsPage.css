@@ -1,5 +1,3 @@
-/* frontend/src/styles/components/settingsPage.css */
-
 /* ============================================
    SETTINGS PAGE
    ============================================ */
@@ -15,6 +13,7 @@
   fill: #e0f2e0;
 }
 
+/* --- Modal Container --- */
 #overlay {
   position: fixed;
   top: 0;
@@ -22,13 +21,11 @@
   width: 100%;
   height: 100%;
   background-color: rgba(0, 0, 0, 0.6);
-  z-index: 100;
   display: none;
 }
 
 #settingsPopup {
   position: fixed;
-  z-index: 999;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
@@ -49,6 +46,7 @@
   display: flex;
 }
 
+/* --- Header --- */
 .settings-header {
   display: flex;
   justify-content: space-between;
@@ -78,6 +76,13 @@
   transition: all 0.15s ease-out;
 }
 
+#settingsCloseBtn svg {
+  fill: #e0f2e0;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
 #settingsCloseBtn:hover {
   filter: brightness(110%);
 }
@@ -88,13 +93,7 @@
   box-shadow: inset 2px 2px 8px rgba(0, 0, 0, 0.5);
 }
 
-#settingsCloseBtn svg {
-  fill: #e0f2e0;
-  width: 22px;
-  height: 22px;
-  flex-shrink: 0;
-}
-
+/* --- Body Layout --- */
 .settings-body {
   display: flex;
   flex-grow: 1;
@@ -158,7 +157,7 @@
   margin-bottom: 1.5rem;
 }
 
-/* --- Setting Item & Toggle --- */
+/* --- Individual Setting Items --- */
 .setting-item {
   display: flex;
   align-items: center;
@@ -171,11 +170,7 @@
   font-weight: 400;
 }
 
-.setting-label-density {
-  font-size: 12px;
-  font-weight: 400;
-}
-
+/* --- Toggle Switches --- */
 .switch-container {
   display: flex;
   align-items: center;
@@ -235,10 +230,5 @@ input:checked+.slider:before {
   transform: translateX(26px);
 }
 
-.slider.round {
-  border-radius: 34px;
-}
-
-.slider.round:before {
-  border-radius: 50%;
-}
+.slider.round { border-radius: 34px; }
+.slider.round:before { border-radius: 50%; }

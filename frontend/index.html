@@ -22,24 +22,6 @@
 <body>
   <div id="app-scaler">
     <div id="overlay"></div>
-    <div id="previewPopup">
-      <div class="preview-header">
-        <div class="preview-info">
-          <h3>Simulation</h3>
-          <span id="previewTimeDisplay">Est. Time: -- s</span>
-        </div>
-        <button id="previewCloseBtn">
-          <svg width="24" height="24" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path d="M18 6L6 18M6 6L18 18" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </button>
-      </div>
-      <div class="preview-viewport" id="previewContainer">
-        <video id="previewVideo" autoplay muted playsinline></video>
-        <canvas id="previewCanvas"></canvas>
-        <div id="previewMarker"></div>
-      </div>
-    </div>
     <div id="preparePopup">
       <div class="prepare-header">
         <h2>Prepare Path</h2>
@@ -53,61 +35,70 @@
       <div class="prepare-body">
         <div class="control-group">
 
-          <!-- Speed Input - NO container -->
-          <div class="speed-input-wrapper">
-            <label for="speedInput" class="input-label">Robot Speed (mm/s)</label>
-            <div class="input-wrapper">
-              <input type="number" id="speedInput" class="styled-input" value="10" step="10" min="1" max="100"
-                placeholder="e.g. 10">
-            </div>
+          <div class="setting-row-wrapper">
+            <label for="speedInput" class="row-label">Robot Speed (mm/s)</label>
+            <input type="number" id="speedInput" class="row-input" value="10" step="10" min="1" max="100"
+              placeholder="10">
           </div>
 
-          <!-- Fill Shape Toggle Container -->
-          <div class="fill-toggle-container">
-            <span class="input-label">Fill Shape</span>
-            <div class="segment-control" style="width: 140px;">
+          <div class="setting-row-wrapper">
+            <span class="row-label">Fill Shape</span>
+            <div class="segment-control fill-control">
               <button id="fillOff" class="segment-btn active">Off</button>
               <button id="fillOn" class="segment-btn">On</button>
             </div>
           </div>
 
-          <!-- Accordion Panel (outside container) -->
           <div class="fill-accordion-container">
             <div id="fillSettingsPanel" class="fill-settings-panel">
               <div class="fill-settings-inner">
 
-                <!-- Raster Pattern Section -->
-                <div class="raster-pattern-section">
-                  <label class="fill-setting-label">Raster Pattern</label>
-                  <div class="segment-control raster-pattern-control">
-                    <button id="rasterA" class="segment-btn active">Line</button>
-                    <button id="rasterB" class="segment-btn">Spiral</button>
+                <div class="settings-group-container">
+                  <div class="setting-row-wrapper secondary-wrapper">
+                    <label class="row-label">Raster Pattern</label>
+                    <div class="segment-control raster-control">
+                      <button id="rasterA" class="segment-btn active">Line</button>
+                      <button id="rasterB" class="segment-btn">Spiral</button>
+                    </div>
+                  </div>
+
+                  <div class="setting-row-wrapper secondary-wrapper">
+                    <label for="densityRaster" class="row-label">Density</label>
+                    <input type="number" id="densityRaster" class="row-input" value="10" step="1" min="1" max="20"
+                      placeholder="10">
                   </div>
                 </div>
 
-                <!-- Density Section -->
-                <div class="density-section">
-                  <div class="density-wrapper">
-                    <label for="densityRaster" class="fill-setting-label">Density:</label>
-                    <input type="number" id="densityRaster" class="styled-input-density" value="10" step="1" min="1"
-                      max="20" placeholder="10">
+              </div>
+            </div>
+          </div>
+
+          <div class="preview-action-container">
+            <div class="setting-row-wrapper preview-wrapper">
+              <span class="row-label">Preview Path</span>
+              <div class="segment-control preview-control">
+                <button id="previewOff" class="segment-btn active">OFF</button>
+                <button id="previewOn" class="segment-btn">ON</button>
+              </div>
+            </div>
+
+            <div id="previewInfoPanel" class="preview-info-panel">
+              <div class="preview-info-inner">
+                <div class="preview-duration-row">
+                  <span class="preview-duration-label">Estimated Duration:</span>
+                  <span id="previewDuration" class="preview-duration-value">--</span>
+                </div>
+                <div class="preview-info-row">
+                  <div class="preview-info-icon">i</div>
+                  <div class="preview-info-text">
+                    Yellow line indicates the positioning of the planned path. Orange marker indicates the movement and speed of the end effector.
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-
-          <!-- Bottom Buttons -->
           <div id="bottomButtons">
-            <button id="previewBtn" class="action-btn action-btn-prepare full-width-btn">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                xmlns="http://www.w3.org/2000/svg">
-                <path d="M5 3l14 9-14 9V3z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-              <span class="btn-text">SIMULATE PATH</span>
-            </button>
-
             <div class="bottom-btn-row">
               <button id="prepareCancelBtn" class="action-btn action-btn-cancel half-width-btn">
                 <svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
@@ -145,9 +136,7 @@
       <div class="settings-body">
         <div class="settings-sidebar">
           <button class="sidebar-btn active" data-target="general-settings">General</button>
-          <!-- <button class="sidebar-btn" data-target="robot-settings">Robot</button> -->
           <button class="sidebar-btn" data-target="camera-settings">Camera</button>
-          <!-- <button class="sidebar-btn" data-target="laser-settings">Laser</button> -->
         </div>
         <div class="settings-main">
           <div id="general-settings" class="settings-panel active">
@@ -179,9 +168,6 @@
               </div>
             </div>
           </div>
-          <!-- <div id="robot-settings" class="settings-panel">
-            <h3>Robot Settings</h3>
-          </div> -->
           <div id="camera-settings" class="settings-panel">
             <h3>Camera Settings</h3>
             <div class="setting-item">
@@ -195,11 +181,7 @@
                 <span class="switch-label">On</span>
               </div>
             </div>
-            <!-- <button id="save-view" class="btn-text" data-state="ready">SAVE</button> -->
           </div>
-          <!-- <div id="laser-settings" class="settings-panel">
-            <h3>Laser Settings</h3>
-          </div> -->
         </div>
       </div>
     </div>
@@ -436,8 +418,10 @@
     </div>
     <div id="viewport">
       <canvas id="canvas"></canvas>
+      <canvas id="previewOverlay"></canvas>
       <video id="video"></video>
       <div id="robot-marker"></div>
+      <div id="preview-marker"></div>
     </div>
   </div>
 </body>

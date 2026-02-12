@@ -3,7 +3,6 @@
    ============================================ */
 #preparePopup {
   position: absolute;
-  z-index: 101;
   top: 10%;
   right: 3%;
   width: fit-content;
@@ -16,12 +15,15 @@
   flex-direction: column;
   overflow: hidden;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  /* Layout positioning variable */
+  --popup-edge-offset: 10px;
 }
 
 #preparePopup.active {
   display: flex;
 }
 
+/* --- Header --- */
 .prepare-header {
   display: flex;
   justify-content: space-between;
@@ -51,6 +53,13 @@
   transition: all 0.15s ease-out;
 }
 
+#prepareCloseBtn svg {
+  fill: #e0f2e0;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
 #prepareCloseBtn:hover {
   filter: brightness(110%);
 }
@@ -61,13 +70,7 @@
   box-shadow: inset 2px 2px 8px rgba(0, 0, 0, 0.5);
 }
 
-#prepareCloseBtn svg {
-  fill: #e0f2e0;
-  width: 22px;
-  height: 22px;
-  flex-shrink: 0;
-}
-
+/* --- Body & Layout --- */
 .prepare-body {
   display: flex;
   flex-grow: 1;
@@ -85,57 +88,297 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 12px;
 }
 
-.input-label {
-  display: block;
-  color: #E0F2E0;
-  margin-bottom: 0.5rem;
-  font-family: 'IBM Plex Sans', sans-serif;
-  font-weight: 500;
-  font-size: 1.2rem;
-}
-
-.speed-input-wrapper {
+/* --- Common Input Wrappers --- */
+.setting-row-wrapper {
   width: 100%;
+  height: 54px;
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
   align-items: center;
-}
-
-.input-wrapper {
-  position: relative;
-  height: fit-content;
-  width: 100%;
-}
-
-.styled-input {
-  background: #161b2296;
+  background-color: #161b2296;
   border: 2px solid #2c343b;
-  color: #E0F2E0;
-  padding: 12px 15px;
   border-radius: 8px;
-  width: 100%;
-  font-family: 'IBM Plex Sans', sans-serif;
-  font-size: 1.1rem;
-  text-align: center;
+  padding: 0 16px;
   box-sizing: border-box;
   transition: border-color 0.2s;
 }
 
-.styled-input:focus {
+.setting-row-wrapper:hover {
+  border-color: #455256;
+}
+
+.secondary-wrapper {
+  background-color: #0f1419;
+  border: 1px solid #2c343b;
+  height: 48px;
+}
+
+.settings-group-container {
+  width: 100%;
+  background-color: #161b2296;
+  border: 2px solid #2c343b;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-sizing: border-box;
+}
+
+/* --- Labels & Inputs --- */
+.row-label {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: #E0F2E0;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.input-label, 
+.fill-setting-label {
+  display: block;
+  color: #E0F2E0;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 600;
+}
+
+.input-label {
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  font-size: 1.2rem;
+}
+
+.fill-setting-label {
+  font-size: 14px;
+  margin: 0;
+}
+
+/* Numeric Inputs */
+.row-input,
+.styled-input, 
+.styled-input-density {
+  background-color: #0f1419;
+  border: 1px solid #2c343b;
+  color: #E0F2E0;
+  border-radius: 6px;
+  text-align: center;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.row-input {
+  width: 80px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.styled-input {
+  width: 100%;
+  padding: 12px 15px;
+  font-size: 1.1rem;
+  background: #161b2296;
+  border-width: 2px;
+}
+
+.styled-input-density {
+  width: 80px;
+  padding: 8px 12px;
+  font-size: 14px;
+  background-color: #161b22;
+  border-width: 2px;
+}
+
+.secondary-wrapper .row-input {
+  background-color: #161b22;
+}
+
+.row-input:focus,
+.styled-input:focus,
+.styled-input-density:focus {
   outline: none;
   border-color: #e0f2e0;
   background: #1c2128;
 }
 
-.styled-input::-webkit-outer-spin-button,
-.styled-input::-webkit-inner-spin-button {
+/* Remove Spinners */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
+/* --- Segmented Controls (Toggles) --- */
+.segment-control {
+  display: flex;
+  background-color: #0f1419;
+  border-radius: 6px;
+  padding: 2px;
+  border: 1px solid #2c343b;
+  height: 36px;
+}
+
+.segment-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 0 16px;
+  color: #5c6b75;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.segment-btn:hover {
+  color: #e0f2e0;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.segment-btn.active {
+  background-color: #2c343b;
+  color: #e0f2e0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.fill-control, .preview-control { width: 120px; }
+.raster-control { width: 140px; }
+
+/* --- Fill Settings Panel (Accordion) --- */
+.fill-accordion-container {
+  width: 100%;
+}
+
+.fill-settings-panel {
+  width: 100%;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.3s ease-out, opacity 0.3s ease;
+}
+
+.fill-settings-panel.open {
+  max-height: 250px;
+  opacity: 1;
+}
+
+.fill-settings-inner {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Preview Info Panel (Inside Prepare Modal) --- */
+.preview-action-container {
+  width: 100%;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #2c343b;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-wrapper {
+  background-color: #1c2128;
+}
+
+.preview-wrapper:hover {
+  border-color: #e0f2e0;
+}
+
+.preview-info-panel {
+  width: 100%;
+  max-height: 0;
+  overflow: hidden;
+  background-color: #161b2296;
+  border-radius: 8px;
+  transition: max-height 0.3s ease-out, opacity 0.3s ease;
+  opacity: 0;
+  border: 2px solid transparent;
+}
+
+.preview-info-panel.open {
+  max-height: 150px;
+  opacity: 1;
+  border-color: #2c343b;
+  margin-top: 8px;
+}
+
+.preview-info-inner {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.preview-duration-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.preview-duration-label {
+  color: #e0f2e0;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.preview-duration-value {
+  color: #e0f2e0;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.5px;
+}
+
+.preview-info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: #0f1419;
+  border-radius: 6px;
+  border: 1px solid #2c343b;
+}
+
+.preview-info-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: #2c343b;
+  color: #e0f2e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.preview-info-text {
+  color: #e0f2e0b6;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: normal;
+  max-width: 280px;
+}
+
+/* --- Action Buttons Layout (Grid/Flex) --- */
 #bottomButtons {
   display: flex;
   flex-direction: column;
@@ -151,246 +394,17 @@
   width: 100%;
 }
 
-/* Override button styles for this specific menu to ensure uniform sizing */
 #bottomButtons .action-btn {
   height: 50px;
   margin: 0;
   flex-shrink: 0;
 }
 
-/* Top button fills width */
-.full-width-btn {
-  width: 100%;
-}
-
-/* Bottom buttons split width 50/50 */
-.half-width-btn {
-  flex: 1;
-  width: 50%;
-}
+.full-width-btn { width: 100%; }
+.half-width-btn { flex: 1; width: 50%; }
 
 #bottomButtons .action-btn-prepare,
 #bottomButtons .action-btn-execute,
 #bottomButtons .action-btn-cancel {
   width: auto;
 }
-
-/* ============================================
-   FILL SHAPE TOGGLE CONTAINER
-   ============================================ */
-.fill-toggle-container {
-  width: 100%;
-  background-color: #161b2296;
-  border: 2px solid #2c343b;
-  border-radius: 8px;
-  padding: 12px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.fill-toggle-container .input-label {
-  margin-bottom: 0;
-}
-
-/* ============================================
-   ACCORDION & SEGMENTED CONTROLS
-   ============================================ */
-.fill-accordion-container {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Fill Settings Panel */
-.fill-settings-panel {
-  width: 100%;
-  max-height: 0;
-  overflow: hidden;
-  background-color: #161b2296;
-  border-radius: 8px;
-  transition: max-height 0.3s ease-out, opacity 0.3s ease;
-  opacity: 0;
-  border: 2px solid transparent;
-}
-
-.fill-settings-panel.open {
-  max-height: 250px;
-  opacity: 1;
-  border-color: #2c343b;
-}
-
-.fill-settings-inner {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  align-items: center;
-}
-
-/* Raster Pattern Section */
-.raster-pattern-section {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-
-.raster-pattern-section .fill-setting-label {
-  font-size: 14px;
-  color: #e0f2e0;
-  font-weight: 600;
-  text-align: center;
-}
-
-/* Segmented Control (Off/On and Line/Spiral) */
-.segment-control {
-  display: flex;
-  background-color: #0f1419;
-  border-radius: 6px;
-  padding: 3px;
-  border: 1px solid #2c343b;
-}
-
-.segment-control.raster-pattern-control {
-  width: 80%;
-}
-
-.segment-btn {
-  flex: 1;
-  background: transparent;
-  border: none;
-  padding: 10px 16px;
-  color: #5c6b75;
-  font-family: 'IBM Plex Sans', sans-serif;
-  font-weight: 600;
-  font-size: 13px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.segment-btn:hover {
-  color: #e0f2e0;
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-.segment-btn.active {
-  background-color: #2c343b;
-  color: #e0f2e0;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-
-/* Density Section */
-.density-section {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-}
-
-.density-wrapper {
-  width: 80%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 15px;
-  background-color: #0f1419;
-  border: 1px solid #2c343b;
-  border-radius: 6px;
-  padding: 10px 15px;
-}
-
-.fill-setting-label {
-  margin: 0;
-  font-size: 14px;
-  color: #e0f2e0;
-  font-weight: 600;
-}
-
-.density-wrapper .fill-setting-label {
-  flex-shrink: 0;
-}
-
-.styled-input-density {
-  width: 80px;
-  padding: 8px 12px;
-  font-size: 14px;
-  background-color: #161b22;
-  border: 2px solid #2c343b;
-  color: #E0F2E0;
-  border-radius: 6px;
-  text-align: center;
-  box-sizing: border-box;
-  transition: border-color 0.2s;
-  font-family: 'IBM Plex Sans', sans-serif;
-  font-weight: 500;
-}
-
-.styled-input-density:focus {
-  outline: none;
-  border-color: #e0f2e0;
-  background: #1c2128;
-}
-
-.styled-input-density::-webkit-outer-spin-button,
-.styled-input-density::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-/* ============================================
-   PREVIEW PATH BUTTON
-   ============================================ */
-/* --- Preview Path Button --- */
-.preview-action-container {
-  width: 100%;
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #2c343b;
-  display: flex;
-  justify-content: center;
-}
-
-#previewPathBtn {
-  width: 100%;
-  background-color: #1c2128;
-  border: 2px solid #2c343b;
-  color: #e0f2e0;
-  fill: #e0f2e0;
-  transition: all 0.2s ease;
-}
-
-#previewPathBtn:hover:not(:disabled) {
-  background-color: rgb(46, 53, 65);
-  border-color: #e0f2e0;
-  filter: none;
-}
-
-#previewPathBtn:active:not(:disabled) {
-  background-color: #0f1419;
-}
-
-#previewPathBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  border-color: #2c343b;
-}
-
-
-.fill-header {
-  width: 70%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 5px;
-}
-
-.fill-accordion-container .segment-control {
-    background-color: #0f1419;
-    border: 1px solid #2c343b;
-}
-

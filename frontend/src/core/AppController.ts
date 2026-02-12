@@ -99,12 +99,14 @@ class AppController {
             () => this.toolHandler.updateThermalButtonState(),
         );
 
+        this.previewManager = new PreviewManager(this.ui, this.state, getCM);
+
         this.executionManager = new ExecutionManager(
             this.ui,
             this.state,
             getCM,
             () => this.toolHandler.updateDrawButtonState(),
-            () => this.previewManager.openPreview(),
+            () => this.previewManager,
         );
 
         this.settingsManager = new SettingsManager(
@@ -114,8 +116,6 @@ class AppController {
             this.hardware,
             () => this.toolHandler.updateDrawButtonState(),
         );
-
-        this.previewManager = new PreviewManager(this.ui, this.state, getCM);
 
         // TODO: Expose on window for quick console access during development
         // TODO: REMOVE BEFORE SHIPPING
@@ -232,12 +232,17 @@ class AppController {
         this.ui.prepareCloseBtn.addEventListener('click', () => this.ui.preparePopup.classList.remove('active'));
         this.ui.prepareCancelBtn.addEventListener('click', () => this.ui.preparePopup.classList.remove('active'));
 
-        this.ui.previewCloseBtn.addEventListener('click', () => this.previewManager.closePreview());
+        this.ui.previewToggleOn.addEventListener('click', () => {
+            this.previewManager.togglePreview(true);
+        });
 
-        //Live preview window refresh
+        this.ui.previewToggleOff.addEventListener('click', () => {
+            this.previewManager.togglePreview(false);
+        });
+
         const refreshPreview = () => {
-            if (this.ui.previewPopup.classList.contains('active')) {
-                this.previewManager.updatePreviewData();
+            if (this.ui.previewToggleOn.classList.contains('active')) {
+                this.previewManager.refreshPreview();
             }
         };
 
@@ -249,6 +254,7 @@ class AppController {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(refreshPreview, 500);
         });
+
 
         // Clicking the background overlay closes whichever modal is open
         this.ui.overlay.addEventListener('click', () => {
@@ -345,12 +351,8 @@ class AppController {
         this.ui.canvas.addEventListener('touchend', () => setTimeout(() => this.toolHandler.updateDrawButtonState(), 50));
 
         // --- Execution actions ---;
-        this.ui.previewBtn.addEventListener('click', () => this.executionManager.previewPath());
         this.ui.executeBtn.addEventListener('click', () => this.executionManager.executePath());
         this.ui.clearBtn.addEventListener('click', () => this.executionManager.clearDrawing());
-        this.ui.clearBtn.addEventListener('click', () => {
-            this.ui.previewBtn.disabled = true;
-        });
 
         // --- Fill / Raster settings ---
         const updateFillState = (isEnabled: boolean) => {
@@ -405,9 +407,8 @@ class AppController {
         // --- Window resize ---
         window.addEventListener('resize', () => {
             this.settingsManager.handleResize();
-            if (this.ui.previewPopup.classList.contains('active')) {
-                this.previewManager.updatePreviewData();
-            }
+            this.previewManager.updateOverlaySize(); // Changed
+
             if (this.canvasManager) {
                 const w = this.ui.viewport.offsetWidth;
                 const h = this.ui.viewport.offsetHeight;

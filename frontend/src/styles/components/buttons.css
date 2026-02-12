@@ -1,130 +1,7 @@
-/* frontend/src/styles/components/buttons.css */
-
 /* ============================================
-   TOGGLE SWITCH COMPONENTS
+   TOGGLE SWITCHES (LASER & ROBOT)
    ============================================ */
-
-/* --- Laser Toggle --- */
-#laser-toggle-container {
-  position: relative;
-  display: flex;
-  height: 100%;
-  width: 300px;
-  flex-shrink: 0;
-  user-select: none;
-}
-
-.laser-bg-section {
-  height: 100%;
-  width: 50%;
-  background-color: #172027;
-}
-
-#laser-off-bg {
-  background-color: #2c343b;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding-left: 15px;
-  transition: background-color 0.2s ease;
-}
-
-#laser-on-bg {
-  border-top-right-radius: 16px;
-  border-bottom-right-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 15px;
-  background-color: #172027;
-  transition: background-color 0.2s ease;
-}
-
-#laser-center-box {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  height: 100%;
-  width: 185px;
-  border-radius: 18px;
-  background-color: #172027;
-  border: 2px solid #2c343b;
-  padding: 0 40px;
-  color: #e0f2e0;
-  font-size: 18px;
-  font-weight: bold;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
-  cursor: pointer;
-  overflow: hidden;
-}
-
-#laser-slider {
-  position: absolute;
-  left: 3px;
-  top: 3px;
-  width: 40px;
-  height: calc(100% - 6px);
-  background-color: #e0f2e0;
-  border-radius: 14px;
-  transition: left 0.3s ease, background-color 0.2s ease;
-  z-index: 1;
-}
-
-#laser-text {
-  position: relative;
-  z-index: 2;
-}
-
-#laser-off-text,
-#laser-on-text {
-  position: absolute;
-  color: #e0f2e0;
-  font-size: 18px;
-  font-weight: bold;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 1;
-}
-
-#laser-off-text {
-  left: 15px;
-}
-
-#laser-on-text {
-  right: 15px;
-}
-
-/* Active State */
-#laser-toggle-container.active #laser-slider {
-  left: calc(100% - 43px);
-  background-color: #fff6f8;
-}
-
-#laser-toggle-container.active #laser-center-box {
-  background-color: #86140d;
-  border-color: #cb0e00;
-  color: #fff6f8;
-}
-
-#laser-toggle-container.active #laser-off-bg {
-  background-color: #172027;
-}
-
-#laser-toggle-container.active #laser-on-bg {
-  background-color: #cb0e00;
-}
-
-#laser-toggle-container.active #laser-on-text {
-  color: #fff6f8;
-}
-
-/* --- Robot Toggle --- */
+#laser-toggle-container,
 #robot-toggle-container {
   position: relative;
   display: flex;
@@ -134,15 +11,14 @@
   user-select: none;
 }
 
-.robot-bg-section {
+/* --- Toggle Backgrounds --- */
+.laser-bg-section, .robot-bg-section {
   height: 100%;
   width: 50%;
   background-color: #172027;
 }
 
-#robot-off-bg {
-  border-top-left-radius: 16px;
-  border-bottom-left-radius: 16px;
+#laser-off-bg, #robot-off-bg {
   background-color: #2c343b;
   display: flex;
   align-items: center;
@@ -151,7 +27,12 @@
   transition: background-color 0.2s ease;
 }
 
-#robot-on-bg {
+#robot-off-bg {
+  border-top-left-radius: 16px;
+  border-bottom-left-radius: 16px;
+}
+
+#laser-on-bg, #robot-on-bg {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -160,7 +41,13 @@
   transition: background-color 0.2s ease;
 }
 
-#robot-center-box {
+#laser-on-bg {
+  border-top-right-radius: 16px;
+  border-bottom-right-radius: 16px;
+}
+
+/* --- Center Box (Slider Container) --- */
+#laser-center-box, #robot-center-box {
   position: absolute;
   top: 0;
   left: 50%;
@@ -184,7 +71,8 @@
   overflow: hidden;
 }
 
-#robot-slider {
+/* --- Sliders --- */
+#laser-slider, #robot-slider {
   position: absolute;
   left: 3px;
   top: 3px;
@@ -196,13 +84,14 @@
   z-index: 1;
 }
 
-#robot-text {
+/* --- Text Labels --- */
+#laser-text, #robot-text {
   position: relative;
   z-index: 2;
 }
 
-#robot-off-text,
-#robot-on-text {
+#laser-off-text, #laser-on-text,
+#robot-off-text, #robot-on-text {
   position: absolute;
   color: #e0f2e0;
   font-size: 18px;
@@ -212,40 +101,39 @@
   z-index: 1;
 }
 
-#robot-off-text {
-  left: 15px;
-}
+#laser-off-text, #robot-off-text { left: 15px; }
+#laser-on-text, #robot-on-text { right: 15px; }
 
-#robot-on-text {
-  right: 15px;
+/* --- Active States: Laser --- */
+#laser-toggle-container.active #laser-slider {
+  left: calc(100% - 43px);
+  background-color: #fff6f8;
 }
+#laser-toggle-container.active #laser-center-box {
+  background-color: #86140d;
+  border-color: #cb0e00;
+  color: #fff6f8;
+}
+#laser-toggle-container.active #laser-off-bg { background-color: #172027; }
+#laser-toggle-container.active #laser-on-bg { background-color: #cb0e00; }
+#laser-toggle-container.active #laser-on-text { color: #fff6f8; }
 
-/* Active State */
+/* --- Active States: Robot --- */
 #robot-toggle-container.active #robot-slider {
   left: calc(100% - 43px);
   background-color: #f2f1e0;
 }
-
 #robot-toggle-container.active #robot-center-box {
   background-color: #79420c;
   border-color: #fa8500;
   color: #f2f1e0;
 }
-
-#robot-toggle-container.active #robot-off-bg {
-  background-color: #172027;
-}
-
-#robot-toggle-container.active #robot-on-bg {
-  background-color: #fa8500;
-}
-
-#robot-toggle-container.active #robot-on-text {
-  color: #f2f1e0;
-}
+#robot-toggle-container.active #robot-off-bg { background-color: #172027; }
+#robot-toggle-container.active #robot-on-bg { background-color: #fa8500; }
+#robot-toggle-container.active #robot-on-text { color: #f2f1e0; }
 
 /* ============================================
-   ICON & MODE BUTTONS
+   ICON BUTTONS (Sidebar/Tools)
    ============================================ */
 .icon-btn {
   display: flex;
@@ -254,7 +142,6 @@
   width: 90%;
   aspect-ratio: 1 / 1;
   border-radius: 12px;
-  border: none;
   background-color: #2c343b;
   color: #e0f2e0;
   border: 3px solid transparent;
@@ -262,9 +149,7 @@
   cursor: pointer;
 }
 
-.icon-btn:hover {
-  filter: brightness(110%);
-}
+.icon-btn:hover { filter: brightness(110%); }
 
 .icon-btn.selected,
 .icon-btn:active {
@@ -278,18 +163,21 @@
   cursor: not-allowed;
   filter: grayscale(50%);
   pointer-events: none;
-  box-shadow: none;
   border-color: transparent;
+  box-shadow: none;
 }
 
-.icon-btn-stroke {
-  stroke: #e0f2e0;
-}
+.icon-btn-stroke { stroke: #e0f2e0; }
+.icon-btn-fill { fill: #e0f2e0; }
 
-.icon-btn-fill {
+#settingsBtn {
+  transition: all 0.08s ease-out;
   fill: #e0f2e0;
 }
 
+/* ============================================
+   MODE BUTTONS (Top Right)
+   ============================================ */
 .mode-btn {
   display: flex;
   align-items: center;
@@ -331,13 +219,8 @@
   stroke: none;
 }
 
-#settingsBtn {
-  transition: all 0.08s ease-out;
-  fill: #e0f2e0;
-}
-
 /* ============================================
-   ACTION BUTTONS (DRAWING/PREPARE/EXECUTE)
+   ACTION BUTTONS (DRAW/EXECUTE/CANCEL)
    ============================================ */
 .action-btn {
   display: flex;
@@ -350,7 +233,6 @@
   font-size: 14px;
   letter-spacing: 0.5px;
   text-transform: uppercase;
-  border: none;
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -363,87 +245,51 @@
   flex-shrink: 0;
 }
 
-.action-btn:hover:not(:disabled) {
-  filter: brightness(115%);
-}
-
-.action-btn:active:not(:disabled) {
-  filter: brightness(95%);
-}
-
-.action-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-  filter: grayscale(50%);
-}
-
-.action-btn[data-state="drawing"] {
-  background-color: #fa8500;
-  color: #0f1419;
-  border-color: #fa8500;
-  fill: #0f1419;
-}
-
-.action-btn[data-state="drawing"]:hover {
-  filter: brightness(110%);
-}
-
-.action-btn-prepare {
-  background-color: #1a4d6b;
-  color: #e0f2e0;
-  fill: #e0f2e0;
-  width: fit-content;
-}
-
-.action-btn-prepare:hover:not(:disabled) {
-  background-color: #1a4d6b;
-}
-
-.action-btn-prepare:disabled {
-  background-color: #303d4b;
-  color: #e0f2e0;
-}
-
 .btn-icon {
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.btn-text {
-  line-height: 1;
+.btn-text { line-height: 1; }
+
+.action-btn:hover:not(:disabled) { filter: brightness(115%); }
+.action-btn:active:not(:disabled) { filter: brightness(95%); }
+.action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  filter: grayscale(50%);
 }
 
+/* State: Drawing */
+.action-btn[data-state="drawing"] {
+  background-color: #fa8500;
+  color: #0f1419;
+  border-color: #fa8500;
+  fill: #0f1419;
+}
+.action-btn[data-state="drawing"]:hover { filter: brightness(110%); }
+
+/* Variant: Prepare */
+.action-btn-prepare {
+  background-color: #1a4d6b;
+  width: fit-content;
+}
+.action-btn-prepare:hover:not(:disabled) { background-color: #1a4d6b; }
+.action-btn-prepare:disabled { background-color: #303d4b; }
+
+/* Variant: Execute */
 .action-btn-execute {
   background-color: #cb0e00;
   color: #fff6f8;
   fill: #fff6f8;
 }
+.action-btn-execute:hover:not(:disabled) { background-color: #cb0e00; }
+.action-btn-execute:disabled { background-color: #303d4b; color: #e0f2e0; fill: #e0f2e0; }
 
-.action-btn-execute:hover:not(:disabled) {
-  background-color: #cb0e00;
-  color: #fff6f8;
-  fill: #fff6f8;
-}
-
-.action-btn-execute:disabled {
-  background-color: #303d4b;
-  color: #e0f2e0;
-  fill: #e0f2e0;
-}
-
-.action-btn-cancel {
-  background-color: #303d4b;
-  color: #e0f2e0;
-  fill: #e0f2e0
-}
-
-.action-btn-cancel:hover:not(:disabled) {
-  background-color: #303d4b;
-  fill: #e0f2e0;
-  color: #e0f2e0;
-}
-
+/* Variant: Cancel */
+.action-btn-cancel,
+.action-btn-cancel:hover:not(:disabled),
 .action-btn-cancel:disabled {
   background-color: #303d4b;
   color: #e0f2e0;
