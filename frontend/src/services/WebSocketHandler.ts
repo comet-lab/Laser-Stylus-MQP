@@ -19,6 +19,11 @@ export interface WebSocketMessage {
     isTransformedViewOn: boolean;
     pathEvent: string | null;
     heat_markers?: { x: number, y: number }[];
+    
+    path_preview?: {
+        x: number[];
+        y: number[];
+    };
 }
 
 // Type for partial updates, any subset of WebSocketMessage

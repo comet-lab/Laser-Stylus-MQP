@@ -5,7 +5,6 @@
  *
  * Centralized cache of all DOM elements used by the application.
  * Queried once at construction time to avoid repeated getElementById calls.
- * Every other module receives a reference to this single object.
  */
 
 export interface UIRegistry {
@@ -27,12 +26,21 @@ export interface UIRegistry {
     // --- Action Buttons ---
     settingsBtn: HTMLButtonElement;
     settingsCloseBtn: HTMLButtonElement;
+    
+    // Top panel button that opens the popup
     prepareBtn: HTMLButtonElement;
+    
+    // Popup buttons
     prepareCloseBtn: HTMLButtonElement;
     prepareCancelBtn: HTMLButtonElement;
-    previewBtn: HTMLButtonElement;
-    previewCloseBtn: HTMLButtonElement;
+    
+    // NEW: The button inside the popup that runs the simulation
+    previewBtn: HTMLButtonElement; 
+    
+    // The button inside the popup that fires the laser
     executeBtn: HTMLButtonElement;
+    
+    previewCloseBtn: HTMLButtonElement;
     clearBtn: HTMLButtonElement;
 
     // --- Hardware Controls (Robot / Laser) ---
@@ -109,10 +117,6 @@ export interface UIRegistry {
     heightDisplay: HTMLElement;
 }
 
-/**
- * Queries the DOM once and returns a frozen UIRegistry.
- * Call this after the DOM is ready (e.g. inside a 'load' listener).
- */
 export function createUIRegistry(): UIRegistry {
     return {
         // Core Viewport
@@ -133,12 +137,16 @@ export function createUIRegistry(): UIRegistry {
         // Action Buttons
         settingsBtn:      document.getElementById('settingsBtn')      as HTMLButtonElement,
         settingsCloseBtn: document.getElementById('settingsCloseBtn') as HTMLButtonElement,
+        
         prepareBtn:       document.getElementById('prepareBtn')       as HTMLButtonElement,
         prepareCloseBtn:  document.getElementById('prepareCloseBtn')  as HTMLButtonElement,
         prepareCancelBtn: document.getElementById('prepareCancelBtn') as HTMLButtonElement,
-        previewBtn:       document.getElementById('previewPathBtn')   as HTMLButtonElement,
-        previewCloseBtn:  document.getElementById('previewCloseBtn')  as HTMLButtonElement,
+        
+        // Use 'previewBtn' for the simulation button as requested
+        previewBtn:       document.getElementById('previewBtn')       as HTMLButtonElement, 
         executeBtn:       document.getElementById('executeBtn')       as HTMLButtonElement,
+        
+        previewCloseBtn:  document.getElementById('previewCloseBtn')  as HTMLButtonElement,
         clearBtn:         document.getElementById('clearBtn')         as HTMLButtonElement,
 
         // Hardware Controls

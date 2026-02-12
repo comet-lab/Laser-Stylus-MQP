@@ -104,6 +104,7 @@ class AppController {
             this.state,
             getCM,
             () => this.toolHandler.updateDrawButtonState(),
+            () => this.previewManager.openPreview(),
         );
 
         this.settingsManager = new SettingsManager(
@@ -231,7 +232,6 @@ class AppController {
         this.ui.prepareCloseBtn.addEventListener('click', () => this.ui.preparePopup.classList.remove('active'));
         this.ui.prepareCancelBtn.addEventListener('click', () => this.ui.preparePopup.classList.remove('active'));
 
-        this.ui.previewBtn.addEventListener('click', () => this.previewManager.openPreview());
         this.ui.previewCloseBtn.addEventListener('click', () => this.previewManager.closePreview());
 
         //Live preview window refresh
@@ -344,7 +344,8 @@ class AppController {
         this.ui.canvas.addEventListener('mouseup', () => setTimeout(() => this.toolHandler.updateDrawButtonState(), 50));
         this.ui.canvas.addEventListener('touchend', () => setTimeout(() => this.toolHandler.updateDrawButtonState(), 50));
 
-        // --- Execution actions ---
+        // --- Execution actions ---;
+        this.ui.previewBtn.addEventListener('click', () => this.executionManager.previewPath());
         this.ui.executeBtn.addEventListener('click', () => this.executionManager.executePath());
         this.ui.clearBtn.addEventListener('click', () => this.executionManager.clearDrawing());
 
@@ -435,6 +436,10 @@ class AppController {
                 this.ui.robotMarker.style.top = `${(state.laserY / vh) * ch}px`;
                 this.ui.robotMarker.style.display = 'block';
             }
+        }
+
+        if (state.path_preview) {
+            this.previewManager.handlePathFromWebSocket(state.path_preview);
         }
 
         // --- Thermal / heat data ---
