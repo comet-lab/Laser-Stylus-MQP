@@ -141,12 +141,10 @@ export class CanvasManager {
     );
 
     this.zoom = zoom;
-    this.syncFixturesTransform();
+    this.syncFixturesTransform();    
     this.fCanvas.requestRenderAll();
+
 }, { passive: false });
-
-
-
 
 
 

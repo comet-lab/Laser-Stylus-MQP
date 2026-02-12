@@ -372,6 +372,32 @@ class AppController {
                 }
             }
         });
+
+        // code for the zoom functionality
+        let zoomLevel = 1;
+        const MIN_ZOOM = 1;   
+        const MAX_ZOOM = 4;
+
+        this.ui.viewport.addEventListener('wheel', (e: WheelEvent) => {
+            if (!e.ctrlKey) return;
+
+            e.preventDefault();
+
+            const zoomSpeed = 0.0015;
+
+            zoomLevel *= (1 - e.deltaY * zoomSpeed);
+
+            // prevents the zoom from going below the min or max that we set. These can be changed
+            zoomLevel = Math.min(Math.max(zoomLevel, MIN_ZOOM), MAX_ZOOM);
+
+            const zoomWrapper = document.getElementById('zoom-wrapper');
+            if (zoomWrapper) {
+                zoomWrapper.style.transform = `scale(${zoomLevel})`;
+            }
+
+
+        }, { passive: false });
+
     }
 
     // ===================================================================
