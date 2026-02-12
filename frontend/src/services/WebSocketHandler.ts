@@ -1,3 +1,5 @@
+//frontend/src/services/WebSocketHandler.ts
+
 // Define the state interface matching your backend example_data
 export interface WebSocketMessage {
     x: number;
@@ -8,11 +10,15 @@ export interface WebSocketMessage {
     rz: number;
     laserX: number;
     laserY: number;
+    maxHeat: number; 
     beamWaist: number;
+    height: number;
     speed: number;
     isLaserOn: boolean;
     isRobotOn: boolean;
+    isTransformedViewOn: boolean;
     pathEvent: string | null;
+    heat_markers?: { x: number, y: number }[];
 }
 
 // Type for partial updates, any subset of WebSocketMessage
@@ -53,14 +59,6 @@ export class WebSocketHandler {
         
         //this.ws.onopen = () => this.log("Connected to WebSocket");
         this.ws.onmessage = (event) => {
-            /*
-            if (this.outputElement) {
-                this.outputElement.textContent = "Last update:\n" + event.data;
-            } else {
-                //console.log(event.data);
-            }
-            */            
-            //this.log(`Received: ${event.data}`);
             try {
                 const newState = JSON.parse(event.data) as WebSocketMessage;
                 

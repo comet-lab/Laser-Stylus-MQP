@@ -1,4 +1,4 @@
-// utils.ts
+//frontend/src/utils/math_utils.ts
 
 // Bresenham's line algorithm generator
 // Used to convert the vector shapes from Fabric into a pixel list for the laser

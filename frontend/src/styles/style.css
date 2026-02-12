@@ -2,27 +2,33 @@
    FONTS & IMPORTS
    ============================================ */
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;700&display=swap');
-@import url('./buttons.css');
-@import url('./settingsPage.css');
-@import url('./preparePage.css');
+@import url('./components/buttons.css');
+@import url('./components/settingsPage.css');
+@import url('./components/preparePage.css');
 
 /* ============================================
-   GLOBAL STYLES
+   GLOBAL STYLES & UTILITIES
    ============================================ */
 
-/* Added global reset and explicit height/width.
-   In Standards Mode, percentage heights on children (like #top-panel's 7%)
-   require the parent (body/html) to have an explicit height.
-*/
+#app-scaler {
+  transform-origin: top left;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
 * {
   box-sizing: border-box;
 }
 
-body, html {
+html, body {
   margin: 0 !important;
   padding: 0 !important;
   height: 100%;
   width: 100%;
+  touch-action: none;
 }
 
 body {
@@ -52,8 +58,13 @@ pre {
   white-space: pre-wrap;
 }
 
+.hidden,
+.hidden-mode {
+  display: none !important;
+}
+
 /* ============================================
-   TOP PANEL
+   TOP PANEL & STATUS
    ============================================ */
 #top-panel {
   height: 60px;
@@ -66,7 +77,6 @@ pre {
   gap: 10px;
 }
 
-/* --- Status Panels --- */
 .status-message {
   display: flex;
   height: 100%;
@@ -82,6 +92,57 @@ pre {
   padding-right: 5px;
   flex-grow: 1;
   gap: 12px;
+  border: 2px solid #2c343b;
+}
+
+#status-panel-right {
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-start;
+  background-color: #2c343b; 
+  border: 2px solid #2c343b;
+  border-radius: 18px;
+  padding: 0;
+  gap: 0;
+  height: 100%;
+  width: auto;
+  overflow: hidden;
+}
+
+.mode-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: transparent;
+  color: #e0f2e0;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 1px;
+  padding: 0 12px 0 16px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.mode-btn-wrapper {
+  display: flex;
+  align-items: center;
+  background-color: #172027; 
+  padding: 4px;
+  gap: 4px;
+  height: 100%;
+  flex-grow: 1;
+  border-top-left-radius: 16px;
+  border-bottom-left-radius: 16px;
+  border-top-right-radius: 0; 
+  border-bottom-right-radius: 0;
+}
+
+.mode-specific-buttons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  height: 100%;
 }
 
 /* ============================================
@@ -120,119 +181,130 @@ pre {
   margin-bottom: auto;
 }
 
-.icon-btn {
+#settings-icon-section {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  width: 90%;
-  aspect-ratio: 1 / 1;
-  border-radius: 12px;
-  border: none;
-  background-color: #2c343b;
-  color: #e0f2e0;
-  border: 3px solid transparent;
-  transition: all 0.15s ease-out;
-}
-.icon-btn:hover {
-  filter: brightness(110%);
-}
-.icon-btn.selected,
-.icon-btn:active {
-  background-color: #455256;
-  border-color: #e0f2e0;
-  box-shadow: inset 2px 2px 8px rgba(0, 0, 0, 0.5);
+  margin-bottom: 0.2vw;
 }
 
-/* Disabled state for shape buttons */
-.icon-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-  filter: grayscale(50%);
-  pointer-events: none;
-  box-shadow: none;
-  border-color: transparent;
-}
-
-.icon-btn-stroke {
-  stroke: #e0f2e0;
-}
-.icon-btn-fill {
-  fill: #e0f2e0;
+.tool-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
 }
 
 /* ============================================
-   STATUS PANEL
+   SLIDERS (VERTICAL & HORIZONTAL)
    ============================================ */
-#status-panel-right {
-  display: grid;
-  grid-template-columns: auto auto auto auto;
-  grid-template-rows: auto auto;
-  align-content: center;
-  justify-content: end;
-  column-gap: 8px;
-  row-gap: 6px;
-  padding-right: 30px;
-  font-weight: bold;
-  font-size: 18px;
-  color: #f5eff7;
+.brush-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 30px;
+  width: 100%;
 }
 
-.status-label:nth-child(5),
-.status-label:nth-child(7) {
-  padding-left: 30px; /* Adds extra space before column 3 */
+.brush-label {
+  color: #e0f2e0;
+  font-size: 0.8rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  user-select: none;
+  pointer-events: none;
 }
 
-#status-panel-right p {
-  font-weight: bold;
-  font-size: 18px;
-  color: #f5eff7;
+.vertical-slider-container {
+  height: 170px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.vertical-range {
+  width: 170px;
+  height: 6px;
+  transform: rotate(-90deg);
+  transform-origin: center;
   margin: 0;
-  display: grid;
-  grid-template-columns: auto auto 1fr;
-  gap: 0 8px;
 }
 
-.status-label {
-  text-align: right;
+.height-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 30px;
+  width: 100%;
 }
 
-.status-label:nth-child(odd) {
-  text-align: right;
+.height-label {
+  color: #e0f2e0;
+  font-size: 0.8rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  user-select: none;
+  pointer-events: none;
 }
 
-.status-value {
-  text-align: left;
+.height-number {
+  font-size: 1.2rem;
+  margin-bottom: 15px;
+  user-select: none;
+  pointer-events: none;
 }
 
-.status-laser-on {
-  color: #cb0e00;
+.height-vertical-slider-container {
+  height: 180px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-top: 20px;
 }
-.status-robot-on {
-  color: #fa8500;
+
+.height-vertical-range {
+  width: 210px;
+  min-width: 210px;
+  height: 6px;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  margin: 0;
 }
-.status-off {
-  color: #70ff57;
+
+.styled-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #2c343b;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
 }
-.status-batch {
-  color: #70ff57;
-}
-.status-real-time {
-  color: #fa8500;
-}
-.status-camera-connected {
-  color: #70ff57;
-}
-.status-camera-off {
-  color: #cb0e00;
+
+.styled-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #e0f2e0;
+  cursor: pointer;
+  border: 2px solid #2c343b;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
 }
 
 /* ============================================
-   CANVAS & VIDEO
+   CANVAS & VIDEO VIEWPORT
    ============================================ */
 #viewport {
   position: absolute;
-  top: 60px; /* Below Top Panel */
-  left: 65.5px; /* Right of Left Panel */
+  top: 60px;
+  left: 65.5px;
   width: calc(100% - 65.5px);
   height: calc(100% - 60px);
   overflow: hidden;
@@ -245,51 +317,157 @@ pre {
   left: 0;
   width: 100%;
   height: 100%;
-  object-fit: fill; /* Stretches video to match canvas coordinate system */
+  object-fit: fill;
   z-index: 1;
   pointer-events: none;
 }
 
-/* Fabric.js wraps #canvas in a div, so style that not the canvas directly
-*/
+#canvas {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  touch-action: none;
+  /* This ensures canvas display size matches viewport */
+}
+
+#fixturesCanvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10 !important;
+  pointer-events: none;
+  display: none;
+  opacity: 0.6;
+}
+
+#fixturesCanvas.active {
+  pointer-events: auto;
+  display: block;
+}
+
+/* Make sure both canvases are children of viewport */
 .fabric-canvas-container {
   position: absolute !important;
   top: 0 !important;
   left: 0 !important;
   width: 100% !important;
   height: 100% !important;
-  z-index: 10; /* Above video */
+  z-index: 20;
 }
 
-/* Ensure the inner canvas element fills the wrapper */
-#canvas {
-  width: 100%;
-  height: 100%;
+.fabric-canvas-container .upper-canvas {
+  z-index: 20 !important;
 }
 
-/* for the different tools on the left side */
+
 .activeTool {
   outline: 3px solid #6df06d;
   border-radius: 6px;
 }
 
-/* Styles for the circular robot marker */
 #robot-marker {
-    position: absolute;
-    width: 24px;
-    height: 24px;
-    border: 3px solid #70ff57;
-    border-radius: 50%;
-    background-color: transparent;
-    pointer-events: none;
-    z-index: 999;
-    display: none;
-    transform: translate(-50%, -50%); 
-    transition: left 0.1s linear, top 0.1s linear;
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border: 3px solid #70ff57;
+  border-radius: 50%;
+  background-color: transparent;
+  pointer-events: none;
+  z-index: 900;
+  display: none;
+  transform: translate(-50%, -50%);
 }
 
+#max-heat-container {
+  font-weight: bold;
+  color: #e0f2e0;
+  margin-left: auto;
+  padding-right: 10px;
+}
 
-/* Code to allow for drawing on the tablet */
-html, body {
-  touch-action: none;
+.fabric-canvas-container .lower-canvas, .fabric-canvas-container .upper-canvas {
+  z-index: 100 !important;
+}
+
+/* ============================================
+   INDEPENDENT LAYOUT POSITIONING STYLES
+   ============================================ */
+#preparePopup {
+  --popup-edge-offset: 10px; /* ← must match the `right` value in preparePage.css */
+}
+
+/* ============================================
+   MENU AT BOTTOM
+   ============================================ */
+body.menu-bottom #top-panel {
+  position: absolute;
+  top: auto;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+
+body.menu-bottom #viewport {
+  top: 0;
+  bottom: 60px;
+  height: calc(100% - 60px);
+}
+
+body.menu-bottom #left-panel {
+  top: 0;
+  bottom: 60px;
+  height: calc(100% - 60px);
+}
+
+/* --- Prepare popup: pin to top-left, top padding = normal right padding --- */
+body.menu-bottom #preparePopup {
+  top:    var(--popup-edge-offset);
+  left:   calc(var(--popup-edge-offset) + 65px);
+  right:  auto;
+  bottom: auto;
+}
+
+/* --- Settings gear: move to top of the sidebar --- */
+body.menu-bottom #settings-icon-section {
+  order:         -1;
+  margin-top:    0.2vw;
+  margin-bottom: 0;
+}
+
+/* ============================================
+   SIDEBAR ON RIGHT
+   ============================================ */
+body.sidebar-right #left-panel {
+  position: absolute;
+  left: auto;
+  right: 0;
+  top: 60px;
+  bottom: 0;
+}
+
+body.sidebar-right #viewport {
+  left: 0;
+  right: 65.5px;
+  width: calc(100% - 65.5px);
+}
+
+/* ============================================
+   COMBINED: MENU BOTTOM + SIDEBAR RIGHT
+   ============================================ */
+body.menu-bottom.sidebar-right #left-panel {
+  top: 0;
+  bottom: 60px;
+}
+
+body.menu-bottom.sidebar-right #viewport {
+  top: 0;
+  left: 0;
+  right: 65.5px;
+  bottom: 60px;
+  width: calc(100% - 65.5px);
+  height: calc(100% - 60px);
 }
