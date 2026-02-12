@@ -32,102 +32,104 @@ export class PreviewManager {
         const cm = this.getCanvasManager();
         if (!cm) return;
 
-        //Activate UI elements
+        //Activate UI elements FIRST so they have dimensions in the DOM
         this.ui.overlay.classList.add('active'); 
         this.ui.previewPopup.classList.add('active');
-        this.ui.previewBtn.disabled = true;
-        this.ui.previewTimeDisplay.textContent = "Calculating...";
 
-        // Set the video source for the background
+        //Set the video source for the background immediately
         if (this.ui.video.srcObject) {
             this.ui.previewVideo.srcObject = this.ui.video.srcObject;
-            this.ui.previewVideo.play().catch(e => console.warn("Preview play error", e));
+            this.ui.previewVideo.muted = true;
+            
+            try {
+                await this.ui.previewVideo.play();
+            } catch (e) {
+                console.warn("Preview video play error:", e);
+            }
         }
 
-        //Perform layout calculation
+        //Perform layout calculation NOW that elements are visible
         this.updateLayout();
+
+        //Update status and disable button while fetching
+        this.ui.previewTimeDisplay.textContent = "Requesting...";
+        this.ui.previewBtn.disabled = true;
 
         //Fetch data and start
         await this.updatePreviewData();
-        this.ui.previewBtn.disabled = false;
     }
 
     public closePreview(): void {
         this.ui.previewPopup.classList.remove('active');
-        this.ui.overlay.classList.remove('active'); 
+        this.ui.overlay.classList.remove('active');
+        
+        //Stop the video stream to save resources
         this.ui.previewVideo.srcObject = null;
+        
         this.stopAnimation();
+
+        // Re-enable the simulate button so the user can try again
+        this.ui.previewBtn.disabled = false;
     }
 
-    /**
-     * Resizes and positions the Preview Window.
-     * Enforces aspect ratio of the video.
-     * Calculates position based on the prepare menu's right-margin.
-     */
     private updateLayout(): void {
         const videoW = this.ui.video.videoWidth || 1;
         const videoH = this.ui.video.videoHeight || 1;
         const videoRatio = videoW / videoH;
 
-        //Measure header height
-        // e need to query the header inside the popup to know how much extra space to reserve
+        //Measure actual header height from DOM
         const header = this.ui.previewPopup.querySelector('.preview-header');
-        const headerHeight = header ? header.getBoundingClientRect().height : 60; // Fallback to 60 if hidden
+        const headerHeight = header ? header.getBoundingClientRect().height : 60;
 
-        //Calculate positioning (Same as before)
+        //Calculate positioning based on prepare popup
         const prepareRect = this.ui.preparePopup.getBoundingClientRect();
         const sidebarWidth = 65.5; 
         const rightGap = window.innerWidth - prepareRect.right;
         const targetLeft = sidebarWidth + rightGap;
 
-        //Calculate available width for the content (Canvas/video)
+        //Calculate available width for viewport content
         const availableWidth = prepareRect.left - targetLeft - rightGap;
         
-        //Calculate target dimensions for the viewport only
+        //Start with maximum width, calculate height maintaining aspect ratio
         let viewportW = availableWidth;
         let viewportH = viewportW / videoRatio;
 
-        //Check vertical bounds (Window height - margins - header height)
+        //Check vertical bounds (must fit in window with header)
         const maxViewportHeight = window.innerHeight - (rightGap * 2) - headerHeight;
         
         if (viewportH > maxViewportHeight) {
+            //Height-constrained: recalculate width from max height
             viewportH = maxViewportHeight;
             viewportW = viewportH * videoRatio;
         }
 
-        // Round to integers to ensure pixel-perfect canvas alignment
+        //Round to integers for pixel-perfect alignment
         viewportW = Math.floor(viewportW);
         viewportH = Math.floor(viewportH);
 
-        //Apply dimensions to DOM
-        //The popup gets (viewport height + header height)
+        //Apply dimensions to popup (viewport + header)
         this.ui.previewPopup.style.left = `${targetLeft}px`;
         this.ui.previewPopup.style.top = `${prepareRect.top}px`;
         this.ui.previewPopup.style.width = `${viewportW}px`;
         this.ui.previewPopup.style.height = `${viewportH + headerHeight}px`;
 
-        //Update internal canvas resolution
-        //Matches the viewport exactly
+        //Set canvas internal resolution to match viewport exactly
         this.ui.previewCanvas.width = viewportW;
         this.ui.previewCanvas.height = viewportH;
 
-        //Calculate Scale Factors
-        //Now caleY maps video -> viewport (excluding header)
+        //Calculate scale factors for coordinate transformation
         this.scaleX = viewportW / videoW;
         this.scaleY = viewportH / videoH;
 
-        //Update marker size
+        //Update marker size with even integer snapping
         const baseMarkerSize = 24; 
         let scaledSize = Math.max(8, baseMarkerSize * (viewportW / 1920));
         
-        //Snap size to an EVEN INTEGER. 
-        //An odd size (e.g. 13px) means the center is at 6.5px.
+        //Force even number to prevent sub-pixel centering issues
         scaledSize = Math.round(scaledSize);
         if (scaledSize % 2 !== 0) scaledSize += 1;
 
-        //Update local state so the loop knows the exact size
         this.markerSize = scaledSize;
-
         this.ui.previewMarker.style.width = `${this.markerSize}px`;
         this.ui.previewMarker.style.height = `${this.markerSize}px`;
     }
@@ -138,6 +140,7 @@ export class PreviewManager {
 
         this.stopAnimation();
 
+        //Ensure layout is valid before processing
         if (this.ui.previewPopup.classList.contains('active')) {
             this.updateLayout();
         }
@@ -148,47 +151,85 @@ export class PreviewManager {
         const isFill = this.state.fillEnabled;
 
         try {
-            //Get snapshot of the original drawing (Fabric canvas only)
-            const snapshotUrl = cm.getCanvasDataURL();
-            const snapshotImg = new Image();
+            //Send request to backend
+            //In REAL mode, this returns an empty path. In FAKE mode, it returns the path.
+            const response = await cm.previewPath(speed, rasterType, density, isFill);
             
-            //Load snapshot and fetch simulation path in parallel
-            const [_, response] = await Promise.all([
-                new Promise(resolve => {
-                    snapshotImg.onload = resolve;
-                    snapshotImg.src = snapshotUrl;
-                }),
-                cm.getPreviewPath(speed, rasterType, density, isFill)
-            ]);
-            
-            this.pathData = response.path;
-            this.durationSeconds = response.duration;
-            this.ui.previewTimeDisplay.textContent = `Est. Time: ${this.durationSeconds.toFixed(1)}s`;
+            if (response.path && response.path.length > 0) {
+                // --- FAKE MODE DETECTED (Data came back in HTTP response) ---
+                this.pathData = response.path;
+                this.durationSeconds = response.duration;
+                this.ui.previewTimeDisplay.textContent = `Est. Time: ${this.durationSeconds.toFixed(1)}s`;
+                this.ui.previewBtn.disabled = false;
+                
+                this.drawPathOverlay(); 
+                this.startAnimation();
+            } else {
+                // --- REAL MODE (No data in HTTP response) ---
+                // We must wait for the WebSocket to deliver 'path_preview'
+                this.ui.previewTimeDisplay.textContent = "Computing (Waiting for Robot)...";
+                // Keep button disabled until WS data arrives
+                this.ui.previewBtn.disabled = true;
+            }
 
-            //Draw Snapshot (Original) + Path (Overlay)
-            this.drawPathOverlay(snapshotImg); 
-            this.startAnimation();
         } catch (e) {
             console.error(e);
             this.ui.previewTimeDisplay.textContent = "Error";
+            this.ui.previewBtn.disabled = false;
         }
     }
 
-    private drawPathOverlay(backgroundImage?: HTMLImageElement): void {
+    /**
+     * Called by AppController when a 'path_preview' message arrives via WebSocket.
+     * format: { x: [1,2...], y: [3,4...] } (Structure of Arrays)
+     */
+    public handlePathFromWebSocket(previewData: { x: number[], y: number[] }): void {
+        if (!this.ui.previewPopup.classList.contains('active')) return;
+
+        // Convert SOA (Structure of Arrays) to AOS (Array of Objects)
+        const path: Position[] = [];
+        const len = Math.min(previewData.x.length, previewData.y.length);
+        
+        for (let i = 0; i < len; i++) {
+            path.push({ x: previewData.x[i], y: previewData.y[i] });
+        }
+
+        if (path.length === 0) return;
+
+        this.pathData = path;
+        
+        // Estimate duration based on simple distance calc (since robot didn't send duration)
+        const speed = parseFloat(this.ui.speedInput.value) || 10;
+        let totalDistance = 0;
+        for (let i = 1; i < path.length; i++) {
+            const dx = path[i].x - path[i-1].x;
+            const dy = path[i].y - path[i-1].y;
+            totalDistance += Math.sqrt(dx*dx + dy*dy);
+        }
+        
+        // Arbitrary scaling for duration display if speed is abstract
+        // If speed is mm/s and pixels are converted, this needs unit math. 
+        // For now, assuming pixels and 'speed' factor:
+        this.durationSeconds = totalDistance / (speed * 10 || 1); 
+
+        this.ui.previewTimeDisplay.textContent = `Ready`;
+        this.ui.previewBtn.disabled = false;
+
+        this.drawPathOverlay();
+        this.startAnimation();
+    }
+
+    private drawPathOverlay(): void {
         const ctx = this.ui.previewCanvas.getContext('2d');
         if (!ctx) return; 
 
+        // Clear canvas completely so the video element behind it shows through
         ctx.clearRect(0, 0, this.ui.previewCanvas.width, this.ui.previewCanvas.height);
         
-        // Draw original user drawing (Scaled to fit viewport)
-        if (backgroundImage) {
-            ctx.drawImage(backgroundImage, 0, 0, this.ui.previewCanvas.width, this.ui.previewCanvas.height);
-        }
-
         if (this.pathData.length < 2) return;
 
         ctx.beginPath();
-        //Cyan path matching the robot's intent
+        // Cyan path matching the robot's intent
         ctx.strokeStyle = '#00ffff'; 
         ctx.lineWidth = 2; 
         ctx.lineJoin = 'round';
@@ -223,7 +264,10 @@ export class PreviewManager {
         const now = performance.now();
         const elapsed = (now - this.startTime) / 1000; 
 
-        let progress = elapsed / this.durationSeconds;
+        // Avoid division by zero
+        const duration = this.durationSeconds > 0 ? this.durationSeconds : 1;
+
+        let progress = elapsed / duration;
         if (progress >= 1) {
             this.startTime = performance.now();
             progress = 0;
@@ -236,9 +280,7 @@ export class PreviewManager {
         const domX = point.x * this.scaleX;
         const domY = point.y * this.scaleY;
 
-        //Manual centering calculation
-        //top/left = center - (size / 2)
-        //This avoids CSS transform ambiguity and ensures integer alignment
+        // Manual centering calculation
         const offset = this.markerSize / 2;
         
         this.ui.previewMarker.style.left = `${domX - offset}px`;

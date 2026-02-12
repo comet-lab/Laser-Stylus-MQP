@@ -1,3 +1,5 @@
+#backend/src/robot.py
+
 import json
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Optional, Any
@@ -36,16 +38,16 @@ class RobotSchema:
     speed: Optional[float] = None
     density: Optional[float] = None
     height: Optional[float] = None
+    density: Optional[float] = None
     
     # Complex Data
     path: Optional[List[Dict[str, float]]] = None
     heat_markers: Optional[List[Dict[str, float]]] = None
     
-    
-    # Planned Path Preview
-    # Speed, x, y 
-    path_preview: Optional[Dict[str, List[float]]] = None 
-    
+    #Path preparation
+    pathPrepared: Optional[bool] = None
+    executeCommand: Optional[bool] = None
+    path_preview: Optional[Dict[str, List[float]]] = None
 
     def flush(self) -> str:
         """
@@ -60,6 +62,8 @@ class RobotSchema:
         self.path = None
         self.heat_mask = None
         self.heat_markers = None
+        self.path_preview = None # Reset after sending
+        self.executeCommand = None
         
         # Clear motion commands, persist laserX and laserY but not x and y
         self.x = None

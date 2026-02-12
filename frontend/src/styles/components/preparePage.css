@@ -97,7 +97,6 @@
   font-size: 1.2rem;
 }
 
-/* Speed Input - NO container, just label and input */
 .speed-input-wrapper {
   width: 100%;
   display: flex;
@@ -139,9 +138,41 @@
 
 #bottomButtons {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.bottom-btn-row {
+  display: flex;
   flex-direction: row;
-  gap: 40px;
-  height: 70px;
+  gap: 12px;
+  width: 100%;
+}
+
+/* Override button styles for this specific menu to ensure uniform sizing */
+#bottomButtons .action-btn {
+  height: 50px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+/* Top button fills width */
+.full-width-btn {
+  width: 100%;
+}
+
+/* Bottom buttons split width 50/50 */
+.half-width-btn {
+  flex: 1;
+  width: 50%;
+}
+
+#bottomButtons .action-btn-prepare,
+#bottomButtons .action-btn-execute,
+#bottomButtons .action-btn-cancel {
+  width: auto;
 }
 
 /* ============================================
