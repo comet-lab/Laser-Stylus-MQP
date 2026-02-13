@@ -69,7 +69,6 @@ pre {
   width: 100%;
   background-color: #0f1419;
   gap: 10px;
-  z-index: 1000;
 }
 
 /* Status Panels */
@@ -160,7 +159,6 @@ pre {
   width: 65.5px;
   flex-shrink: 0;
   background-color: #0f1419;
-  z-index: 1000;
 }
 
 #top-icon-section,
