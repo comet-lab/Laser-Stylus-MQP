@@ -28,9 +28,11 @@ class Handler:
         self.working_height = 0.0
         self.show_path = True
         self.current_traj = None
-        
         self._last_pose_ui = 0.0
 
+        self.path_display_pixels = None
+        
+        
         self.virtual_fixture, self.dx, self.dy, self.distance_field = self.generate_virtual_fixture()
         self.vf_valid_flag = None
         
@@ -89,6 +91,10 @@ class Handler:
         data = json.loads(msg)
         self.desired_state.update(data)
         
+        
+###------------------------ Mask Reader -------------------####    
+
+
     def _read_mask(self, mask):
         data_str = mask
         image_bytes = base64.b64decode(data_str)
@@ -104,8 +110,16 @@ class Handler:
         spacing = int(self.desired_state.density) # TODO calculate lines per distance 
         print(f"[Spacing (pixels)]: {spacing}")
         # path = Motion_Planner.raster_pattern(img, pitch = spacing) # pixel spacing
-        
+        #TODO check if raster is valid 
+
+    
+    
         polygon, edge = Motion_Planner._create_polygon(img)
+        
+        if polygon is None:
+            print("No shape found ")
+            return []
+        
         path = Motion_Planner.poly_raster(
             polygon,
             spacing=spacing,        # pixels
@@ -113,7 +127,7 @@ class Handler:
             margin=5.0          # inward offset
         )
         
-        print("Raster Path: ", path)
+        # print("Raster Path: ", path)
         fig, ax = plt.subplots(figsize=(8,4))
         # ax.imshow(img, cmap='gray')
         if len(path) > 1:
@@ -124,6 +138,8 @@ class Handler:
         fig.savefig("raster path.png")
         return path
     
+###------------------------ Virtual Fixtures -------------------####    
+
     def _read_fixtures(self):
         gray = self._read_mask(self.desired_state.fixtures_mask)
         self.virtual_fixture, self.dx, self.dy, self.distance_field = self.generate_virtual_fixture(img=gray)
@@ -138,7 +154,7 @@ class Handler:
             
             self.laser_obj.vf_valid_flag = self.vf_valid_flag # should be handle on its own, double precaution
             
-            
+###------------------------ Robot Tracking -------------------####                
     def _do_current_position(self):
         now = time.time()
         if now - self._last_pose_ui < 1/75.0:  # 75 Hz
@@ -152,6 +168,9 @@ class Handler:
         self._track_virtual_fixtures(current_pixel_location)
         self.desired_state.laserX, self.desired_state.laserY = current_pixel_location
     
+    
+###------------------------ THERMAL OVERLAY -------------------####    
+
     def _do_current_thermal_info(self):
         if self.desired_state.heat_markers != None:
             if(len(self.desired_state.heat_markers) == 0 ):
@@ -188,7 +207,9 @@ class Handler:
         # print(f"Max temp: {max_temp}")
         return heat_img
             
-    
+###------------------------ Planned Path Control -------------------####    
+
+
     def _read_path(self):
         path = np.array([[d['x'], d['y']] for d in self.desired_state.path])
         return path
@@ -196,6 +217,16 @@ class Handler:
     def _do_create_path(self, path):
         pixels = path
         path = None
+        pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=3, n_arc=10)
+        
+        fig, ax = plt.subplots(figsize=(8,4))
+        # ax.imshow(img, cmap='gray')
+        if len(pixels) > 1:
+            xs = [p[0] for p in pixels]
+            ys_plot = [p[1] for p in pixels]
+            ax.plot(xs, ys_plot, linewidth=1)  # default color
+        ax.set_axis_off()
+        fig.savefig("pixels path.png")
         
         warped_view = self.desired_state.isTransformedViewOn
         print("Warped Path: ", warped_view)
@@ -239,9 +270,7 @@ class Handler:
         #     ax.plot(xs, ys_plot, linewidth=1)  # default color
         # ax.set_axis_off()
         # fig.savefig("pixels path.png")
-        
-        self.cam_reg.get_path(pixels)
-        self.cam_reg.display_path = True
+        self.path_display_pixels = pixels
         return pixels, traj.total_path_time
     
     def _package_path(self, pixels, total_time):
@@ -254,12 +283,11 @@ class Handler:
             "y" : y,
             "time": time
         }
-    
-    
+     
     def _do_path(self, traj: TrajectoryController):
-        
-        # TODO uncomment controller 
         self.robot_controller.run_trajectory(traj, blocking=False, laser_on=self.desired_state.isLaserOn)
+        
+###------------------------ Live Control ------------------####
         
     def _do_hold_pose(self):
         current_pose, current_vel = self.robot_controller.get_current_state()
@@ -331,6 +359,7 @@ class Handler:
                 raster = self._read_raster()
                 if len(raster) < 1:
                     print("[Warning] : Raster path is empty")
+                    self._package_path(np.empty((1, 2), dtype=float), -1)
                 else: 
                     self.current_traj = self._do_create_path(raster)
                     
@@ -362,6 +391,13 @@ class Handler:
             height_change = np.abs(height_diff) > 0.0001 #0.1 mm
             # print(f"[Robot Height] Height Change: {height_change}")
             
+            if(self.robot_controller.is_trajectory_running() and self.path_display_pixels is not None):
+                self.cam_reg.get_path(self.path_display_pixels)
+                self.cam_reg.display_path = True
+            else:
+                self.cam_reg.display_path = False
+                self.path_display_pixels = None
+            
             if(self.desired_state.fixtures_mask is not None):
                 self._read_fixtures()
                 self.desired_state.fixtures_mask = None
@@ -380,7 +416,8 @@ class Handler:
                 self._do_live_control(height_diff)
                 self.desired_state.path = None
             # elif(not self.robot_controller.is_trajectory_running())
-                    
+            
+                
                     
                     
         else:

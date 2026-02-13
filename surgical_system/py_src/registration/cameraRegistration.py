@@ -507,7 +507,7 @@ class Camera_Registration(System_Calibration):
         ys = laser_pixels[:, 1]
         h, w = disp.shape[:2]
         valid = (xs >= 0) & (xs < w) & (ys >= 0) & (ys < h)
-        disp[ys[valid], xs[valid]] = (0, 255, 0)
+        disp[ys[valid], xs[valid]] = (0, 0, 255)
         
         cv2.circle(disp, current_pixel_location, 5, (255, 0, 0), 2)
         return disp

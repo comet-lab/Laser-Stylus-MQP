@@ -86,6 +86,9 @@ class Motion_Planner():
         
         contours, _ = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         
+        
+        if(len(contours)  < 1):
+            return None, None
         edge = max(contours, key=cv2.contourArea)
         perimeter_pts = edge[:, 0, :] 
         # plt.plot(perimeter_pts[:, 0], perimeter_pts[:, 1])
