@@ -99,12 +99,14 @@ class AppController {
             () => this.toolHandler.updateThermalButtonState(),
         );
 
+        this.previewManager = new PreviewManager(this.ui, this.state, getCM);
+
         this.executionManager = new ExecutionManager(
             this.ui,
             this.state,
             getCM,
             () => this.toolHandler.updateDrawButtonState(),
-            () => this.previewManager.openPreview(),
+            () => this.previewManager,
         );
 
         this.settingsManager = new SettingsManager(
@@ -114,8 +116,6 @@ class AppController {
             this.hardware,
             () => this.toolHandler.updateDrawButtonState(),
         );
-
-        this.previewManager = new PreviewManager(this.ui, this.state, getCM);
 
         // TODO: Expose on window for quick console access during development
         // TODO: REMOVE BEFORE SHIPPING
@@ -154,6 +154,19 @@ class AppController {
 
         // Restore persisted layout positions
         this.settingsManager.restoreLayoutPositions();
+
+        //Save robot height to localStorage to keep it from shifting on page reload
+        const savedHeight = localStorage.getItem('robot_height');
+        if (savedHeight) {
+            const heightVal = parseInt(savedHeight);
+            if (!isNaN(heightVal)) {
+                //Update the Slider UI
+                this.ui.heightSlider.value = savedHeight;
+                //Update the Text Display
+                this.ui.heightDisplay.textContent = savedHeight;
+                //TODO: May need to send a wshandler.updateState to sync
+            }
+        }
     }
 
     private setMessage(str: string): void {
@@ -219,6 +232,34 @@ class AppController {
         this.ui.video.requestVideoFrameCallback(this.updateCanvasLoop.bind(this));
     }
 
+    /**
+     * Central handler for window resize events.
+     * Ensures sub-systems update in the correct order to avoid layout thrashing.
+     */
+    private handleResize(): void {
+        // 1. Layout Manager: Calculate new panel positions/sizes
+        this.settingsManager.handleResize();
+
+        // 2. Get authoritative viewport dimensions
+        const w = this.ui.viewport.offsetWidth;
+        const h = this.ui.viewport.offsetHeight;
+
+        // 3. Preview Manager: Resize overlay and re-project path
+        this.previewManager.updateOverlaySize();
+
+        // 4. Canvas Manager: Scale fabric canvas and objects
+        if (this.canvasManager) {
+            // Check against internal canvas dimensions to prevent unnecessary updates
+            if (this.ui.canvas.width !== w || this.ui.canvas.height !== h) {
+                this.canvasManager.updateCanvasSize(w, h);
+            }
+        } else {
+            // If CM doesn't exist yet, ensure the raw canvas element matches viewport
+            this.ui.canvas.width = w;
+            this.ui.canvas.height = h;
+        }
+    }
+
     // ===================================================================
     // Event binding  (thin wiring – logic lives in sub-systems)
     // ===================================================================
@@ -232,12 +273,17 @@ class AppController {
         this.ui.prepareCloseBtn.addEventListener('click', () => this.ui.preparePopup.classList.remove('active'));
         this.ui.prepareCancelBtn.addEventListener('click', () => this.ui.preparePopup.classList.remove('active'));
 
-        this.ui.previewCloseBtn.addEventListener('click', () => this.previewManager.closePreview());
+        this.ui.previewToggleOn.addEventListener('click', () => {
+            this.previewManager.togglePreview(true);
+        });
 
-        //Live preview window refresh
+        this.ui.previewToggleOff.addEventListener('click', () => {
+            this.previewManager.togglePreview(false);
+        });
+
         const refreshPreview = () => {
-            if (this.ui.previewPopup.classList.contains('active')) {
-                this.previewManager.updatePreviewData();
+            if (this.ui.previewToggleOn.classList.contains('active')) {
+                this.previewManager.refreshPreview();
             }
         };
 
@@ -249,6 +295,7 @@ class AppController {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(refreshPreview, 500);
         });
+
 
         // Clicking the background overlay closes whichever modal is open
         this.ui.overlay.addEventListener('click', () => {
@@ -329,7 +376,11 @@ class AppController {
         this.ui.heightSlider.addEventListener('input', () => {
             const heightValue = parseInt(this.ui.heightSlider.value);
             this.ui.heightDisplay.textContent = String(heightValue);
-            //console.log('Sending height:', heightValue);
+            
+            //Save to local storage
+            localStorage.setItem('robot_height', String(heightValue));
+            
+            //Send to backend
             this.wsHandler.updateState({ height: heightValue });
         });
 
@@ -345,12 +396,8 @@ class AppController {
         this.ui.canvas.addEventListener('touchend', () => setTimeout(() => this.toolHandler.updateDrawButtonState(), 50));
 
         // --- Execution actions ---;
-        this.ui.previewBtn.addEventListener('click', () => this.executionManager.previewPath());
         this.ui.executeBtn.addEventListener('click', () => this.executionManager.executePath());
         this.ui.clearBtn.addEventListener('click', () => this.executionManager.clearDrawing());
-        this.ui.clearBtn.addEventListener('click', () => {
-            this.ui.previewBtn.disabled = true;
-        });
 
         // --- Fill / Raster settings ---
         const updateFillState = (isEnabled: boolean) => {
@@ -404,17 +451,7 @@ class AppController {
 
         // --- Window resize ---
         window.addEventListener('resize', () => {
-            this.settingsManager.handleResize();
-            if (this.ui.previewPopup.classList.contains('active')) {
-                this.previewManager.updatePreviewData();
-            }
-            if (this.canvasManager) {
-                const w = this.ui.viewport.offsetWidth;
-                const h = this.ui.viewport.offsetHeight;
-                if (this.ui.canvas.width !== w || this.ui.canvas.height !== h) {
-                    this.canvasManager.updateCanvasSize(w, h);
-                }
-            }
+            this.handleResize();
         });
 
         // code for the zoom functionality
