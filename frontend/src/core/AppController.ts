@@ -462,22 +462,23 @@ class AppController {
         // --- Robot-position marker ---
         if (state.laserX !== undefined && state.laserY !== undefined) {
 
-        const vw = this.ui.video.videoWidth;
-        const vh = this.ui.video.videoHeight;
+            const video = this.ui.video;
 
-        if (vw > 0 && vh > 0) {
+            const vw = video.videoWidth;
+            const vh = video.videoHeight;
 
-            // gets the size annd position of the view
-            const rect = this.ui.video.getBoundingClientRect();
+            if (vw > 0 && vh > 0) {
 
-            const x = (state.laserX / vw) * rect.width;
-            const y = (state.laserY / vh) * rect.height;
+                const rect = video.getBoundingClientRect();
 
-            this.ui.robotMarker.style.left = `${x}px`;
-            this.ui.robotMarker.style.top  = `${y}px`;
-            this.ui.robotMarker.style.display = 'block';
+                const x = (state.laserX / vw) * rect.width;
+                const y = (state.laserY / vh) * rect.height;
+
+                this.ui.robotMarker.style.left = `${x}px`;
+                this.ui.robotMarker.style.top  = `${y}px`;
+                this.ui.robotMarker.style.display = 'block';
+            }
         }
-    }
 
         // --- Thermal / heat data ---
         if (state.maxHeat !== undefined) {
