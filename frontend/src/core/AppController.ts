@@ -542,23 +542,17 @@ class AppController {
     private syncUiToState(state: Partial<WebSocketMessage>): void {
         // --- Robot-position marker ---
         if (state.laserX !== undefined && state.laserY !== undefined) {
+            const cw = this.ui.viewport.offsetWidth;
+            const ch = this.ui.viewport.offsetHeight;
+            const vw = this.ui.video.videoWidth;
+            const vh = this.ui.video.videoHeight;
 
-        const vw = this.ui.video.videoWidth;
-        const vh = this.ui.video.videoHeight;
-
-        if (vw > 0 && vh > 0) {
-
-            // gets the size annd position of the view
-            const rect = this.ui.video.getBoundingClientRect();
-
-            const x = (state.laserX / vw) * rect.width;
-            const y = (state.laserY / vh) * rect.height;
-
-            this.ui.robotMarker.style.left = `${x}px`;
-            this.ui.robotMarker.style.top  = `${y}px`;
-            this.ui.robotMarker.style.display = 'block';
+            if (vw > 0 && vh > 0) {
+                this.ui.robotMarker.style.left = `${(state.laserX / vw) * cw}px`;
+                this.ui.robotMarker.style.top = `${(state.laserY / vh) * ch}px`;
+                this.ui.robotMarker.style.display = 'block';
+            }
         }
-    }
 
         if (state.path_preview) {
             this.previewManager.handlePathFromWebSocket(state.path_preview);
