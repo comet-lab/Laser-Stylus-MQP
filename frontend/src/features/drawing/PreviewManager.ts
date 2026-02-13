@@ -122,7 +122,7 @@ export class PreviewManager {
     }
   }
 
-  public handlePathFromWebSocket(previewData: { x: number[], y: number[] }): void {
+  public handlePathFromWebSocket(previewData: { x: number[], y: number[] }, serverDuration?: number): void {
     if (!this.isPreviewActive) return;
 
     const path: Position[] = [];
@@ -139,7 +139,7 @@ export class PreviewManager {
       const dy = path[i].y - path[i - 1].y;
       totalDistance += Math.sqrt(dx * dx + dy * dy);
     }
-    const duration = totalDistance / (speed * 10 || 1);
+    const duration = serverDuration || 10.0;;
 
     this.handlePathData(path, duration);
   }

@@ -479,7 +479,7 @@ class AppController {
         }
 
         if (state.path_preview) {
-            this.previewManager.handlePathFromWebSocket(state.path_preview);
+            this.previewManager.handlePathFromWebSocket(state.path_preview, state.preview_duration);
         }
 
         // --- Thermal / heat data ---
