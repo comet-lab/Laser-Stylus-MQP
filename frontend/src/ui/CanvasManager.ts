@@ -71,6 +71,8 @@ export class CanvasManager {
     // --- CONFIG: Other Constants ---
     private readonly BORDER_THICKNESS = 4;
 
+    public onShapeModified: () => void = () => {};
+
     constructor(
         canvas: HTMLCanvasElement,
         video: HTMLVideoElement,
@@ -126,6 +128,11 @@ export class CanvasManager {
         this.fCanvas.on('mouse:up', (opt) => {
             if (this.isHeatAreaMode) this.onHeatMouseUp();
             else this.onMouseUp();
+        });
+        this.fCanvas.on('object:modified', (opt) => {
+            if (opt.target && !(opt.target as any)._isMarker) {
+                this.onShapeModified();
+            }
         });
         this.fCanvas.on('path:created', (e: any) => {
             if (e.path) {
@@ -879,6 +886,7 @@ export class CanvasManager {
                 o.evented = true;
             }
         });
+        this.fCanvas.requestRenderAll();
     }
 
     public isDrawingEnabled(): boolean {
@@ -1182,14 +1190,46 @@ export class CanvasManager {
     /**
      * Sends full path data to backend for preview/preparation
      */
-    public async previewPath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<{ duration: number, path: Position[] }> {
+    public async previewPath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<{ duration: number, path: Position[], warning?: string }> {
         // Generate Pixel Path
         const pixels = this.generatePixelPath();
+        const width = this.fCanvas.getWidth();
+        const height = this.fCanvas.getHeight();
+
+        //Check if out of bounds. If so, abort.
+        const isOutOfBounds = pixels.some(p => p.x < 0 || p.x > width || p.y < 0 || p.y > height);
+        if (isOutOfBounds) {
+            throw new Error("OUT_OF_BOUNDS");
+        }
+
+        //Check for overlap with virtual fixtures. If there's any overlap, warn user
+        let hasFixtureOverlap = false;
+        if (this.hasFixtures() && this.fixturesCtx) {
+            // Grab the raw pixel data from the fixtures canvas
+            const imgData = this.fixturesCtx.getImageData(0, 0, width, height).data;
+            
+            for (const p of pixels) {
+                const px = Math.floor(p.x);
+                const py = Math.floor(p.y);
+                
+                // Ensure we don't check outside the array bounds
+                if (px >= 0 && px < width && py >= 0 && py < height) {
+                    // Calculate the index for the Alpha channel of this specific (x,y) pixel
+                    const alphaIndex = (py * width + px) * 4 + 3;
+                    
+                    // If the alpha channel is greater than 0, the user drew a fixture here
+                    if (imgData[alphaIndex] > 0) {
+                        hasFixtureOverlap = true;
+                        break; // Stop checking, we only need one violation to trigger the warning
+                    }
+                }
+            }
+        }
 
         // Normalize to video space
         const videoPixels = pixels.map(p => ({
-            x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
-            y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
+            x: (p.x / width) * this.video.videoWidth,
+            y: (p.y / height) * this.video.videoHeight
         }));
 
         const formData = new FormData();
@@ -1212,7 +1252,8 @@ export class CanvasManager {
 
         return {
             duration: response.duration,
-            path: response.path
+            path: response.path,
+            warning: hasFixtureOverlap ? "FIXTURE_OVERLAP" : undefined
         };
     }
 

@@ -215,6 +215,16 @@ class AppController {
             () => { this.ui.resetHeatAreaBtn.disabled = false; },
         );
 
+        this.canvasManager.onShapeModified = () => {
+            if (this.ui.previewToggleOn.classList.contains('active')) {
+                // The preview window is currently open, so silently refresh the data!
+                this.previewManager.refreshPreview();
+            } else {
+                // The preview window is closed. Invalidate old data to wait for new request
+                this.executionManager.onShapeComplete(); 
+            }
+        };
+
         this.toolHandler.updateDrawButtonState();
         this.toolHandler.updateFixturesButtonState();
         this.toolHandler.updateThermalButtonState();
