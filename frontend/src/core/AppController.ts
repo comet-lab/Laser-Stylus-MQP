@@ -99,11 +99,14 @@ class AppController {
             () => this.toolHandler.updateThermalButtonState(),
         );
 
+        this.previewManager = new PreviewManager(this.ui, this.state, getCM);
+
         this.executionManager = new ExecutionManager(
             this.ui,
             this.state,
             getCM,
             () => this.toolHandler.updateDrawButtonState(),
+            () => this.previewManager,
         );
 
         this.settingsManager = new SettingsManager(
@@ -113,8 +116,6 @@ class AppController {
             this.hardware,
             () => this.toolHandler.updateDrawButtonState(),
         );
-
-        this.previewManager = new PreviewManager(this.ui, this.state, getCM);
 
         // TODO: Expose on window for quick console access during development
         // TODO: REMOVE BEFORE SHIPPING
@@ -153,6 +154,19 @@ class AppController {
 
         // Restore persisted layout positions
         this.settingsManager.restoreLayoutPositions();
+
+        //Save robot height to localStorage to keep it from shifting on page reload
+        const savedHeight = localStorage.getItem('robot_height');
+        if (savedHeight) {
+            const heightVal = parseInt(savedHeight);
+            if (!isNaN(heightVal)) {
+                //Update the Slider UI
+                this.ui.heightSlider.value = savedHeight;
+                //Update the Text Display
+                this.ui.heightDisplay.textContent = savedHeight;
+                //TODO: May need to send a wshandler.updateState to sync
+            }
+        }
     }
 
     private setMessage(str: string): void {
@@ -218,6 +232,34 @@ class AppController {
         this.ui.video.requestVideoFrameCallback(this.updateCanvasLoop.bind(this));
     }
 
+    /**
+     * Central handler for window resize events.
+     * Ensures sub-systems update in the correct order to avoid layout thrashing.
+     */
+    private handleResize(): void {
+        // 1. Layout Manager: Calculate new panel positions/sizes
+        this.settingsManager.handleResize();
+
+        // 2. Get authoritative viewport dimensions
+        const w = this.ui.viewport.offsetWidth;
+        const h = this.ui.viewport.offsetHeight;
+
+        // 3. Preview Manager: Resize overlay and re-project path
+        this.previewManager.updateOverlaySize();
+
+        // 4. Canvas Manager: Scale fabric canvas and objects
+        if (this.canvasManager) {
+            // Check against internal canvas dimensions to prevent unnecessary updates
+            if (this.ui.canvas.width !== w || this.ui.canvas.height !== h) {
+                this.canvasManager.updateCanvasSize(w, h);
+            }
+        } else {
+            // If CM doesn't exist yet, ensure the raw canvas element matches viewport
+            this.ui.canvas.width = w;
+            this.ui.canvas.height = h;
+        }
+    }
+
     // ===================================================================
     // Event binding  (thin wiring – logic lives in sub-systems)
     // ===================================================================
@@ -231,13 +273,17 @@ class AppController {
         this.ui.prepareCloseBtn.addEventListener('click', () => this.ui.preparePopup.classList.remove('active'));
         this.ui.prepareCancelBtn.addEventListener('click', () => this.ui.preparePopup.classList.remove('active'));
 
-        this.ui.previewBtn.addEventListener('click', () => this.previewManager.openPreview());
-        this.ui.previewCloseBtn.addEventListener('click', () => this.previewManager.closePreview());
+        this.ui.previewToggleOn.addEventListener('click', () => {
+            this.previewManager.togglePreview(true);
+        });
 
-        //Live preview window refresh
+        this.ui.previewToggleOff.addEventListener('click', () => {
+            this.previewManager.togglePreview(false);
+        });
+
         const refreshPreview = () => {
-            if (this.ui.previewPopup.classList.contains('active')) {
-                this.previewManager.updatePreviewData();
+            if (this.ui.previewToggleOn.classList.contains('active')) {
+                this.previewManager.refreshPreview();
             }
         };
 
@@ -249,6 +295,7 @@ class AppController {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(refreshPreview, 500);
         });
+
 
         // Clicking the background overlay closes whichever modal is open
         this.ui.overlay.addEventListener('click', () => {
@@ -329,7 +376,11 @@ class AppController {
         this.ui.heightSlider.addEventListener('input', () => {
             const heightValue = parseInt(this.ui.heightSlider.value);
             this.ui.heightDisplay.textContent = String(heightValue);
-            //console.log('Sending height:', heightValue);
+            
+            //Save to local storage
+            localStorage.setItem('robot_height', String(heightValue));
+            
+            //Send to backend
             this.wsHandler.updateState({ height: heightValue });
         });
 
@@ -344,7 +395,7 @@ class AppController {
         this.ui.canvas.addEventListener('mouseup', () => setTimeout(() => this.toolHandler.updateDrawButtonState(), 50));
         this.ui.canvas.addEventListener('touchend', () => setTimeout(() => this.toolHandler.updateDrawButtonState(), 50));
 
-        // --- Execution actions ---
+        // --- Execution actions ---;
         this.ui.executeBtn.addEventListener('click', () => this.executionManager.executePath());
         this.ui.clearBtn.addEventListener('click', () => this.executionManager.clearDrawing());
 
@@ -400,18 +451,84 @@ class AppController {
 
         // --- Window resize ---
         window.addEventListener('resize', () => {
-            this.settingsManager.handleResize();
-            if (this.ui.previewPopup.classList.contains('active')) {
-                this.previewManager.updatePreviewData();
+            this.handleResize();
+        });
+
+        // code for the zoom functionality
+        let zoomLevel = 1;
+        const MIN_ZOOM = 1;   
+        const MAX_ZOOM = 4;
+
+        this.ui.viewport.addEventListener('wheel', (e: WheelEvent) => {
+            if (!e.ctrlKey) return;
+
+            e.preventDefault();
+
+            const zoomSpeed = 0.0015;
+
+            zoomLevel *= (1 - e.deltaY * zoomSpeed);
+
+            // prevents the zoom from going below the min or max that we set. These can be changed
+            zoomLevel = Math.min(Math.max(zoomLevel, MIN_ZOOM), MAX_ZOOM);
+
+            const zoomWrapper = document.getElementById('zoom-wrapper');
+            if (zoomWrapper) {
+                zoomWrapper.style.transform = `scale(${zoomLevel})`;
             }
-            if (this.canvasManager) {
-                const w = this.ui.viewport.offsetWidth;
-                const h = this.ui.viewport.offsetHeight;
-                if (this.ui.canvas.width !== w || this.ui.canvas.height !== h) {
-                    this.canvasManager.updateCanvasSize(w, h);
+
+            if (zoomLevel > 1) {
+                this.ui.viewport.style.overflow = 'auto';
+            } else {
+                this.ui.viewport.style.overflow = 'hidden';
+            }
+
+
+        }, { passive: false });
+
+        // pinch zoom
+        zoomLevel = 1;
+
+        const zoomWrapper = document.getElementById('zoom-wrapper');
+        let initialDistance = 0;
+        let startZoom = 1;
+
+        function getDistance(touches: TouchList) {
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        this.ui.viewport.addEventListener('touchstart', (e: TouchEvent) => {
+            if (e.touches.length === 2) {
+                initialDistance = getDistance(e.touches);
+                startZoom = zoomLevel;
+            }
+        }, { passive: false });
+
+        this.ui.viewport.addEventListener('touchmove', (e: TouchEvent) => {
+            if (e.touches.length === 2 && zoomWrapper) {
+                e.preventDefault();
+
+                const currentDistance = getDistance(e.touches);
+                const scaleFactor = currentDistance / initialDistance;
+
+                zoomLevel = startZoom * scaleFactor;
+
+                // clamp zoom
+                zoomLevel = Math.min(Math.max(zoomLevel, MIN_ZOOM), MAX_ZOOM);
+
+                zoomWrapper.style.transform = `scale(${zoomLevel})`;
+
+                // show scrollbars when zoomed in, hide at default
+                if (zoomLevel > 1) {
+                    this.ui.viewport.style.overflow = 'auto';
+                } else {
+                    this.ui.viewport.style.overflow = 'hidden';
                 }
             }
-        });
+        }, { passive: false });
+
+
     }
 
     // ===================================================================
@@ -425,16 +542,26 @@ class AppController {
     private syncUiToState(state: Partial<WebSocketMessage>): void {
         // --- Robot-position marker ---
         if (state.laserX !== undefined && state.laserY !== undefined) {
-            const cw = this.ui.viewport.offsetWidth;
-            const ch = this.ui.viewport.offsetHeight;
-            const vw = this.ui.video.videoWidth;
-            const vh = this.ui.video.videoHeight;
 
-            if (vw > 0 && vh > 0) {
-                this.ui.robotMarker.style.left = `${(state.laserX / vw) * cw}px`;
-                this.ui.robotMarker.style.top = `${(state.laserY / vh) * ch}px`;
-                this.ui.robotMarker.style.display = 'block';
-            }
+        const vw = this.ui.video.videoWidth;
+        const vh = this.ui.video.videoHeight;
+
+        if (vw > 0 && vh > 0) {
+
+            // gets the size annd position of the view
+            const rect = this.ui.video.getBoundingClientRect();
+
+            const x = (state.laserX / vw) * rect.width;
+            const y = (state.laserY / vh) * rect.height;
+
+            this.ui.robotMarker.style.left = `${x}px`;
+            this.ui.robotMarker.style.top  = `${y}px`;
+            this.ui.robotMarker.style.display = 'block';
+        }
+    }
+
+        if (state.path_preview) {
+            this.previewManager.handlePathFromWebSocket(state.path_preview);
         }
 
         // --- Thermal / heat data ---

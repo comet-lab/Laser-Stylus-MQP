@@ -1,113 +1,120 @@
-//frontend/src/features/drawing/ExecutionManager.ts
-
-import { UIRegistry }    from '../../core/UIRegistry';
-import { AppState }      from '../../core/AppState';
+import { UIRegistry } from '../../core/UIRegistry';
+import { AppState } from '../../core/AppState';
 import { CanvasManager } from '../../ui/CanvasManager';
+import { PreviewManager } from '../drawing/PreviewManager';
 
 /**
  * ExecutionManager
  *
- * Owns the lifecycle that begins once the user has finished drawing a shape:
- *   1. onShapeComplete  – records that a shape now exists (triggers button-state update)
- *   2. executePath      – reads speed / fill settings, sends path to backend, cleans up
- *   3. clearDrawing     – removes the shape and re-arms the selected tool
+ * Owns the lifecycle:
+ * 1. onShapeComplete – records that a shape now exists
+ * 2. executePath     – sends execute command (requires preview first)
+ * 3. clearDrawing    – resets everything
  */
 export class ExecutionManager {
     constructor(
-        private readonly ui:                  UIRegistry,
-        private readonly state:               AppState,
-        private getCanvasManager:             () => CanvasManager | null,
-        private updateDrawButtonState:        () => void,
-    ) {}
-
-    // ---------------------------------------------------------------
-    // Shape-complete callback  (wired into CanvasManager construction)
-    // ---------------------------------------------------------------
+        private readonly ui: UIRegistry,
+        private readonly state: AppState,
+        private getCanvasManager: () => CanvasManager | null,
+        private updateDrawButtonState: () => void,
+        private getPreviewManager: () => PreviewManager,
+    ) {
+        this.updateExecuteButtonState();
+    }
 
     /**
-     * Called by CanvasManager the moment the user lifts the pointer after
-     * drawing a shape.  Records the type so that button-state logic knows
-     * a shape exists.
+     * Called by CanvasManager when the user finishes drawing a shape.
      */
     onShapeComplete(): void {
         if (this.state.selectedShape && this.state.selectedShape !== 'marker') {
             this.state.drawnShapeType = this.state.selectedShape;
+
+            // New shape drawn -> Invalidate preview state
+            const previewMgr = this.getPreviewManager();
+            previewMgr.resetPreviewState();
+
+            this.updateExecuteButtonState();
             this.updateDrawButtonState();
         }
     }
 
-    // ---------------------------------------------------------------
-    // Execute
-    // ---------------------------------------------------------------
+    async previewPath(): Promise<void> {
+        const previewMgr = this.getPreviewManager();
+        previewMgr.togglePreview(true);
+    }
 
     /**
-     * Validates inputs, sends the path to the backend via CanvasManager,
-     * and cleans up UI state on success.
+     * Sends execute command to start the prepared path.
+     * Only works if path has been previewed first (Safety Interlock).
      */
     async executePath(): Promise<void> {
         const cm = this.getCanvasManager();
         if (!cm) return;
 
-        const speed   = parseFloat(this.ui.speedInput.value);
-        const density = this.state.fillEnabled
-            ? parseFloat(this.ui.rasterDensityInput.value)
-            : 0;
-
-        if (isNaN(speed) || speed <= 0) {
-            alert('Invalid speed');
+        const previewMgr = this.getPreviewManager();
+        if (!previewMgr.hasPreviewedCurrent()) {
+            alert('Please preview the path first');
             return;
         }
 
         this.ui.executeBtn.disabled = true;
-        this.ui.prepareBtn.disabled = true;
 
         try {
-            await cm.executePath(
-                speed,
-                String(this.state.selectedRasterPattern),
-                density,
-                this.state.fillEnabled,
-            );
-
-            // Success – clean up
+            await cm.executeCommand();
             cm.clearDrawing();
             this.state.drawnShapeType = null;
+
+            // Reset preview state on execution
+            previewMgr.resetPreviewState();
+
+            this.updateExecuteButtonState();
             this.ui.toggleButtons.forEach(btn => btn.disabled = false);
             this.updateDrawButtonState();
 
-            // Re-arm the drawing tool that was active before execution
+            // Close prepare popup
+            this.ui.preparePopup.classList.remove('active');
+
+            // Re-arm the tool
             if (this.state.selectedShape && this.state.selectedShape !== 'marker') {
                 cm.setShapeType(this.state.selectedShape);
                 cm.enableDrawing();
             }
-
-            this.ui.preparePopup.classList.remove('active');
         } catch (e) {
             console.error(e);
             this.ui.executeBtn.disabled = false;
-            this.ui.prepareBtn.disabled = false;
         }
     }
 
-    // ---------------------------------------------------------------
-    // Clear
-    // ---------------------------------------------------------------
-
-    /**
-     * Removes the current shape from the canvas and immediately re-arms
-     * the selected tool so the user can draw again without extra clicks.
-     */
     clearDrawing(): void {
         const cm = this.getCanvasManager();
-
         cm?.clearDrawing();
         this.state.drawnShapeType = null;
+
+        // Reset preview state on clear
+        const previewMgr = this.getPreviewManager();
+        previewMgr.resetPreviewState();
+
+        this.updateExecuteButtonState();
         this.updateDrawButtonState();
 
-        // Re-arm drawing if a shape tool is still selected
         if (cm && this.state.selectedShape && this.state.selectedShape !== 'marker') {
             cm.setShapeType(this.state.selectedShape);
             cm.enableDrawing();
+        }
+    }
+
+    private updateExecuteButtonState(): void {
+        const previewMgr = this.getPreviewManager();
+        const hasPreview = previewMgr.hasPreviewedCurrent();
+
+        if (hasPreview) {
+            this.ui.executeBtn.disabled = false;
+            this.ui.executeBtn.style.pointerEvents = 'auto';
+            this.ui.executeBtn.style.opacity = '1';
+        } else {
+            this.ui.executeBtn.disabled = true;
+            this.ui.executeBtn.style.pointerEvents = 'none';
+            this.ui.executeBtn.style.opacity = '0.3';
         }
     }
 }

@@ -37,6 +37,8 @@ class RobotSchema:
     
     path: List[Dict[str, float]] = None
     heat_markers: List[Dict[str, float]] = None
+    executeCommand: bool = None
+    path_preview: Dict[str, List[float]] = None
 
 
     @staticmethod

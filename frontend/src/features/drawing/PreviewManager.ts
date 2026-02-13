@@ -3,247 +3,365 @@ import { AppState } from '../../core/AppState';
 import { CanvasManager } from '../../ui/CanvasManager';
 import { Position } from '../../ui/types';
 
+/**
+ * PreviewManager - CAD-style toolpath overlay with animated follower
+ */
 export class PreviewManager {
-    private isAnimating: boolean = false;
-    private startTime: number = 0;
-    private pathData: Position[] = [];
-    private durationSeconds: number = 0;
-    private animationFrameId: number | null = null;
-    
-    //Exact scaling factor (Video -> Preview)
-    private scaleX: number = 1;
-    private scaleY: number = 1;
+  private ctx: CanvasRenderingContext2D;
+  private isPreviewActive: boolean = false;
+  // "Source of Truth": The path in raw video coordinates
+  private sourcePath: Position[] = [];
+  private pathData: Position[] = [];
+  private durationSeconds: number = 0;
+  private hasPreviewedCurrentDrawing: boolean = false;
 
-    //Store marker size to perform manual centering in the loop
-    private markerSize: number = 24;
+  // Animation state
+  private isAnimating: boolean = false;
+  private animationStartTime: number = 0;
+  private animationFrameId: number | null = null;
 
-    constructor(
-        private readonly ui: UIRegistry,
-        private readonly state: AppState,
-        private getCanvasManager: () => CanvasManager | null,
-    ) {
-        //Force border-box and remove CSS transform to give JS full control
-        this.ui.previewMarker.style.boxSizing = 'border-box';
-        this.ui.previewMarker.style.transform = 'none';
-        this.ui.previewMarker.style.margin = '0';
+  // Visual styling
+  private readonly PATH_COLOR = '#ffff00'; // Neon Yellow
+  private readonly PATH_WIDTH = 4;
+  private readonly DASH_PATTERN = [12, 6];
+  private readonly GLOW_COLOR = 'rgba(255, 255, 0, 0.4)';
+  private readonly GLOW_WIDTH = 10;
+
+  constructor(
+    private readonly ui: UIRegistry,
+    private readonly state: AppState,
+    private getCanvasManager: () => CanvasManager | null,
+  ) {
+    const ctx = this.ui.previewOverlay.getContext('2d');
+    if (!ctx) throw new Error('Preview overlay context not available');
+    this.ctx = ctx;
+
+    this.updateOverlaySize();
+
+    // Disable execute button immediately when clicked
+    const executeBtn = this.getExecuteBtn();
+    if (executeBtn) {
+      executeBtn.addEventListener('click', () => {
+        this.setExecuteButtonState(false);
+      });
+    }
+  }
+
+  private getExecuteBtn(): HTMLButtonElement | null {
+    return document.getElementById('executeBtn') as HTMLButtonElement | null;
+  }
+
+  /**
+   * Handle the complex state of the execute button (Disabled prop + CSS styles)
+   */
+  private setExecuteButtonState(isEnabled: boolean): void {
+    const btn = this.getExecuteBtn();
+    if (!btn) return;
+
+    if (isEnabled) {
+      btn.disabled = false;
+      // MUST override the inline styles set by ExecutionManager
+      btn.style.pointerEvents = 'auto';
+      btn.style.opacity = '1';
+    } else {
+      btn.disabled = true;
+      btn.style.pointerEvents = 'none';
+      btn.style.opacity = '0.3';
+    }
+  }
+
+  public togglePreview(enable: boolean): void {
+    this.isPreviewActive = enable;
+
+    if (enable) {
+      this.ui.previewToggleOn.classList.add('active');
+      this.ui.previewToggleOff.classList.remove('active');
+      this.ui.previewInfoPanel.classList.add('open');
+      this.updateOverlaySize();
+      this.refreshPreview();
+    } else {
+      this.ui.previewToggleOn.classList.remove('active');
+      this.ui.previewToggleOff.classList.add('active');
+      this.ui.previewInfoPanel.classList.remove('open');
+      this.clearOverlay();
+      this.stopAnimation();
+    }
+  }
+
+  public async refreshPreview(): Promise<void> {
+    if (!this.isPreviewActive) return;
+
+    const cm = this.getCanvasManager();
+    if (!cm) return;
+
+    const speed = parseFloat(this.ui.speedInput.value) || 10;
+    const density = this.state.fillEnabled
+      ? parseFloat(this.ui.rasterDensityInput.value)
+      : 0;
+    const rasterType = this.state.selectedRasterPattern || '';
+    const isFill = this.state.fillEnabled;
+
+    this.ui.previewDuration.textContent = 'Computing...';
+
+    // Disable execute while computing new path
+    this.setExecuteButtonState(false);
+    this.stopAnimation();
+
+    try {
+      const response = await cm.previewPath(speed, rasterType, density, isFill);
+
+      if (response.path && response.path.length > 0) {
+        this.handlePathData(response.path, response.duration);
+      } else {
+        this.ui.previewDuration.textContent = 'Waiting...';
+      }
+    } catch (e) {
+      console.error('Preview refresh error:', e);
+      this.ui.previewDuration.textContent = 'Error';
+      this.clearOverlay();
+    }
+  }
+
+  public handlePathFromWebSocket(previewData: { x: number[], y: number[] }): void {
+    if (!this.isPreviewActive) return;
+
+    const path: Position[] = [];
+    const len = Math.min(previewData.x.length, previewData.y.length);
+    for (let i = 0; i < len; i++) {
+      path.push({ x: previewData.x[i], y: previewData.y[i] });
     }
 
-    public async openPreview(): Promise<void> {
-        const cm = this.getCanvasManager();
-        if (!cm) return;
+    // Estimate duration
+    const speed = parseFloat(this.ui.speedInput.value) || 10;
+    let totalDistance = 0;
+    for (let i = 1; i < path.length; i++) {
+      const dx = path[i].x - path[i - 1].x;
+      const dy = path[i].y - path[i - 1].y;
+      totalDistance += Math.sqrt(dx * dx + dy * dy);
+    }
+    const duration = totalDistance / (speed * 10 || 1);
 
-        //Activate UI elements
-        this.ui.overlay.classList.add('active'); 
-        this.ui.previewPopup.classList.add('active');
-        this.ui.previewBtn.disabled = true;
-        this.ui.previewTimeDisplay.textContent = "Calculating...";
+    this.handlePathData(path, duration);
+  }
 
-        // Set the video source for the background
-        if (this.ui.video.srcObject) {
-            this.ui.previewVideo.srcObject = this.ui.video.srcObject;
-            this.ui.previewVideo.play().catch(e => console.warn("Preview play error", e));
-        }
-
-        //Perform layout calculation
-        this.updateLayout();
-
-        //Fetch data and start
-        await this.updatePreviewData();
-        this.ui.previewBtn.disabled = false;
+  private handlePathData(videoPath: Position[], duration: number): void {
+    if (videoPath.length === 0) {
+      this.clearOverlay();
+      return;
     }
 
-    public closePreview(): void {
-        this.ui.previewPopup.classList.remove('active');
-        this.ui.overlay.classList.remove('active'); 
-        this.ui.previewVideo.srcObject = null;
-        this.stopAnimation();
+    // 1. STORE SOURCE OF TRUTH (Video Coordinates)
+    this.sourcePath = videoPath;
+    this.durationSeconds = duration;
+    this.hasPreviewedCurrentDrawing = true;
+
+    // 2. CALCULATE SCREEN COORDINATES
+    this.updatePathTransform();
+
+    this.ui.previewDuration.textContent = `${duration.toFixed(1)}s`;
+    this.setExecuteButtonState(true);
+
+    this.drawPath();
+    this.startAnimation();
+  }
+
+  /**
+   * Recalculates `this.pathData` (screen pixels) from `this.sourcePath` (video pixels)
+   * based on the current canvas dimensions.
+   */
+  private updatePathTransform(): void {
+    if (this.sourcePath.length === 0) return;
+
+    const video = this.ui.video;
+    const canvas = this.ui.previewOverlay;
+
+    // Guard against divide by zero if video isn't loaded yet
+    const vWidth = video.videoWidth || 1;
+    const vHeight = video.videoHeight || 1;
+
+    const scaleX = canvas.width / vWidth;
+    const scaleY = canvas.height / vHeight;
+
+    this.pathData = this.sourcePath.map(p => ({
+      x: p.x * scaleX,
+      y: p.y * scaleY
+    }));
+  }
+
+  private drawPath(): void {
+    this.clearOverlay();
+
+    if (this.pathData.length < 2) return;
+
+    const ctx = this.ctx;
+    ctx.save();
+
+    // Draw glow
+    ctx.strokeStyle = this.GLOW_COLOR;
+    ctx.lineWidth = this.GLOW_WIDTH;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.setLineDash([]);
+    this.drawPathLine(ctx);
+
+    // Draw main path
+    ctx.strokeStyle = this.PATH_COLOR;
+    ctx.lineWidth = this.PATH_WIDTH;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.setLineDash(this.DASH_PATTERN);
+    this.drawPathLine(ctx);
+
+    this.drawDirectionArrows(ctx);
+
+    ctx.restore();
+  }
+
+  private drawPathLine(ctx: CanvasRenderingContext2D): void {
+    ctx.beginPath();
+    ctx.moveTo(this.pathData[0].x, this.pathData[0].y);
+    for (let i = 1; i < this.pathData.length; i++) {
+      ctx.lineTo(this.pathData[i].x, this.pathData[i].y);
     }
+    ctx.stroke();
+  }
 
-    /**
-     * Resizes and positions the Preview Window.
-     * Enforces aspect ratio of the video.
-     * Calculates position based on the prepare menu's right-margin.
-     */
-    private updateLayout(): void {
-        const videoW = this.ui.video.videoWidth || 1;
-        const videoH = this.ui.video.videoHeight || 1;
-        const videoRatio = videoW / videoH;
+  private drawDirectionArrows(ctx: CanvasRenderingContext2D): void {
+    const arrowSpacing = 80;
+    let accumulatedDist = 0;
 
-        //Measure header height
-        // e need to query the header inside the popup to know how much extra space to reserve
-        const header = this.ui.previewPopup.querySelector('.preview-header');
-        const headerHeight = header ? header.getBoundingClientRect().height : 60; // Fallback to 60 if hidden
+    ctx.fillStyle = this.PATH_COLOR;
+    ctx.setLineDash([]);
 
-        //Calculate positioning (Same as before)
-        const prepareRect = this.ui.preparePopup.getBoundingClientRect();
-        const sidebarWidth = 65.5; 
-        const rightGap = window.innerWidth - prepareRect.right;
-        const targetLeft = sidebarWidth + rightGap;
+    for (let i = 1; i < this.pathData.length; i++) {
+      const p1 = this.pathData[i - 1];
+      const p2 = this.pathData[i];
 
-        //Calculate available width for the content (Canvas/video)
-        const availableWidth = prepareRect.left - targetLeft - rightGap;
-        
-        //Calculate target dimensions for the viewport only
-        let viewportW = availableWidth;
-        let viewportH = viewportW / videoRatio;
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
 
-        //Check vertical bounds (Window height - margins - header height)
-        const maxViewportHeight = window.innerHeight - (rightGap * 2) - headerHeight;
-        
-        if (viewportH > maxViewportHeight) {
-            viewportH = maxViewportHeight;
-            viewportW = viewportH * videoRatio;
-        }
+      accumulatedDist += dist;
 
-        // Round to integers to ensure pixel-perfect canvas alignment
-        viewportW = Math.floor(viewportW);
-        viewportH = Math.floor(viewportH);
+      if (accumulatedDist >= arrowSpacing) {
+        accumulatedDist = 0;
 
-        //Apply dimensions to DOM
-        //The popup gets (viewport height + header height)
-        this.ui.previewPopup.style.left = `${targetLeft}px`;
-        this.ui.previewPopup.style.top = `${prepareRect.top}px`;
-        this.ui.previewPopup.style.width = `${viewportW}px`;
-        this.ui.previewPopup.style.height = `${viewportH + headerHeight}px`;
+        const angle = Math.atan2(dy, dx);
+        const arrowSize = 10;
 
-        //Update internal canvas resolution
-        //Matches the viewport exactly
-        this.ui.previewCanvas.width = viewportW;
-        this.ui.previewCanvas.height = viewportH;
-
-        //Calculate Scale Factors
-        //Now caleY maps video -> viewport (excluding header)
-        this.scaleX = viewportW / videoW;
-        this.scaleY = viewportH / videoH;
-
-        //Update marker size
-        const baseMarkerSize = 24; 
-        let scaledSize = Math.max(8, baseMarkerSize * (viewportW / 1920));
-        
-        //Snap size to an EVEN INTEGER. 
-        //An odd size (e.g. 13px) means the center is at 6.5px.
-        scaledSize = Math.round(scaledSize);
-        if (scaledSize % 2 !== 0) scaledSize += 1;
-
-        //Update local state so the loop knows the exact size
-        this.markerSize = scaledSize;
-
-        this.ui.previewMarker.style.width = `${this.markerSize}px`;
-        this.ui.previewMarker.style.height = `${this.markerSize}px`;
-    }
-
-    public async updatePreviewData(): Promise<void> {
-        const cm = this.getCanvasManager();
-        if (!cm) return;
-
-        this.stopAnimation();
-
-        if (this.ui.previewPopup.classList.contains('active')) {
-            this.updateLayout();
-        }
-
-        const speed = parseFloat(this.ui.speedInput.value) || 10;
-        const density = this.state.fillEnabled ? parseFloat(this.ui.rasterDensityInput.value) : 10;
-        const rasterType = this.state.selectedRasterPattern || '';
-        const isFill = this.state.fillEnabled;
-
-        try {
-            //Get snapshot of the original drawing (Fabric canvas only)
-            const snapshotUrl = cm.getCanvasDataURL();
-            const snapshotImg = new Image();
-            
-            //Load snapshot and fetch simulation path in parallel
-            const [_, response] = await Promise.all([
-                new Promise(resolve => {
-                    snapshotImg.onload = resolve;
-                    snapshotImg.src = snapshotUrl;
-                }),
-                cm.getPreviewPath(speed, rasterType, density, isFill)
-            ]);
-            
-            this.pathData = response.path;
-            this.durationSeconds = response.duration;
-            this.ui.previewTimeDisplay.textContent = `Est. Time: ${this.durationSeconds.toFixed(1)}s`;
-
-            //Draw Snapshot (Original) + Path (Overlay)
-            this.drawPathOverlay(snapshotImg); 
-            this.startAnimation();
-        } catch (e) {
-            console.error(e);
-            this.ui.previewTimeDisplay.textContent = "Error";
-        }
-    }
-
-    private drawPathOverlay(backgroundImage?: HTMLImageElement): void {
-        const ctx = this.ui.previewCanvas.getContext('2d');
-        if (!ctx) return; 
-
-        ctx.clearRect(0, 0, this.ui.previewCanvas.width, this.ui.previewCanvas.height);
-        
-        // Draw original user drawing (Scaled to fit viewport)
-        if (backgroundImage) {
-            ctx.drawImage(backgroundImage, 0, 0, this.ui.previewCanvas.width, this.ui.previewCanvas.height);
-        }
-
-        if (this.pathData.length < 2) return;
+        ctx.save();
+        ctx.translate(p2.x, p2.y);
+        ctx.rotate(angle);
 
         ctx.beginPath();
-        //Cyan path matching the robot's intent
-        ctx.strokeStyle = '#00ffff'; 
-        ctx.lineWidth = 2; 
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-arrowSize, -arrowSize / 2);
+        ctx.lineTo(-arrowSize, arrowSize / 2);
+        ctx.closePath();
+        ctx.fill();
 
-        const start = this.pathData[0];
-        ctx.moveTo(start.x * this.scaleX, start.y * this.scaleY);
+        ctx.restore();
+      }
+    }
+  }
 
-        for (let i = 1; i < this.pathData.length; i++) {
-            const p = this.pathData[i];
-            ctx.lineTo(p.x * this.scaleX, p.y * this.scaleY);
-        }
-        ctx.stroke();
+  private startAnimation(): void {
+    if (this.pathData.length === 0 || this.durationSeconds <= 0) return;
+
+    this.stopAnimation();
+    this.isAnimating = true;
+    this.animationStartTime = performance.now();
+    this.ui.previewMarker.style.display = 'block';
+    this.animationLoop();
+  }
+
+  private stopAnimation(): void {
+    this.isAnimating = false;
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+    this.ui.previewMarker.style.display = 'none';
+  }
+
+  private animationLoop(): void {
+    if (!this.isAnimating || this.pathData.length === 0) return;
+
+    const now = performance.now();
+    const elapsed = (now - this.animationStartTime) / 1000;
+    let progress = elapsed / this.durationSeconds;
+
+    if (progress >= 1) {
+      this.animationStartTime = performance.now();
+      progress = 0;
     }
 
-    private startAnimation(): void {
-        this.isAnimating = true;
-        this.startTime = performance.now();
-        this.ui.previewMarker.style.display = 'block';
-        this.loop();
+    const totalPoints = this.pathData.length;
+    const index = Math.min(
+      Math.floor(progress * totalPoints),
+      totalPoints - 1
+    );
+    const point = this.pathData[index];
+
+    // Convert canvas coordinates to DOM viewport coordinates
+    const canvasRect = this.ui.previewOverlay.getBoundingClientRect();
+    const scaleX = canvasRect.width / this.ui.previewOverlay.width;
+    const scaleY = canvasRect.height / this.ui.previewOverlay.height;
+
+    const domX = point.x * scaleX;
+    const domY = point.y * scaleY;
+
+    this.ui.previewMarker.style.left = `${domX}px`;
+    this.ui.previewMarker.style.top = `${domY}px`;
+
+    this.animationFrameId = requestAnimationFrame(() => this.animationLoop());
+  }
+
+  private clearOverlay(): void {
+    this.ctx.clearRect(0, 0, this.ui.previewOverlay.width, this.ui.previewOverlay.height);
+  }
+
+  /**
+   * Called on window resize. Updates canvas size and re-projects the path.
+   */
+  public updateOverlaySize(): void {
+    const canvas = this.ui.previewOverlay;
+    const viewport = this.ui.viewport;
+
+    // 1. Match Canvas to DOM
+    canvas.width = viewport.offsetWidth;
+    canvas.height = viewport.offsetHeight;
+
+    // 2. Re-calculate path positions for new size
+    if (this.sourcePath.length > 0) {
+      this.updatePathTransform();
+
+      if (this.isPreviewActive) {
+        this.drawPath();
+      }
     }
+  }
 
-    private stopAnimation(): void {
-        this.isAnimating = false;
-        if (this.animationFrameId) cancelAnimationFrame(this.animationFrameId);
-        this.ui.previewMarker.style.display = 'none';
-    }
+  public hasPreviewedCurrent(): boolean {
+    return this.hasPreviewedCurrentDrawing;
+  }
 
-    private loop(): void {
-        if (!this.isAnimating || this.pathData.length === 0) return;
+  public resetPreviewState(): void {
+    this.hasPreviewedCurrentDrawing = false;
+    this.pathData = [];
+    this.sourcePath = [];
+    this.durationSeconds = 0;
+    this.stopAnimation();
+    this.clearOverlay();
+    this.ui.previewDuration.textContent = '--';
 
-        const now = performance.now();
-        const elapsed = (now - this.startTime) / 1000; 
+    // Disable execute button
+    this.setExecuteButtonState(false);
+    this.ui.previewToggleOff.click();
+  }
 
-        let progress = elapsed / this.durationSeconds;
-        if (progress >= 1) {
-            this.startTime = performance.now();
-            progress = 0;
-        }
-
-        const totalPoints = this.pathData.length;
-        const index = Math.min(Math.floor(progress * totalPoints), totalPoints - 1);
-        const point = this.pathData[index];
-
-        const domX = point.x * this.scaleX;
-        const domY = point.y * this.scaleY;
-
-        //Manual centering calculation
-        //top/left = center - (size / 2)
-        //This avoids CSS transform ambiguity and ensures integer alignment
-        const offset = this.markerSize / 2;
-        
-        this.ui.previewMarker.style.left = `${domX - offset}px`;
-        this.ui.previewMarker.style.top = `${domY - offset}px`;
-
-        this.animationFrameId = requestAnimationFrame(() => this.loop());
-    }
+  public dispose(): void {
+    this.stopAnimation();
+    this.clearOverlay();
+  }
 }

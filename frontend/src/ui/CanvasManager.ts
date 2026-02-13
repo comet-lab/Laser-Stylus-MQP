@@ -46,28 +46,6 @@ export class CanvasManager {
     private prevWidth: number;
     private prevHeight: number;
 
-    // --- State: Zoom ---
-    private zoom = 1;
-    private readonly MIN_ZOOM = 0.25;
-    private readonly MAX_ZOOM = 4;
-    private readonly ZOOM_STEP = 0.1;
-
-    private syncFixturesTransform(): void {
-    if (!this.fixturesCanvas) return;
-
-    const vpt = this.fCanvas.viewportTransform;
-    if (!vpt) return;
-
-    const [a, b, c, d, e, f] = vpt;
-
-    this.fixturesCanvas.style.transform =
-        `matrix(${a}, ${b}, ${c}, ${d}, ${e}, ${f})`;
-
-    this.fixturesCanvas.style.transformOrigin = '0 0';
-}
-
-
-
     // --- CONFIG: Visual Defaults ---
     private readonly SHAPE_DEFAULTS = {
         fill: 'transparent',
@@ -121,33 +99,6 @@ export class CanvasManager {
             containerClass: 'fabric-canvas-container',
             enablePointerEvents: true
         });
-
-        // Ctrl + Mouse Wheel Zoom
-        this.fCanvas.upperCanvasEl.addEventListener('wheel', (e: WheelEvent) => {
-    if (!e.ctrlKey) return;
-    if (this.isFixturesMode) return;
-
-    e.preventDefault();
-
-    let zoom = this.zoom;
-    zoom *= Math.pow(0.999, e.deltaY);
-    zoom = Math.min(this.MAX_ZOOM, Math.max(this.MIN_ZOOM, zoom));
-
-    const pointer = this.fCanvas.getPointer(e);
-
-    this.fCanvas.zoomToPoint(
-        new fabric.Point(pointer.x, pointer.y),
-        zoom
-    );
-
-    this.zoom = zoom;
-    this.syncFixturesTransform();
-    this.fCanvas.requestRenderAll();
-}, { passive: false });
-
-
-
-
 
 
         this.prevWidth = canvas.width;
@@ -246,33 +197,30 @@ export class CanvasManager {
     }
 
     public async getPreviewPath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<{ duration: number, path: Position[] }> {
-        //Generate Pixel Path (Same as execute)
-        const pixels = this.generatePixelPath();
+        // This method is now used only by PreviewManager for visualization
+        // It does not send data to backend, that's done by previewPath()
 
-        //Normalize to video space
-        //We do this to ensure the preview matches the camera frame
+        const pixels = this.generatePixelPath();
         const videoPixels = pixels.map(p => ({
             x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
             y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
         }));
 
+        // For preview window visualization, we still need simulation data
+        // Real path computation happens in previewPath() -> backend
         const formData = new FormData();
         formData.append('speed', speed.toString());
         formData.append('density', density.toString());
-        // JSON stringify the array for the backend
         formData.append('pixels', JSON.stringify(videoPixels));
         formData.append('is_fill', isFillEnabled.toString());
 
-        // Only append raster type if it exists
         if (raster_type) {
             formData.append('raster_type', raster_type);
         }
 
-        //Probably want to send the file here as well, or whatever data we usually have for execute
-        //Right now it's just for the dummy path
+        // This still calls /api/preview but won't be confused with previewPath()
         const response = await this.postFormData('/api/preview', formData);
 
-        // Return exactly what the Python endpoint returns
         return {
             duration: response.duration,
             path: response.path
@@ -942,31 +890,35 @@ export class CanvasManager {
     }
 
     public updateCanvasSize(width: number, height: number): void {
-        // 1. Calculate the scaling factor based on the change
-        // Prevent division by zero if initialized incorrectly
         const scaleX = this.prevWidth ? width / this.prevWidth : 1;
         const scaleY = this.prevHeight ? height / this.prevHeight : 1;
 
-        // 2. Resize the actual fabric canvas container
         this.fCanvas.setDimensions({ width, height });
 
-        // 3. Iterate through all objects to reposition them relative to the new size
         this.fCanvas.getObjects().forEach(obj => {
-            // Scale the position
+            // 1. Scale Position
             const newLeft = obj.left * scaleX;
             const newTop = obj.top * scaleY;
 
+            // 2. Scale Dimensions (FIX)
+            // We multiply the existing scale factor by the new resize ratio
+            const newScaleX = obj.scaleX * scaleX;
+            const newScaleY = obj.scaleY * scaleY;
+
             obj.set({
                 left: newLeft,
-                top: newTop
+                top: newTop,
+                scaleX: newScaleX,
+                scaleY: newScaleY
             });
 
-            // Also scale specific custom properties for Markers
+            // Marker Handling (Keep existing custom logic)
             if ((obj as any)._isMarker) {
                 (obj as any)._tipX = (obj as any)._tipX * scaleX;
                 (obj as any)._tipY = (obj as any)._tipY * scaleY;
             }
-            obj.setCoords(); // Critical, recalculate hitboxes
+
+            obj.setCoords();
         });
 
         // 4. Handle Fixtures (Raster) Canvas Scaling
@@ -1224,97 +1176,61 @@ export class CanvasManager {
     }
 
     // =========================================================================
-    // Execution & Export Logic
+    // Preview/Execute Logic (NEW)
     // =========================================================================
 
-    public async executePath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<any> {
-        // 1. Always generate the vector path (pixels)
+    /**
+     * Sends full path data to backend for preview/preparation
+     */
+    public async previewPath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<{ duration: number, path: Position[] }> {
+        // Generate Pixel Path
         const pixels = this.generatePixelPath();
+
+        // Normalize to video space
         const videoPixels = pixels.map(p => ({
             x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
             y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
         }));
 
-        //this.downloadJson(videoPixels, 'path-debug.json');
-
         const formData = new FormData();
-        formData.append('speed', (Number(speed) / 1000).toString());
-        if (isFillEnabled) {
-            formData.append('raster_type', raster_type);
-        }
+        formData.append('speed', speed.toString());
         formData.append('density', density.toString());
         formData.append('pixels', JSON.stringify(videoPixels));
         formData.append('is_fill', isFillEnabled.toString());
 
-        // 2. Generate raster image IF fill is enabled
+        if (raster_type) {
+            formData.append('raster_type', raster_type);
+        }
+
+        // Add raster mask if fill is enabled
         if (isFillEnabled) {
-            const width = this.fCanvas.getWidth();
-            const height = this.fCanvas.getHeight();
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = width;
-            tempCanvas.height = height;
-            const ctx = tempCanvas.getContext('2d', { willReadFrequently: true, alpha: false });
-            if (!ctx) throw new Error("Could not create temp context");
-
-            // No smoothing for sharp mask edges
-            ctx.imageSmoothingEnabled = false;
-            (ctx as any).mozImageSmoothingEnabled = false;
-            (ctx as any).webkitImageSmoothingEnabled = false;
-            (ctx as any).msImageSmoothingEnabled = false;
-
-            // White background
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(0, 0, width, height);
-
-            // Render objects using Fabric's internal engine to handle rotation/scaling
-            this.fCanvas.getObjects().forEach(obj => {
-                if ((obj as any)._isMarker) return; // Skip markers
-                if (obj instanceof fabric.Line) return; // Skip Lines for Raster!
-
-                // Save original state
-                const originalFill = obj.fill;
-                const originalStroke = obj.stroke;
-
-                // Set mask style (Black = Raster Area)
-                if (obj instanceof fabric.Line) {
-                    // Lines have no fill, so we must draw the stroke in black
-                    obj.stroke = '#000000';
-                    obj.fill = 'transparent';
-                } else {
-                    obj.fill = '#000000';
-                    obj.stroke = 'transparent';
-                }
-
-                // Render with transforms applied automatically
-                obj.render(ctx);
-
-                // Restore state
-                obj.fill = originalFill;
-                obj.stroke = originalStroke;
-            });
-
-            const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
-            if (!blob) throw new Error("Failed to generate image blob");
+            const blob = await this.generateRasterBlob();
             formData.append('file', blob, 'path.png');
         }
 
-        return this.postFormData('/api/execute', formData);
+        const response = await this.postFormData('/api/preview', formData);
+
+        return {
+            duration: response.duration,
+            path: response.path
+        };
     }
 
-    //HELPER FOR IF YOU WANT TO DOWNLOAD THE GENERATED PATH FOR DEBUGGING
-    private downloadJson(data: any, filename: string): void {
-        const jsonStr = JSON.stringify(data, null, 2);
-        const blob = new Blob([jsonStr], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
+    /**
+     * Sends execute command only (path should already be prepared)
+     */
+    public async executeCommand(): Promise<any> {
+        const response = await fetch(`${this.apiBaseUrl}/api/execute`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
 
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(errorData.detail || 'Execute command failed');
+        }
 
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        return response.json();
     }
 
     public async updateViewSettings(isTransformedViewOn: boolean, isThermalViewOn: boolean = false): Promise<any> {
@@ -1403,20 +1319,19 @@ export class CanvasManager {
                     prevP = finalPt;
                 }
             } else if (obj instanceof fabric.Line) {
-                // 1. Get the line's start/end points relative to its center
+                //Proper coordinate transformation for lines
                 const line = obj as fabric.Line;
                 const points = line.calcLinePoints(); // {x1, y1, x2, y2}
 
-                // 2. Transform them to world coordinates using the matrix
+                //Transform start and end points using object's transform matrix
                 const start = new fabric.Point(points.x1, points.y1).transform(matrix);
                 const end = new fabric.Point(points.x2, points.y2).transform(matrix);
 
-                // 3. Generate pixels between the REAL start and end
+                //Generate pixels between the transformed points
                 const gen = Utils.generateLinePixels(start.x, start.y, end.x, end.y);
                 for (const p of gen) pixels.push(p);
-
             } else {
-                // Generic Fallback (Rects, Lines) -> Use getCoords() which returns the 4 corners (Transformed)
+                //Generic Fallback (Rects, Lines) -> Use getCoords() which returns the 4 corners (Transformed)
                 const coords = obj.getCoords(); // Returns [TL, TR, BR, BL] absolute coordinates
                 for (let i = 0; i < coords.length; i++) {
                     const start = coords[i];

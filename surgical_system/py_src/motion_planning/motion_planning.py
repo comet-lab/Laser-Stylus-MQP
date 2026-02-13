@@ -88,8 +88,8 @@ class Motion_Planner():
         
         edge = max(contours, key=cv2.contourArea)
         perimeter_pts = edge[:, 0, :] 
-        plt.plot(perimeter_pts[:, 0], perimeter_pts[:, 1])
-        plt.show()
+        # plt.plot(perimeter_pts[:, 0], perimeter_pts[:, 1])
+        # plt.show()
         
         poly = Polygon(perimeter_pts)
 
