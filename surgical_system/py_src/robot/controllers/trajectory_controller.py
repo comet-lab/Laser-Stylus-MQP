@@ -18,6 +18,7 @@ class TrajectoryController():
         self.debug = debug
         self.target_position_list = None 
         self.target_vel_list = None
+        self.total_path_time = None
         
         # self.laser_info = controller_msg.laser_info
         
@@ -84,10 +85,11 @@ class TrajectoryController():
         self.total_distance = np.sum(distances)
         if self.durations[0] == -1:
             self.durations[0] = self.total_distance/float(self.max_velocity)
-            print(self.durations[0])
+            # print(self.durations[0])
             
         durations = (distances / np.sum(distances)) * self.durations[0]
         cumulative_durations = np.cumsum(durations)
+        self.total_path_time = cumulative_durations[-1] # total time
         if points.shape[-1] < 3: # Points are not 3D
             points = np.hstack((points, np.full((points.shape[0], 1), self.positions[0, -1])))
         
@@ -113,32 +115,24 @@ class TrajectoryController():
             if dt <= 0:
                 raise ValueError("durations must be strictly increasing")
             v_way[i] = (position[i] - position[i-1]) / dt
+            
+            # detect corner by angle between segments
+            u = position[i]   - position[i-1]
+            v = position[i+1] - position[i]
+            if np.linalg.norm(u) > 1e-9 and np.linalg.norm(v) > 1e-9:
+                cosang = np.dot(u, v) / (np.linalg.norm(u)*np.linalg.norm(v))
+                if cosang < 0.95:   # corner threshold
+                    v_way[i] = 0.0
         
         a_way = np.zeros_like(position)
         
-        # for i in range(1, self.n_points - 1):
-        #     a_prev = (v_way[i]   - v_way[i-1]) / dt
-        #     a_next = (v_way[i+1] - v_way[i])   / dt
-        #     a = 0.5 * (a_prev + a_next)
-
-        #     # acceleration clamp
-        #     # a = np.clip(a, -self.MAX_ACCELERATION, self.MAX_ACCELERATION)
-        #     a_way[i] = a
         
         self.trajectories = np.empty((self.n_points - 1, self.n_dims), dtype=object)
         for i in range(self.n_points - 1):
-            t0 = durations[i]
-            tf = durations[i + 1]
-
-            p0 = position[i]
-            pf = position[i + 1]
-
-            v0 = v_way[i]
-            vf = v_way[i + 1]
-
-            a0 = a_way[i]
-            af = a_way[i + 1]
-
+            t0, tf = durations[i], durations[i+1]
+            p0, pf = position[i], position[i+1]
+            v0, vf = v_way[i], v_way[i+1]
+            a0, af = a_way[i], a_way[i+1]
 
             for d in range(self.n_dims):
                 self.trajectories[i, d] = QuinticTrajectory(

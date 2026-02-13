@@ -12,7 +12,7 @@ import asyncio
 import base64
 from motion_planning.motion_planning import Motion_Planner
 import matplotlib.pyplot as plt
-
+from robot.controllers.trajectory_controller import TrajectoryController
 
 class Handler:
     def __init__(self, desired_state: RobotSchema, robot_controller: MockRobotController, cam_reg: MockCameraRegistration, laser_obj: MockLaser, start_pose, mock_robot):
@@ -27,6 +27,7 @@ class Handler:
         self.prev_robot_on = False
         self.working_height = 0.0
         self.show_path = True
+        self.current_traj = None
         
         self._last_pose_ui = 0.0
 
@@ -80,6 +81,7 @@ class Handler:
         # print(self.desired_state.heat_markers)
         status.maxHeat = self.desired_state.maxHeat
         status.laserX, status.laserY = int(self.desired_state.laserX), int(self.desired_state.laserY)
+        status.path_preview = self.desired_state.path_preview
         return status.to_str()
     
     def _recv_fn(self, msg: str):
@@ -99,9 +101,18 @@ class Handler:
     def _read_raster(self):
         img = self._read_mask(self.desired_state.raster_mask)
         img = Motion_Planner.fill_in_shape(img) 
-        pitch = int(self.desired_state.density) # TODO calculate lines per distance 
-        print(f"[Pitch]: {pitch}")
-        path = Motion_Planner.raster_pattern(img, pitch = pitch) # pixel spacing
+        spacing = int(self.desired_state.density) # TODO calculate lines per distance 
+        print(f"[Spacing (pixels)]: {spacing}")
+        # path = Motion_Planner.raster_pattern(img, pitch = spacing) # pixel spacing
+        
+        polygon, edge = Motion_Planner._create_polygon(img)
+        path = Motion_Planner.poly_raster(
+            polygon,
+            spacing=spacing,        # pixels
+            theta_deg=45.0,      # angle
+            margin=5.0          # inward offset
+        )
+        
         print("Raster Path: ", path)
         fig, ax = plt.subplots(figsize=(8,4))
         # ax.imshow(img, cmap='gray')
@@ -187,30 +198,65 @@ class Handler:
         path = None
         
         warped_view = self.desired_state.isTransformedViewOn
+        print("Warped Path: ", warped_view)
         robot_path = self.cam_reg.get_UI_to_world_m(
                 self.cam_type, 
                 pixels, 
                 warped_view, 
                 z = self.working_height)
+        # fig, ax = plt.subplots(figsize=(8,4))
+        
+        # if len(robot_path) > 1:
+        #     xs = [p[0] for p in robot_path]
+        #     ys_plot = [p[1] for p in robot_path]
+        #     ax.plot(xs, ys_plot, linewidth=1)  # default color
+        # ax.set_axis_off()
+        # fig.savefig("World Positions after warp path.png")
             
-        speed = self.desired_state.speed if self.desired_state.speed != None else 0.01 # m/s
+        speed = self.desired_state.speed / 1000.0 if self.desired_state.speed != None else 0.01 # m/s
         traj = self.robot_controller.create_custom_trajectory(robot_path, speed)
+        target_pixels, total_time = self._do_show_path(traj)
+        self._package_path(target_pixels, total_time)
         return traj
     
-    def _do_show_path(self, traj):
+    def _do_show_path(self, traj: TrajectoryController):
         target_positions = traj.get_path_position()
+        fig, ax = plt.subplots(figsize=(8,4))
+        # ax.imshow(img, cmap='gray')
+        # if len(target_positions) > 1:
+        #     xs = [p[0] for p in target_positions]
+        #     ys_plot = [p[1] for p in target_positions]
+        #     ax.plot(xs, ys_plot, linewidth=1)  # default color
+        # ax.set_axis_off()
+        # fig.savefig("target_positions path.png")
+        
         warped = self.desired_state.isTransformedViewOn
         pixels = self.cam_reg.get_world_m_to_UI(self.cam_type, target_positions, warped)
         pixels = np.asarray(pixels, dtype=np.int16)
+        # if len(pixels) > 1:
+        #     xs = [p[0] for p in pixels]
+        #     ys_plot = [p[1] for p in pixels]
+        #     ax.plot(xs, ys_plot, linewidth=1)  # default color
+        # ax.set_axis_off()
+        # fig.savefig("pixels path.png")
+        
         self.cam_reg.get_path(pixels)
         self.cam_reg.display_path = True
+        return pixels, traj.total_path_time
+    
+    def _package_path(self, pixels, total_time):
+        x, y = list(pixels[:, 0].astype(np.float64)), list(pixels[:, 1].astype(np.float64))
+        # print(pixels)
+        time = [total_time]
+        print(f"Total Time: {total_time}")
+        self.desired_state.path_preview = {
+            "x" : x,
+            "y" : y,
+            "time": time
+        }
     
     
-    def _do_path(self, traj):
-        # TODO determine cam type from desired state
-        # TODO convert path from List
-        if self.show_path:
-            self._do_show_path(traj)
+    def _do_path(self, traj: TrajectoryController):
         
         # TODO uncomment controller 
         self.robot_controller.run_trajectory(traj, blocking=False, laser_on=self.desired_state.isLaserOn)
@@ -274,6 +320,34 @@ class Handler:
         self._do_current_thermal_info()
         # print(self.desired_state.heat_markers)
         self._do_current_position()
+        
+        
+        if(self.desired_state.raster_mask is not None
+               and not self.robot_controller.is_trajectory_running()):
+                self.desired_state.x = None
+                self.desired_state.y = None
+                self.laser_obj.set_output(False)
+                print("Raster Trigger")
+                raster = self._read_raster()
+                if len(raster) < 1:
+                    print("[Warning] : Raster path is empty")
+                else: 
+                    self.current_traj = self._do_create_path(raster)
+                    
+                self.desired_state.raster_mask = None
+                self.desired_state.path = None
+                
+        elif(self.desired_state.path is not None and len(self.desired_state.path) > 1
+                and not self.robot_controller.is_trajectory_running()):
+            print("Path Trigger")
+            self.laser_obj.set_output(False)
+            path = self._read_path()
+            
+            self.current_traj = self._do_create_path(path)
+            
+            self.desired_state.x = None
+            self.desired_state.y = None
+            self.desired_state.path = None
 
         if(self.desired_state.isRobotOn):          
             self.working_height = self.desired_state.height / 100.0 if self.desired_state.height else  0 # cm to m
@@ -292,36 +366,12 @@ class Handler:
                 self._read_fixtures()
                 self.desired_state.fixtures_mask = None
                 
-            
-            # TODO, always recieving raster_mask 
-            
-            if(self.desired_state.raster_mask is not None
-               and not self.robot_controller.is_trajectory_running()):
-                self.desired_state.x = None
-                self.desired_state.y = None
-                self.laser_obj.set_output(False)
-                print("Raster Trigger")
-                raster = self._read_raster()
-                if len(raster) < 1:
-                    print("[Warning] : Raster path is empty")
-                else: 
-                    traj = self._do_create_path(raster)
-                    self._do_path(traj)
-                    
-                self.desired_state.raster_mask = None
-                self.desired_state.path = None
-                
-            elif(self.desired_state.path is not None and len(self.desired_state.path) > 1
-                 and not self.robot_controller.is_trajectory_running()):
-                print("Path Trigger")
-                self.laser_obj.set_output(False)
-                path = self._read_path()
-                traj = self._do_create_path(path)
-                self._do_path(traj)
-                
-                self.desired_state.x = None
-                self.desired_state.y = None
-                self.desired_state.path = None
+            if(self.current_traj is not None and self.desired_state.executeCommand
+                   and not self.robot_controller.is_trajectory_running()):
+                print("Executing Path")
+                self._do_path(self.current_traj)
+                self.desired_state.executeCommand = None
+                self.current_traj = None
                 
             elif(((self.desired_state.x is not None and self.desired_state.y is not None) or height_change)
                    and not self.robot_controller.is_trajectory_running()):
