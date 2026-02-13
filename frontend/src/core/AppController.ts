@@ -154,6 +154,19 @@ class AppController {
 
         // Restore persisted layout positions
         this.settingsManager.restoreLayoutPositions();
+
+        //Save robot height to localStorage to keep it from shifting on page reload
+        const savedHeight = localStorage.getItem('robot_height');
+        if (savedHeight) {
+            const heightVal = parseInt(savedHeight);
+            if (!isNaN(heightVal)) {
+                //Update the Slider UI
+                this.ui.heightSlider.value = savedHeight;
+                //Update the Text Display
+                this.ui.heightDisplay.textContent = savedHeight;
+                //TODO: May need to send a wshandler.updateState to sync
+            }
+        }
     }
 
     private setMessage(str: string): void {
@@ -363,7 +376,11 @@ class AppController {
         this.ui.heightSlider.addEventListener('input', () => {
             const heightValue = parseInt(this.ui.heightSlider.value);
             this.ui.heightDisplay.textContent = String(heightValue);
-            //console.log('Sending height:', heightValue);
+            
+            //Save to local storage
+            localStorage.setItem('robot_height', String(heightValue));
+            
+            //Send to backend
             this.wsHandler.updateState({ height: heightValue });
         });
 
