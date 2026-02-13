@@ -137,7 +137,7 @@ export function createUIRegistry(): UIRegistry {
         previewToggleOff: document.getElementById('previewOff') as HTMLButtonElement,
         previewInfoPanel: document.getElementById('previewInfoPanel') as HTMLElement,
         previewDuration: document.getElementById('previewDuration') as HTMLElement,
-        previewMarker: document.getElementById('robot-marker') as HTMLElement,
+        previewMarker: document.getElementById('preview-marker') as HTMLElement,
         clearBtn: document.getElementById('clearBtn') as HTMLButtonElement,
 
         // Hardware Controls

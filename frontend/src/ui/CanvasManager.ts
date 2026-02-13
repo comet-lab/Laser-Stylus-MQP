@@ -890,31 +890,35 @@ export class CanvasManager {
     }
 
     public updateCanvasSize(width: number, height: number): void {
-        // 1. Calculate the scaling factor based on the change
-        // Prevent division by zero if initialized incorrectly
         const scaleX = this.prevWidth ? width / this.prevWidth : 1;
         const scaleY = this.prevHeight ? height / this.prevHeight : 1;
 
-        // 2. Resize the actual fabric canvas container
         this.fCanvas.setDimensions({ width, height });
 
-        // 3. Iterate through all objects to reposition them relative to the new size
         this.fCanvas.getObjects().forEach(obj => {
-            // Scale the position
+            // 1. Scale Position
             const newLeft = obj.left * scaleX;
             const newTop = obj.top * scaleY;
 
+            // 2. Scale Dimensions (FIX)
+            // We multiply the existing scale factor by the new resize ratio
+            const newScaleX = obj.scaleX * scaleX;
+            const newScaleY = obj.scaleY * scaleY;
+
             obj.set({
                 left: newLeft,
-                top: newTop
+                top: newTop,
+                scaleX: newScaleX,
+                scaleY: newScaleY
             });
 
-            // Also scale specific custom properties for Markers
+            // Marker Handling (Keep existing custom logic)
             if ((obj as any)._isMarker) {
                 (obj as any)._tipX = (obj as any)._tipX * scaleX;
                 (obj as any)._tipY = (obj as any)._tipY * scaleY;
             }
-            obj.setCoords(); // Critical, recalculate hitboxes
+
+            obj.setCoords();
         });
 
         // 4. Handle Fixtures (Raster) Canvas Scaling

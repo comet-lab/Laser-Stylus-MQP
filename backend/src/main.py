@@ -149,39 +149,39 @@ async def preview_path(
     await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
 
     # --- REAL MODE (Default): Return empty path, Frontend waits for WS ---
-    return {
-        "status": "pending",
-        "duration": 0,
-        "path": [], 
-        "message": "Computation initiated on Robot"
-    }
+    # return {
+    #     "status": "pending",
+    #     "duration": 0,
+    #     "path": [], 
+    #     "message": "Computation initiated on Robot"
+    # }
 
     # --- FAKE MODE (Uncomment for testing without Robot) ---
-    # final_path = []
-    # duration = 0
+    final_path = []
+    duration = 0
 
-    # if is_fill:
-    #     final_path = generate_fake_raster_path(pixel_list, density)
-    # else:
-    #     final_path = pixel_list[::5]
+    if is_fill:
+        final_path = generate_fake_raster_path(pixel_list, density)
+    else:
+        final_path = pixel_list[::5]
 
-    # total_distance = 0
-    # if len(final_path) > 1:
-    #     for i in range(1, len(final_path)):
-    #         dx = final_path[i]['x'] - final_path[i-1]['x']
-    #         dy = final_path[i]['y'] - final_path[i-1]['y']
-    #         total_distance += math.sqrt(dx*dx + dy*dy)
+    total_distance = 0
+    if len(final_path) > 1:
+        for i in range(1, len(final_path)):
+            dx = final_path[i]['x'] - final_path[i-1]['x']
+            dy = final_path[i]['y'] - final_path[i-1]['y']
+            total_distance += math.sqrt(dx*dx + dy*dy)
 
-    # fake_speed_factor = speed * 10
-    # if fake_speed_factor == 0: fake_speed_factor = 1
-    # duration = (total_distance / fake_speed_factor) + random.uniform(0.5, 1.5)
+    fake_speed_factor = speed * 10
+    if fake_speed_factor == 0: fake_speed_factor = 1
+    duration = (total_distance / fake_speed_factor) + random.uniform(0.5, 1.5)
 
-    # return {
-    #     "status": "success",
-    #     "duration": duration,
-    #     "path": final_path,
-    #     "message": "Preview data sent to robot (Simulation)"
-    # }
+    return {
+        "status": "success",
+        "duration": duration,
+        "path": final_path,
+        "message": "Preview data sent to robot (Simulation)"
+    }
     
 # --- EXECUTION ENDPOINT ---
 @app.post("/api/execute")

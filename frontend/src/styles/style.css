@@ -263,6 +263,8 @@ pre {
   transform: translate(-50%, -50%);
 }
 
+#preview-marker { border: 3px solid #FFA500}
+
 #robot-marker { border: 3px solid #70ff57; }
 
 /* ============================================

@@ -219,6 +219,34 @@ class AppController {
         this.ui.video.requestVideoFrameCallback(this.updateCanvasLoop.bind(this));
     }
 
+    /**
+     * Central handler for window resize events.
+     * Ensures sub-systems update in the correct order to avoid layout thrashing.
+     */
+    private handleResize(): void {
+        // 1. Layout Manager: Calculate new panel positions/sizes
+        this.settingsManager.handleResize();
+
+        // 2. Get authoritative viewport dimensions
+        const w = this.ui.viewport.offsetWidth;
+        const h = this.ui.viewport.offsetHeight;
+
+        // 3. Preview Manager: Resize overlay and re-project path
+        this.previewManager.updateOverlaySize();
+
+        // 4. Canvas Manager: Scale fabric canvas and objects
+        if (this.canvasManager) {
+            // Check against internal canvas dimensions to prevent unnecessary updates
+            if (this.ui.canvas.width !== w || this.ui.canvas.height !== h) {
+                this.canvasManager.updateCanvasSize(w, h);
+            }
+        } else {
+            // If CM doesn't exist yet, ensure the raw canvas element matches viewport
+            this.ui.canvas.width = w;
+            this.ui.canvas.height = h;
+        }
+    }
+
     // ===================================================================
     // Event binding  (thin wiring – logic lives in sub-systems)
     // ===================================================================
@@ -406,16 +434,7 @@ class AppController {
 
         // --- Window resize ---
         window.addEventListener('resize', () => {
-            this.settingsManager.handleResize();
-            this.previewManager.updateOverlaySize(); // Changed
-
-            if (this.canvasManager) {
-                const w = this.ui.viewport.offsetWidth;
-                const h = this.ui.viewport.offsetHeight;
-                if (this.ui.canvas.width !== w || this.ui.canvas.height !== h) {
-                    this.canvasManager.updateCanvasSize(w, h);
-                }
-            }
+            this.handleResize();
         });
     }
 
