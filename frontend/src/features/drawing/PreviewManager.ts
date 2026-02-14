@@ -1,3 +1,5 @@
+//frontend/src/features/drawing/PreviewManager.ts
+
 import { UIRegistry } from '../../core/UIRegistry';
 import { AppState } from '../../core/AppState';
 import { CanvasManager } from '../../ui/CanvasManager';

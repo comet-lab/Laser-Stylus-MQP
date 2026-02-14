@@ -421,6 +421,71 @@ body.menu-bottom.sidebar-right #viewport {
 }
 
 /* ============================================
+   THERMAL GRADIENT LEGEND (ULTRA-SLIM)
+   ============================================ */
+#thermal-gradient-legend {
+    position: absolute;
+    left: 30px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    background-color: rgba(21, 27, 33, 0.85);
+    padding: 10px 8px;
+    border-radius: 8px;
+    border: 2px solid #2c343b;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.legend-core {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 6px;
+}
+
+.gradient-bar {
+    width: 20px;
+    height: 200px;
+    background: linear-gradient(to top, 
+        #00007F 0%,    /* Dark Blue (20°C) */
+        #0000FF 12.5%, /* Blue */
+        #00FFFF 37.5%, /* Cyan */
+        #00FF00 50%,   /* Green (60°C) */
+        #FFFF00 62.5%, /* Yellow */
+        #FF0000 87.5%, /* Red */
+        #7F0000 100%   /* Dark Red (100°C) */
+    );
+    border: 1px solid #e0f2e0;
+    border-radius: 4px;
+}
+
+.gradient-labels {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between; 
+    
+    color: #e0f2e0;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 1px 0;
+}
+
+.legend-unit {
+    color: #a1b0a4;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    width: 100%;
+    text-align: left;
+}
+
+/* ============================================
    Z-INDEX MANAGEMENT
    ============================================ */
 /* Layer Order (Bottom to Top):
