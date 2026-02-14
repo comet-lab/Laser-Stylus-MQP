@@ -360,12 +360,20 @@ export class CanvasManager {
 
     private onFixturesPointerDown(e: PointerEvent): void {
         if (!this.currentBrushType || !this.fixturesCanvas || !this.fixturesCtx) return;
+        
+        const { x, y } = this.getCanvasCoordinates(e, this.fixturesCanvas);
+
+        // --- GLOBAL MARKER DELETION ---
+        if (this.checkMarkerDeleteClick(x, y)) {
+            return; // Eat the click so we don't paint blue fixture ink
+        }
+
         if (this.fixturesApplied) {
             this.restoreDrawingState();
         }
+        
         this.isFixturesDrawing = true;
         this.fixturesCanvas.setPointerCapture(e.pointerId);
-        const { x, y } = this.getCanvasCoordinates(e, this.fixturesCanvas);
         this.lastFixturesPoint = { x, y };
         this.drawFixturesBrush(x, y);
         this.fixturesApplied = false;
@@ -620,8 +628,13 @@ export class CanvasManager {
     private onHeatMouseDown(opt: any) {
         if (!this.fCanvas.getElement()) return;
 
-        this.isDrawingHeatArea = true;
         const pointer = this.fCanvas.getScenePoint(opt.e);
+
+        if (this.checkMarkerDeleteClick(pointer.x, pointer.y)) {
+            return;
+        }
+
+        this.isDrawingHeatArea = true;
         this.heatStartPos = { x: pointer.x, y: pointer.y };
 
         // Create the specific "Heat Style" rectangle
@@ -630,13 +643,13 @@ export class CanvasManager {
             top: pointer.y,
             width: 0,
             height: 0,
-            fill: 'rgba(255, 69, 0, 0.3)', // Translucent Orange
-            stroke: '#ff4500',            // Solid Orange (for base)
+            fill: 'rgba(255, 69, 0, 0.3)',
+            stroke: '#ff4500',
             strokeWidth: 2,
-            strokeDashArray: [6, 6],      // Dotted/Dashed
-            selectable: false,            // NOT MOVABLE
-            evented: false,               // NO EVENTS
-            hasControls: false,           // NO HANDLES
+            strokeDashArray: [6, 6],
+            selectable: false,
+            evented: false,
+            hasControls: false,
             hasBorders: false,
             originX: 'left',
             originY: 'top'
@@ -722,26 +735,17 @@ export class CanvasManager {
     // =========================================================================
 
     private async onMouseDown(opt: any) {
+        const pointer = this.fCanvas.getScenePoint(opt.e);
+
+        // --- GLOBAL MARKER DELETION (Always Active) ---
+        if (this.checkMarkerDeleteClick(pointer.x, pointer.y)) {
+            return; // Eat the click so we don't draw a shape/marker underneath it
+        }
+
+        // --- THERMAL MODE (Adding Markers) ---
         if (this.isMarkerMode) {
-            const pointer = this.fCanvas.getScenePoint(opt.e);
+            // If they clicked a marker but missed the X, do nothing so they don't stack markers
             if (opt.target && opt.target.type === 'group' && opt.target._isMarker) {
-                const group = opt.target as fabric.Group;
-                const groupCenter = group.getCenterPoint();
-                const clickRelX = pointer.x - groupCenter.x;
-                const clickRelY = pointer.y - groupCenter.y;
-
-                const closeBoxObj = group.getObjects()[3];
-
-                const distToX = Math.sqrt(
-                    Math.pow(clickRelX - closeBoxObj.left, 2) +
-                    Math.pow(clickRelY - closeBoxObj.top, 2)
-                );
-
-                if (distToX < 15) {
-                    this.removeMarker(group);
-                    await this.submitHeatMarkers(this.getHeatMarkersInVideoSpace());
-                    return;
-                }
                 return;
             }
             this.addHeatMarker(pointer.x, pointer.y);
@@ -749,12 +753,12 @@ export class CanvasManager {
             return;
         }
 
+        // --- DRAWING MODE (Shapes) ---
         if (this.hasPlacedShape) return;
         if (!this.currentShapeType || this.currentShapeType === 'freehand') return;
         if (opt.target) return;
 
         this.isCreatingShape = true;
-        const pointer = this.fCanvas.getScenePoint(opt.e);
         this.shapeStartPos = { x: pointer.x, y: pointer.y };
         const commonOpts = {
             left: pointer.x,
@@ -827,6 +831,36 @@ export class CanvasManager {
                 this.onShapeComplete();
             }
         }
+    }
+
+    /**
+     * Checks if a click coordinates land exactly on the 'X' of any existing marker.
+     * Returns true if a marker was deleted, false otherwise.
+     */
+    private checkMarkerDeleteClick(pointerX: number, pointerY: number): boolean {
+        // Iterate backwards so if markers overlap, we delete the one on top
+        for (let i = this.markerObjects.length - 1; i >= 0; i--) {
+            const group = this.markerObjects[i];
+            const groupCenter = group.getCenterPoint();
+            const clickRelX = pointerX - groupCenter.x;
+            const clickRelY = pointerY - groupCenter.y;
+
+            // Get the close box (index 3 in your group array)
+            const closeBoxObj = group.getObjects()[3];
+
+            const distToX = Math.sqrt(
+                Math.pow(clickRelX - (closeBoxObj.left || 0), 2) +
+                Math.pow(clickRelY - (closeBoxObj.top || 0), 2)
+            );
+
+            if (distToX < 15) {
+                this.removeMarker(group);
+                // Fire and forget network call
+                this.submitHeatMarkers(this.getHeatMarkersInVideoSpace()).catch(console.error);
+                return true; 
+            }
+        }
+        return false;
     }
 
     // =========================================================================
