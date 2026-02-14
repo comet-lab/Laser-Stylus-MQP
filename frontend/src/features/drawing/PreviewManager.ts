@@ -317,18 +317,13 @@ export class PreviewManager {
       Math.floor(progress * totalPoints),
       totalPoints - 1
     );
+
+    // Grab the current point (already in correct local viewport coordinates)
     const point = this.pathData[index];
 
-    // Convert canvas coordinates to DOM viewport coordinates
-    const canvasRect = this.ui.previewOverlay.getBoundingClientRect();
-    const scaleX = canvasRect.width / this.ui.previewOverlay.width;
-    const scaleY = canvasRect.height / this.ui.previewOverlay.height;
-
-    const domX = point.x * scaleX;
-    const domY = point.y * scaleY;
-
-    this.ui.previewMarker.style.left = `${domX}px`;
-    this.ui.previewMarker.style.top = `${domY}px`;
+    // Apply directly. The browser's #app-scaler will handle the zoom automatically!
+    this.ui.previewMarker.style.left = `${point.x}px`;
+    this.ui.previewMarker.style.top = `${point.y}px`;
 
     this.animationFrameId = requestAnimationFrame(() => this.animationLoop());
   }
