@@ -254,6 +254,7 @@ class Camera_Registration(System_Calibration):
                             [0,0,0,1]])
         
         obj_Points = np.vstack((xValues.flatten(), yValues.flatten())).T.reshape(-1, 2)
+        robot_positions = np.zeros((1, 2))
 
         print("\nFiring in 4 seconds ...")
         for i, (x, y) in enumerate(zip(xValues.flatten(),
@@ -269,6 +270,7 @@ class Camera_Registration(System_Calibration):
             
             
             ### Get images ##
+            robot_positions[i, :] = self.robot_controller.current_robot_to_world_position()
             therm_img = self.therm_cam.get_latest()['thermal']
             time.sleep(0.2) # laser may still be firing
             color_img = self.rgbd_cam.get_latest()['color']
