@@ -61,6 +61,9 @@ class AppController {
     private readonly settingsManager: SettingsManager;
     private readonly previewManager: PreviewManager;
 
+    private isHardwareHeightSynced: boolean = false;
+    private isChangingHeight: boolean = false;
+
     // ---------------------------------------------------------------
     // Late-initialised (created once the video track arrives)
     // ---------------------------------------------------------------
@@ -154,19 +157,6 @@ class AppController {
 
         // Restore persisted layout positions
         this.settingsManager.restoreLayoutPositions();
-
-        //Save robot height to localStorage to keep it from shifting on page reload
-        const savedHeight = localStorage.getItem('robot_height');
-        if (savedHeight) {
-            const heightVal = parseInt(savedHeight);
-            if (!isNaN(heightVal)) {
-                //Update the Slider UI
-                this.ui.heightSlider.value = savedHeight;
-                //Update the Text Display
-                this.ui.heightDisplay.textContent = savedHeight;
-                //TODO: May need to send a wshandler.updateState to sync
-            }
-        }
     }
 
     private setMessage(str: string): void {
@@ -212,7 +202,7 @@ class AppController {
             () => this.executionManager.onShapeComplete(),
             () => this.toolHandler.updateFixturesButtonState(),
             () => this.toolHandler.updateThermalButtonState(),
-            () => { this.ui.resetHeatAreaBtn.disabled = false; },
+            () => { this.ui.resetHeatAreaBtn.disabled = false; this.ui.heatLegend.classList.remove('hidden'); },
         );
 
         this.canvasManager.onShapeModified = () => {
@@ -247,24 +237,24 @@ class AppController {
      * Ensures sub-systems update in the correct order to avoid layout thrashing.
      */
     private handleResize(): void {
-        // 1. Layout Manager: Calculate new panel positions/sizes
+        //Layout Manager: Calculate new panel positions/sizes
         this.settingsManager.handleResize();
 
-        // 2. Get authoritative viewport dimensions
+        //Get authoritative viewport dimensions
         const w = this.ui.viewport.offsetWidth;
         const h = this.ui.viewport.offsetHeight;
 
-        // 3. Preview Manager: Resize overlay and re-project path
+        //Preview Manager: Resize overlay and re-project path
         this.previewManager.updateOverlaySize();
 
-        // 4. Canvas Manager: Scale fabric canvas and objects
+        //Canvas Manager: Scale fabric canvas and objects
         if (this.canvasManager) {
-            // Check against internal canvas dimensions to prevent unnecessary updates
+            //Check against internal canvas dimensions to prevent unnecessary updates
             if (this.ui.canvas.width !== w || this.ui.canvas.height !== h) {
                 this.canvasManager.updateCanvasSize(w, h);
             }
         } else {
-            // If CM doesn't exist yet, ensure the raw canvas element matches viewport
+            //If CM doesn't exist yet, ensure the raw canvas element matches viewport
             this.ui.canvas.width = w;
             this.ui.canvas.height = h;
         }
@@ -352,8 +342,12 @@ class AppController {
         });
         this.ui.resetHeatAreaBtn.addEventListener('click', async () => {
             if (!this.canvasManager) return;
-            this.ui.resetHeatAreaBtn.disabled = true;
-            try { await this.canvasManager.resetHeatArea(); }
+            try { 
+                await this.canvasManager.resetHeatArea();
+                this.ui.resetHeatAreaBtn.disabled = true;
+                this.ui.heatLegend.classList.add('hidden')
+
+             }
             catch (e) { console.error(e); this.ui.resetHeatAreaBtn.disabled = false; }
         });
         this.ui.clearMarkersBtn.addEventListener('click', async () => {
@@ -361,6 +355,7 @@ class AppController {
             this.canvasManager.clearMarkers();
             await this.canvasManager.submitHeatMarkers(this.canvasManager.getHeatMarkersInVideoSpace());
         });
+
 
         // --- Fixture brushes & actions ---
         this.ui.roundBrushBtn.addEventListener('click', () => this.toolHandler.handleBrushSelection('round'));
@@ -382,13 +377,19 @@ class AppController {
             this.hardware.changeRobotState(!this.ui.robotBtn.classList.contains('active'));
         });
 
+        this.ui.heightSlider.addEventListener('mousedown', () => this.isChangingHeight = true);
+        this.ui.heightSlider.addEventListener('touchstart', () => this.isChangingHeight = true, { passive: true });
+        
+        this.ui.heightSlider.addEventListener('mouseup', () => this.isChangingHeight = false);
+        this.ui.heightSlider.addEventListener('touchend', () => this.isChangingHeight = false);
+
         // Height Slider 
         this.ui.heightSlider.addEventListener('input', () => {
+            //Block the browser from sending cached defaults on boot
+            if (!this.isHardwareHeightSynced) return;
+
             const heightValue = parseInt(this.ui.heightSlider.value);
-            this.ui.heightDisplay.textContent = String(heightValue);
-            
-            //Save to local storage
-            localStorage.setItem('robot_height', String(heightValue));
+            this.ui.heightDisplay.textContent = String(heightValue + ' CM');
             
             //Send to backend
             this.wsHandler.updateState({ height: heightValue });
@@ -561,6 +562,22 @@ class AppController {
                 this.ui.robotMarker.style.left = `${(state.laserX / vw) * cw}px`;
                 this.ui.robotMarker.style.top = `${(state.laserY / vh) * ch}px`;
                 this.ui.robotMarker.style.display = 'block';
+            }
+        }
+
+        if (state.height !== undefined && state.height !== null) {
+            //If this is our first time hearing from the robot since refreshing
+            this.isHardwareHeightSynced = true;
+
+            if (!this.isChangingHeight) {
+                //Update the physical slider position
+                this.ui.heightSlider.value = state.height.toString();
+                
+                //Update the text label next to the slider
+                if (this.ui.heightDisplay) {
+                    this.ui.heightDisplay.textContent = `${state.height + ' CM'}`;
+                }
+                
             }
         }
 

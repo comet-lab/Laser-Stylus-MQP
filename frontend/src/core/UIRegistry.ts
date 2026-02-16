@@ -102,6 +102,7 @@ export interface UIRegistry {
     maxHeatDisplay: HTMLElement;
     heatAreaBtn: HTMLButtonElement;
     resetHeatAreaBtn: HTMLButtonElement;
+    heatLegend: HTMLElement;
 
     // --- Main Mode Switchers ---
     modeButtons: NodeListOf<HTMLElement>;
@@ -203,6 +204,7 @@ export function createUIRegistry(): UIRegistry {
         maxHeatDisplay: document.getElementById('max-heat-display') as HTMLElement,
         heatAreaBtn: document.getElementById('heatAreaBtn') as HTMLButtonElement,
         resetHeatAreaBtn: document.getElementById('resetHeatAreaBtn') as HTMLButtonElement,
+        heatLegend: document.getElementById('thermal-gradient-legend') as HTMLElement,
 
         // Main Mode Switchers
         modeButtons: document.querySelectorAll('.mode-btn'),
