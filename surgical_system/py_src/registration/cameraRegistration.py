@@ -3,6 +3,7 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation
 import matplotlib.pyplot as plt
+from typing import Dict, Tuple, Optional
 
 if __name__=='__main__':
     import sys, pathlib
@@ -330,6 +331,156 @@ class Camera_Registration(System_Calibration):
         # np.save    (save_dir / "laser_spots.npy",       therm_image_set)
         return combinedImg, therm_img_points, rgb_img_points, obj_Points
     
+    
+    @staticmethod
+    def _project_xy(H: np.ndarray, X: float, Y: float, eps: float = 1e-12) -> Tuple[float, float]:
+        """
+        Project plane coordinate (X,Y,1) to pixel (u,v) using homography H with perspective divide.
+        """
+        p = H @ np.array([X, Y, 1.0], dtype=float)
+        if abs(p[2]) < eps:
+            # Degenerate / numerically unstable
+            return float("inf"), float("inf")
+        return (p[0] / p[2], p[1] / p[2])
+
+    @staticmethod
+    def estimate_depth_from_dense_stack(
+        dense_stack: Dict[float, np.ndarray],
+        obs_uv: Tuple[float, float],
+        cmd_XY: Tuple[float, float],
+        *,
+        metric: str = "l2",
+        refine: bool = True,
+        min_valid_heights: int = 3,
+    ) -> Tuple[float, float, Tuple[float, float], float]:
+        """
+        Estimate depth (height z) using a dense homography stack.
+
+        Parameters
+        ----------
+        dense_stack : dict
+            {z: H_z} where H_z is 3x3 (ideally normalized) homography at height z.
+            z units(e.g., mm).
+        obs_uv : (u_obs, v_obs)
+            Observed pixel location of the laser spot (or feature) in the RGB image.
+        cmd_XY : (X_cmd, Y_cmd)
+            Commanded / known plane coordinates (object coordinates in the calibration plane frame).
+        metric : "l2" or "l1"
+            Error metric in pixel space.
+        refine : bool
+            If True, do a local quadratic refinement around the best discrete z (sub-grid estimate).
+        min_valid_heights : int
+            Require at least this many heights in the stack.
+
+        Returns
+        -------
+        z_hat : float
+            Estimated depth/height.
+        err_hat : float
+            Residual error at z_hat (pixels, metric-dependent).
+        uv_pred : (u_pred, v_pred)
+            Predicted pixel at z_hat.
+        conf : float
+            Simple confidence proxy in (0,1], based on error separation between best and 2nd best.
+            (Higher is better.) Use your own gating thresholds in practice.
+
+        Notes
+        -----
+        - This assumes the environment can be approximated by one height z for this point.
+        - For tilt-aware estimation, you'd solve (z0,a,b) over multiple probes instead.
+        """
+        if len(dense_stack) < min_valid_heights:
+            raise ValueError(f"dense_stack must have at least {min_valid_heights} entries.")
+
+        u_obs, v_obs = map(float, obs_uv)
+        X_cmd, Y_cmd = map(float, cmd_XY)
+
+        # Sort heights
+        zs = np.array(sorted(dense_stack.keys()), dtype=float)
+        Hs = [dense_stack[z] for z in zs]
+
+        # Compute errors over all heights
+        errs = np.empty_like(zs)
+        preds = np.empty((zs.size, 2), dtype=float)
+
+        for i, H in enumerate(Hs):
+            u_pred, v_pred = Camera_Registration._project_xy(np.asarray(H, dtype=float), X_cmd, Y_cmd)
+            preds[i] = (u_pred, v_pred)
+
+            du = u_pred - u_obs
+            dv = v_pred - v_obs
+
+            if metric == "l2":
+                errs[i] = float(np.hypot(du, dv))
+            elif metric == "l1":
+                errs[i] = float(abs(du) + abs(dv))
+            else:
+                raise ValueError("metric must be 'l2' or 'l1'")
+
+        best_idx = int(np.argmin(errs))
+        z_best = float(zs[best_idx])
+        err_best = float(errs[best_idx])
+        uv_best = (float(preds[best_idx, 0]), float(preds[best_idx, 1]))
+
+        # Confidence proxy: how much better than 2nd best?
+        # (This is NOT a probability; it’s just a cheap separability score.)
+        if zs.size >= 2:
+            sorted_errs = np.sort(errs)
+            err2 = float(sorted_errs[1])
+            conf = float(np.clip((err2 - err_best) / max(err2, 1e-9), 0.0, 1.0))
+        else:
+            conf = 0.0
+
+        if not refine or best_idx == 0 or best_idx == zs.size - 1:
+            return z_best, err_best, uv_best, conf
+
+        # ---- Local quadratic refinement on error(z) using 3 neighboring samples ----
+        # Fit e(z) ≈ a z^2 + b z + c around best_idx-1, best_idx, best_idx+1
+        z0, z1, z2 = float(zs[best_idx - 1]), float(zs[best_idx]), float(zs[best_idx + 1])
+        e0, e1, e2 = float(errs[best_idx - 1]), float(errs[best_idx]), float(errs[best_idx + 1])
+
+        # Solve for parabola coefficients via Lagrange form (stable for 3 points)
+        d01 = z0 - z1
+        d02 = z0 - z2
+        d12 = z1 - z2
+
+        a = (e0 / (d01 * d02)
+            - e1 / (d01 * d12)
+            + e2 / (d02 * d12))
+
+        b = (-e0 * (z1 + z2) / (d01 * d02)
+            + e1 * (z0 + z2) / (d01 * d12)
+            - e2 * (z0 + z1) / (d02 * d12))
+
+        if abs(a) < 1e-12:
+            # Nearly linear; refinement not meaningful
+            return z_best, err_best, uv_best, conf
+ 
+        z_ref = -b / (2.0 * a)
+
+        # Clamp refined z to the local interval to avoid nonsense
+        z_ref = float(np.clip(z_ref, min(z0, z2), max(z0, z2)))
+
+        # Interpolate homography between nearest neighbors for refined z (piecewise linear)
+        if z_ref <= z1:
+            # between z0 and z1
+            t = 0.0 if z1 == z0 else (z_ref - z0) / (z1 - z0)
+            H_ref = (1.0 - t) * np.asarray(dense_stack[z0], float) + t * np.asarray(dense_stack[z1], float)
+        else:
+            # between z1 and z2
+            t = 0.0 if z2 == z1 else (z_ref - z1) / (z2 - z1)
+            H_ref = (1.0 - t) * np.asarray(dense_stack[z1], float) + t * np.asarray(dense_stack[z2], float)
+
+        u_ref, v_ref = Camera_Registration._project_xy(H_ref, X_cmd, Y_cmd)
+        du = u_ref - u_obs
+        dv = v_ref - v_obs
+        err_ref = float(np.hypot(du, dv)) if metric == "l2" else float(abs(du) + abs(dv))
+
+        # Keep refinement only if it improves
+        if np.isfinite(err_ref) and err_ref <= err_best:
+            return z_ref, err_ref, (float(u_ref), float(v_ref)), conf
+
+        return z_best, err_best, uv_best, conf
     
     @staticmethod
     def load_homography_stack_from_txt(file_path: str):
