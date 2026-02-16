@@ -212,7 +212,7 @@ class AppController {
             () => this.executionManager.onShapeComplete(),
             () => this.toolHandler.updateFixturesButtonState(),
             () => this.toolHandler.updateThermalButtonState(),
-            () => { this.ui.resetHeatAreaBtn.disabled = false; },
+            () => { this.ui.resetHeatAreaBtn.disabled = false; this.ui.heatLegend.classList.remove('hidden'); },
         );
 
         this.canvasManager.onShapeModified = () => {
@@ -247,24 +247,24 @@ class AppController {
      * Ensures sub-systems update in the correct order to avoid layout thrashing.
      */
     private handleResize(): void {
-        // 1. Layout Manager: Calculate new panel positions/sizes
+        //Layout Manager: Calculate new panel positions/sizes
         this.settingsManager.handleResize();
 
-        // 2. Get authoritative viewport dimensions
+        //Get authoritative viewport dimensions
         const w = this.ui.viewport.offsetWidth;
         const h = this.ui.viewport.offsetHeight;
 
-        // 3. Preview Manager: Resize overlay and re-project path
+        //Preview Manager: Resize overlay and re-project path
         this.previewManager.updateOverlaySize();
 
-        // 4. Canvas Manager: Scale fabric canvas and objects
+        //Canvas Manager: Scale fabric canvas and objects
         if (this.canvasManager) {
-            // Check against internal canvas dimensions to prevent unnecessary updates
+            //Check against internal canvas dimensions to prevent unnecessary updates
             if (this.ui.canvas.width !== w || this.ui.canvas.height !== h) {
                 this.canvasManager.updateCanvasSize(w, h);
             }
         } else {
-            // If CM doesn't exist yet, ensure the raw canvas element matches viewport
+            //If CM doesn't exist yet, ensure the raw canvas element matches viewport
             this.ui.canvas.width = w;
             this.ui.canvas.height = h;
         }
@@ -352,8 +352,12 @@ class AppController {
         });
         this.ui.resetHeatAreaBtn.addEventListener('click', async () => {
             if (!this.canvasManager) return;
-            this.ui.resetHeatAreaBtn.disabled = true;
-            try { await this.canvasManager.resetHeatArea(); }
+            try { 
+                await this.canvasManager.resetHeatArea();
+                this.ui.resetHeatAreaBtn.disabled = true;
+                this.ui.heatLegend.classList.add('hidden')
+
+             }
             catch (e) { console.error(e); this.ui.resetHeatAreaBtn.disabled = false; }
         });
         this.ui.clearMarkersBtn.addEventListener('click', async () => {
@@ -361,6 +365,7 @@ class AppController {
             this.canvasManager.clearMarkers();
             await this.canvasManager.submitHeatMarkers(this.canvasManager.getHeatMarkersInVideoSpace());
         });
+
 
         // --- Fixture brushes & actions ---
         this.ui.roundBrushBtn.addEventListener('click', () => this.toolHandler.handleBrushSelection('round'));

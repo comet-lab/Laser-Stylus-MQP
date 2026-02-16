@@ -681,7 +681,7 @@ export class CanvasManager {
 
         this.isDrawingHeatArea = false;
 
-        // Prevent tiny accidental clicks from registering as masks
+        //Prevent tiny accidental clicks from registering as masks
         if (this.activeHeatRect.width * this.activeHeatRect.scaleX < 5 ||
             this.activeHeatRect.height * this.activeHeatRect.scaleY < 5) {
             this.fCanvas.remove(this.activeHeatRect);
@@ -689,15 +689,15 @@ export class CanvasManager {
             return;
         }
 
-        // 1. Generate Mask and Send to Backend
+        //Generate Mask and Send to Backend
         await this.sendHeatMaskToServer(this.activeHeatRect);
 
-        // 2. Remove the visual rectangle (as requested: "finish drawing... it will disappear")
+        //Remove the visual rectangle (as requested: "finish drawing... it will disappear")
         this.fCanvas.remove(this.activeHeatRect);
         this.activeHeatRect = null;
         this.fCanvas.requestRenderAll();
 
-        // 3. Notify UI to enable the Reset Button
+        //Notify UI to enable the Reset Button
         this.onHeatAreaDefined();
     }
 
