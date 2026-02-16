@@ -487,7 +487,6 @@ class AppController {
                 zoomWrapper.style.transform = `scale(${zoomLevel})`;
             }
 
-    
 
 
         }, { passive: false });
@@ -526,7 +525,6 @@ class AppController {
 
                 zoomWrapper.style.transform = `scale(${zoomLevel})`;
 
-            
             }
         }, { passive: false });
 

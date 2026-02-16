@@ -148,7 +148,7 @@ export class PreviewManager {
       path.push({ x: previewData.x[i], y: previewData.y[i] });
     }
 
-    this.handlePathData(path, serverDuration || 10);
+    this.handlePathData(path, serverDuration || 15);
   }
 
   private handlePathData(videoPath: Position[], duration: number): void {
