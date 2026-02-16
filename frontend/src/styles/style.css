@@ -18,6 +18,7 @@ body {
   padding: 0 !important;
   height: 100%;
   width: 100%;
+  user-select: none;
 }
 
 body {
@@ -214,7 +215,6 @@ pre {
   left: 65.5px;
   width: calc(100% - 65.5px);
   height: calc(100% - 60px);
-  overflow: hidden;
   background-color: #000;
 }
 

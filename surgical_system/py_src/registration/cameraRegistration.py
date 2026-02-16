@@ -77,7 +77,7 @@ class Camera_Registration(System_Calibration):
         self.reprojection_test('thermal', self.cam_M['thermal'], gridShape = np.array([2, 2]), laserDuration = .15, \
                         debug=debug, height=0)
         
-        self.laser_alignment()
+        # self.laser_alignment()
         # self.therm_cam.deinitialize_cam()
         # pass
     
