@@ -147,17 +147,7 @@ export class PreviewManager {
       path.push({ x: previewData.x[i], y: previewData.y[i] });
     }
 
-    // Estimate duration
-    const speed = parseFloat(this.ui.speedInput.value) || 10;
-    let totalDistance = 0;
-    for (let i = 1; i < path.length; i++) {
-      const dx = path[i].x - path[i - 1].x;
-      const dy = path[i].y - path[i - 1].y;
-      totalDistance += Math.sqrt(dx * dx + dy * dy);
-    }
-    const duration = serverDuration || 10.0;;
-
-    this.handlePathData(path, duration);
+    this.handlePathData(path, serverDuration || 10);
   }
 
   private handlePathData(videoPath: Position[], duration: number): void {
@@ -166,12 +156,12 @@ export class PreviewManager {
       return;
     }
 
-    // 1. STORE SOURCE OF TRUTH (Video Coordinates)
+    //STORE SOURCE OF TRUTH (Video Coordinates)
     this.sourcePath = videoPath;
     this.durationSeconds = duration;
     this.hasPreviewedCurrentDrawing = true;
 
-    // 2. CALCULATE SCREEN COORDINATES
+    //CALCULATE SCREEN COORDINATES
     this.updatePathTransform();
 
     this.ui.previewDuration.textContent = `${duration.toFixed(1)}s`;
