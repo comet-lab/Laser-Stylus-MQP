@@ -12,7 +12,8 @@
 /* ============================================
    GLOBAL STYLES & RESET
    ============================================ */
-html, body {
+html,
+body {
   margin: 0 !important;
   padding: 0 !important;
   height: 100%;
@@ -25,9 +26,13 @@ body {
   background-color: #000000;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
-#app { max-width: 680px; }
+#app {
+  max-width: 680px;
+}
 
 #app-scaler {
   transform-origin: top left;
@@ -55,7 +60,10 @@ pre {
   white-space: pre-wrap;
 }
 
-.hidden, .hidden-mode { display: none !important; }
+.hidden,
+.hidden-mode {
+  display: none !important;
+}
 
 /* ============================================
    TOP PANEL (Header/Status)
@@ -69,7 +77,6 @@ pre {
   width: 100%;
   background-color: #0f1419;
   gap: 10px;
-  z-index: 1000;
 }
 
 /* Status Panels */
@@ -95,7 +102,7 @@ pre {
   display: flex;
   align-items: stretch;
   justify-content: flex-start;
-  background-color: #2c343b; 
+  background-color: #2c343b;
   border: 2px solid #2c343b;
   border-radius: 18px;
   padding: 0;
@@ -131,14 +138,14 @@ pre {
 .mode-btn-wrapper {
   display: flex;
   align-items: center;
-  background-color: #172027; 
+  background-color: #172027;
   padding: 4px;
   gap: 4px;
   height: 100%;
   flex-grow: 1;
   border-top-left-radius: 16px;
   border-bottom-left-radius: 16px;
-  border-top-right-radius: 0; 
+  border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
 
@@ -160,7 +167,6 @@ pre {
   width: 65.5px;
   flex-shrink: 0;
   background-color: #0f1419;
-  z-index: 1000;
 }
 
 #top-icon-section,
@@ -172,7 +178,9 @@ pre {
   margin-top: 0.2vw;
 }
 
-#settings-icon-section { margin-bottom: 0.2vw; }
+#settings-icon-section {
+  margin-bottom: 0.2vw;
+}
 
 #main-section-wrapper {
   flex-grow: 1;
@@ -210,6 +218,13 @@ pre {
   background-color: #000;
 }
 
+#zoom-wrapper {
+  width: 100%;
+  height: 100%;
+  transform-origin: center center;
+  will-change: transform;
+}
+
 #video {
   position: absolute;
   top: 0;
@@ -222,7 +237,7 @@ pre {
 
 #canvas,
 .fabric-canvas-container,
-.fabric-canvas-container .lower-canvas, 
+.fabric-canvas-container .lower-canvas,
 .fabric-canvas-container .upper-canvas {
   position: absolute !important;
   top: 0 !important;
@@ -253,7 +268,8 @@ pre {
   display: block;
 }
 
-#robot-marker, #preview-marker {
+#robot-marker,
+#preview-marker {
   position: absolute;
   width: 24px;
   height: 24px;
@@ -264,14 +280,19 @@ pre {
   transform: translate(-50%, -50%);
 }
 
-#preview-marker { border: 3px solid #FFA500}
+#preview-marker {
+  border: 3px solid #FFA500
+}
 
-#robot-marker { border: 3px solid #70ff57; }
+#robot-marker {
+  border: 3px solid #70ff57;
+}
 
 /* ============================================
    SLIDERS (Vertical & Horizontal)
    ============================================ */
-.brush-container, .height-container {
+.brush-container,
+.height-container {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -279,9 +300,12 @@ pre {
   width: 100%;
 }
 
-.height-container { gap: 4px; }
+.height-container {
+  gap: 4px;
+}
 
-.brush-label, .height-label {
+.brush-label,
+.height-label {
   color: #e0f2e0;
   font-size: 0.8rem;
   font-weight: bold;
@@ -334,108 +358,6 @@ pre {
   cursor: pointer;
   border: 2px solid #2c343b;
   box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
-}
-
-/* ============================================
-   CANVAS & VIDEO VIEWPORT
-   ============================================ */
-#viewport {
-  position: absolute;
-  top: 60px;
-  left: 65.5px;
-  width: calc(100% - 65.5px);
-  height: calc(100% - 60px);
-  overflow: hidden;
-  background-color: #000;
-}
-
-#zoom-wrapper {
-  width: 100%;
-  height: 100%;
-  transform-origin: center center;
-  will-change: transform;
-}
-
-#video {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: fill;
-  z-index: 1;
-  pointer-events: none;
-}
-
-#canvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-  touch-action: none;
-  /* This ensures canvas display size matches viewport */
-}
-
-#fixturesCanvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 10 !important;
-  pointer-events: none;
-  display: none;
-  opacity: 0.6;
-}
-
-#fixturesCanvas.active {
-  pointer-events: auto;
-  display: block;
-}
-
-/* Make sure both canvases are children of viewport */
-.fabric-canvas-container {
-  position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  z-index: 20;
-}
-
-
-.fabric-canvas-container .upper-canvas {
-  z-index: 20 !important;
-}
-
-
-.activeTool {
-  outline: 3px solid #6df06d;
-  border-radius: 6px;
-}
-
-#robot-marker {
-  position: absolute;
-  width: 24px;
-  height: 24px;
-  border: 3px solid #70ff57;
-  border-radius: 50%;
-  background-color: transparent;
-  pointer-events: none;
-  z-index: 50;
-  display: none;
-  transform: translate(-50%, -50%);
-  /* transition: left 0.1s linear, top 0.1s linear; */
-}
-
-#max-heat-container {
-  font-weight: bold;
-  color: #e0f2e0;
-  margin-left: auto;
-  padding-right: 10px;
-}
-
-.fabric-canvas-container .lower-canvas, .fabric-canvas-container .upper-canvas {
-  z-index: 100 !important;
 }
 
 .vertical-range {
@@ -518,6 +440,122 @@ body.menu-bottom.sidebar-right #viewport {
 }
 
 /* ============================================
+   THERMAL GRADIENT LEGEND (ULTRA-SLIM)
+   ============================================ */
+#thermal-gradient-legend {
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background-color: rgba(21, 27, 33, 0.85);
+  padding: 10px 8px;
+  border-radius: 8px;
+  border: 2px solid #2c343b;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.legend-core {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.gradient-bar {
+  width: 20px;
+  height: 200px;
+  background: linear-gradient(to top,
+      #00007F 0%,
+      /* Dark Blue (20°C) */
+      #0000FF 12.5%,
+      /* Blue */
+      #00FFFF 37.5%,
+      /* Cyan */
+      #00FF00 50%,
+      /* Green (60°C) */
+      #FFFF00 62.5%,
+      /* Yellow */
+      #FF0000 87.5%,
+      /* Red */
+      #7F0000 100%
+      /* Dark Red (100°C) */
+    );
+  border: 1px solid #e0f2e0;
+  border-radius: 4px;
+}
+
+.gradient-labels {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  color: #e0f2e0;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 0;
+}
+
+.legend-unit {
+  color: #a1b0a4;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  width: 100%;
+  text-align: left;
+}
+
+/* ============================================
+   INLINE ROBOT WARNING
+   ============================================ */
+#inline-robot-warning {
+  /* Width is intentionally omitted here; it is calculated dynamically in JS */
+  flex-shrink: 0;
+  flex-grow: 0;
+  box-sizing: border-box;
+  background-color: rgba(250, 133, 0, 0.1);
+  border: 1px solid #fa8500;
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+.inline-warning-text {
+  color: #fa8500;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  text-align: center;
+}
+
+.inline-warning-btn {
+  background-color: #fa8500;
+  color: #ffffff;
+  border: 1px solid transparent;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 6px;
+  border-radius: 6px;
+  width: 100%;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.inline-warning-btn:hover {
+  filter: brightness(115%);
+}
+
+/* ============================================
    Z-INDEX MANAGEMENT
    ============================================ */
 /* Layer Order (Bottom to Top):
@@ -538,9 +576,9 @@ body.menu-bottom.sidebar-right #viewport {
 
 /* Level 2 */
 .fabric-canvas-container,
-.fabric-canvas-container .lower-canvas, 
+.fabric-canvas-container .lower-canvas,
 .fabric-canvas-container .upper-canvas {
-  z-index: 10 !important; 
+  z-index: 10 !important;
 }
 
 /* Level 3 */
@@ -554,12 +592,14 @@ body.menu-bottom.sidebar-right #viewport {
 }
 
 /* Level 5 */
-#robot-marker, #preview-marker {
+#robot-marker,
+#preview-marker {
   z-index: 50 !important;
 }
 
 /* Level 6 */
-#left-panel, #top-panel {
+#left-panel,
+#top-panel {
   z-index: 60;
 }
 
@@ -569,6 +609,7 @@ body.menu-bottom.sidebar-right #viewport {
 }
 
 /* Level 8 */
-#preparePopup, #settingsPopup {
+#preparePopup,
+#settingsPopup {
   z-index: 101;
 }

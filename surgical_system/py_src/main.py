@@ -163,6 +163,7 @@ async def main():
         if control_flow_handler.desired_state.heat_mask is not None:
             latest = control_flow_handler.get_heat_overlay(latest)
         else:
+            # print("trigger")
             thermal_data = camera_reg.get_cam_latest("thermal")
             control_flow_handler.desired_state.maxHeat = float(np.max(thermal_data))
 

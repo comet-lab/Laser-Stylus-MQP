@@ -109,7 +109,7 @@ class TrajectoryController():
         self.MAX_ACCELERATION = np.full(self.n_dims, maxAcceleration) #!!!!!! FIND UNITS [m/s^2]
 
         durations = np.insert(durations, 0, 0) 
-        v_way = np.zeros_like(position)          # (N, D)
+        v_way = np.zeros_like(position)          
 
         # endpoints
         v_way[0]  = 0.0

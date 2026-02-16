@@ -24,6 +24,7 @@ export interface WebSocketMessage {
         x: number[];
         y: number[];
     };
+    preview_duration?: number;
 }
 
 // Type for partial updates, any subset of WebSocketMessage

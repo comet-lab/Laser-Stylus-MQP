@@ -4,7 +4,7 @@ from registration.mock_camera_registration import MockCameraRegistration
 from laser_control.mock_laser import MockLaser
 import numpy as np
 from backend.listener import BackendConnection
-import time
+import time, math
 import json
 import cv2
 from dataclasses import asdict
@@ -107,7 +107,11 @@ class Handler:
     def _read_raster(self):
         img = self._read_mask(self.desired_state.raster_mask)
         img = Motion_Planner.fill_in_shape(img) 
-        spacing = int(self.desired_state.density) # TODO calculate lines per distance 
+        spacing = self.desired_state.density
+        if spacing is None or math.isnan(spacing):
+            return []
+        spacing = int(spacing) # TODO calculate lines per distance 
+        
         print(f"[Spacing (pixels)]: {spacing}")
         # path = Motion_Planner.raster_pattern(img, pitch = spacing) # pixel spacing
         #TODO check if raster is valid 
@@ -205,6 +209,7 @@ class Handler:
         if selection is not None and selection.size != 0:
             self.desired_state.maxHeat = float(max_temp) if max_temp is not None else float(np.max(therm_img)) #TODO find average heat of current robot kernal pixel
         # print(f"Max temp: {max_temp}")
+        # self.desired_state.heat_mask = None
         return heat_img
             
 ###------------------------ Planned Path Control -------------------####    
@@ -217,7 +222,8 @@ class Handler:
     def _do_create_path(self, path):
         pixels = path
         path = None
-        pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=3, n_arc=10)
+        pixels = Motion_Planner.rdp(pixels, epsilon=1)
+        pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=3, n_arc=20)
         
         fig, ax = plt.subplots(figsize=(8,4))
         # ax.imshow(img, cmap='gray')
@@ -292,7 +298,8 @@ class Handler:
     def _do_hold_pose(self):
         current_pose, current_vel = self.robot_controller.get_current_state()
         # Stop robot, no drift
-        if np.linalg.norm(current_vel[:3]) > 3e-5:
+        # print(np.linalg.norm(current_vel[:3]))
+        if np.linalg.norm(current_vel[:3]) > 4e-5:
             # print("Setting speed 0")
             self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
         else:
@@ -390,13 +397,12 @@ class Handler:
             height_diff = self.working_height - self.robot_controller.current_robot_to_world_position()[-1]
             height_change = np.abs(height_diff) > 0.0001 #0.1 mm
             # print(f"[Robot Height] Height Change: {height_change}")
-            
             if(self.robot_controller.is_trajectory_running() and self.path_display_pixels is not None):
-                self.cam_reg.get_path(self.path_display_pixels)
                 self.cam_reg.display_path = True
+                self.cam_reg.get_path(self.path_display_pixels)
             else:
                 self.cam_reg.display_path = False
-                self.path_display_pixels = None
+                # self.path_display_pixels = None
             
             if(self.desired_state.fixtures_mask is not None):
                 self._read_fixtures()

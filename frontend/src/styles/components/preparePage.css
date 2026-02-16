@@ -319,7 +319,6 @@ input::-webkit-inner-spin-button {
   padding: 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
 }
 
 .preview-duration-row {
@@ -327,6 +326,7 @@ input::-webkit-inner-spin-button {
   justify-content: space-between;
   align-items: center;
   padding: 10px 0;
+  padding-top: 0;
 }
 
 .preview-duration-label {
