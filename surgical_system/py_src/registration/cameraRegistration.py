@@ -270,7 +270,6 @@ class Camera_Registration(System_Calibration):
             
             
             ### Get images ##
-            robot_positions[i, :] = self.robot_controller.current_robot_to_world_position()
             therm_img = self.therm_cam.get_latest()['thermal']
             time.sleep(0.2) # laser may still be firing
             color_img = self.rgbd_cam.get_latest()['color']
@@ -331,6 +330,186 @@ class Camera_Registration(System_Calibration):
         # np.save    (save_dir / "laser_spots.npy",       therm_image_set)
         return combinedImg, therm_img_points, rgb_img_points, obj_Points
     
+    
+    @staticmethod
+    def load_homography_stack_from_txt(file_path: str):
+        """
+        Load homography stack dictionary from a txt file written as str(dict).
+        
+        Returns
+        -------
+        homography_stack : dict
+            {height: np.ndarray (3x3)}
+        """
+        
+        if not os.path.isfile(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
+        
+        with open(file_path, 'r') as f:
+            content = f.read()
+        
+        # Safely evaluate the dictionary
+        try:
+            raw_dict = ast.literal_eval(content)
+        except Exception as e:
+            raise ValueError(f"Unable to parse dictionary from file: {e}")
+        
+        homography_stack = {}
+        
+        for z, H in raw_dict.items():
+            H_np = np.array(H, dtype=float)
+            
+            if H_np.shape != (3, 3):
+                raise ValueError(f"Homography at height {z} is not 3x3.")
+            
+            homography_stack[float(z)] = H_np
+        
+        return homography_stack
+    
+    @staticmethod
+    def normalize_homography(H, eps=1e-9):
+        """
+        Normalize homography to remove scale ambiguity.
+        Prefer H[2,2] normalization; fallback to Frobenius.
+        """
+        H = H.astype(float)
+        
+        if abs(H[2,2]) > eps:
+            return H / H[2,2]
+        else:
+            norm = np.linalg.norm(H)
+            if norm < eps:
+                raise ValueError("Homography norm too small to normalize.")
+            return H / norm
+
+
+    def create_dense_stack(self, homography_stack: dict,
+                        dz: float = 1.0, # m
+                        extrapolate: bool = False):
+        """
+        Create a dense homography stack via linear interpolation.
+        
+        Parameters
+        ----------
+        homography_stack : dict
+            {height: 3x3 homography matrix}
+        dz : float
+            Height spacing for dense stack (same units as heights)
+        extrapolate : bool
+            If False, only interpolate within range
+        
+        Returns
+        -------
+        dense_stack : dict
+            {height: interpolated normalized 3x3 homography}
+        """
+        
+        # --- Step 1: Sort heights ---
+        heights = np.array(sorted(homography_stack.keys()), dtype=float)
+        Hs = [self.normalize_homography(homography_stack[z]) for z in heights]
+        Hs = np.stack(Hs, axis=0)
+        
+        z_min, z_max = heights[0], heights[-1]
+        
+        # --- Step 2: Create dense grid ---
+        dense_heights = np.arange(z_min, z_max + dz, dz)
+        
+        dense_stack = {}
+        
+        for z in dense_heights:
+            
+            # Exact match
+            if z in homography_stack:
+                dense_stack[z] = self.normalize_homography(homography_stack[z])
+                continue
+            
+            # If outside bounds
+            if z < z_min or z > z_max:
+                if not extrapolate:
+                    continue
+                else:
+                    # clamp to nearest
+                    if z < z_min:
+                        dense_stack[z] = Hs[0]
+                    else:
+                        dense_stack[z] = Hs[-1]
+                    continue
+            
+            # --- Step 3: Find bracketing indices ---
+            idx_upper = np.searchsorted(heights, z)
+            idx_lower = idx_upper - 1
+            
+            z0 = heights[idx_lower]
+            z1 = heights[idx_upper]
+            
+            H0 = Hs[idx_lower]
+            H1 = Hs[idx_upper]
+            
+            # --- Step 4: Linear interpolation ---
+            t = (z - z0) / (z1 - z0)
+            H_interp = (1 - t) * H0 + t * H1
+            
+            # --- Step 5: Renormalize ---
+            H_interp = self.normalize_homography(H_interp)
+            
+            dense_stack[z] = H_interp
+        
+        return dense_stack
+    
+    
+    def rgb_multi_layer_scan(self, heights: np.ndarray):
+        homography_stack = {}
+        
+        for z in heights:
+            H = self.rgb_raster_scan(self, height = z, gridShape = np.array([2, 6]))
+            homography_stack[z] = H
+            
+        try:
+            file_location = r"surgical_system\py_src\registration\calibration_info" 
+            if not os.path.isdir(file_location):
+                os.makedirs(file_location)
+                
+            file_path = file_location + "homography_stack.txt"
+            homography_file = open(file_path, 'wt')
+            homography_file.write(str(homography_stack))
+            homography_file.close()
+
+        except:
+            print("Unable to write to file")
+        
+        return homography_stack
+    
+    def rgb_raster_scan(self,  height = 0, gridShape = np.array([2, 6]), squareSize = 0.005,):
+        input(f"Press Enter to continue checkboard creation [{height*1000} mm].")
+        xPoints = (np.arange(gridShape[1]) - (gridShape[1] - 1) / 2) * squareSize
+        yPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
+        xValues, yValues = np.meshgrid(xPoints, yPoints)
+        robot_positions = np.zeros((1, 2))
+        pixel_points = np.zeros((1, 2))
+        
+        robot_path = np.hstack((xValues.reshape((-1, 1)), 
+                                yValues.reshape((-1, 1)), 
+                                np.full((xValues.size, 1), height)))
+        
+        traj = self.robot_controller.create_custom_trajectory(robot_path, 0.05)
+        self.robot_controller.run_trajectory(traj, blocking=False)
+        
+        while(self.robot_controller.is_trajectory_running()):
+            world_pos = self.robot_controller.current_robot_to_world_position()[:2]
+            robot_positions = np.vstack((robot_positions, world_pos))
+            color_img = self.rgbd_cam.get_latest()['color']
+            rgb_laser_pixel = self.get_hot_pixel(color_img, method="Centroid")
+            pixel_points = np.vstack((pixel_points, rgb_laser_pixel))
+            time.sleep(0.03)
+            
+        _imgpts = np.array(pixel_points.reshape((2, -1)), np.float32) # already is [2xn]
+        _objpts = np.array(robot_positions.reshape((2, -1)),np.float32) # need this to be [2 x n] 
+
+        H,_ = cv2.findHomography(_imgpts,_objpts)
+        
+        return H
+
+
     def get_path(self, points):
         self.traj_points = points
     
