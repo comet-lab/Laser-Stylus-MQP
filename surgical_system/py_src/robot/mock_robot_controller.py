@@ -2,6 +2,7 @@ import numpy as np
 import time
 from scipy.spatial.transform import Rotation
 from laser_control.mock_laser import MockLaser
+from robot.controllers.trajectory_controller import TrajectoryController
 
 class MockRobotController():
     def __init__(self, laser_obj:MockLaser):
@@ -49,8 +50,15 @@ class MockRobotController():
         # correction_vector = correction_pose[0:3, 3]
         self.go_to_pose(target_pose)
     
-    def create_custom_trajectory(self, robot_waypoints, speed):
-        return (robot_waypoints, speed)
+    def create_custom_trajectory(self, path, max_velocity):
+        path_info = {"Positions": path, 
+                    "Pattern": "Custom",
+                    "Radius": -1,
+                    "Passes": 1,
+                    "MaxVelocity": max_velocity, # [m/s]
+                    "MaxAcceleration": 1.5,#[m/s/s]
+                    "Durations":[-1]} #time per step
+        return TrajectoryController(path_info, debug=True)
 
     def run_trajectory(self, traj, blocking, laser_on):
         print("Waypoint 0:", traj[0][0])

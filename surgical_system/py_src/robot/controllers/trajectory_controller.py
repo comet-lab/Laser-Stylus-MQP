@@ -1,9 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
+
 # from laser_controller import LaserController
 
 from .trajectory_helpers.quintic_trajectory import QuinticTrajectory
 from .trajectory_helpers.path_generation import Path_Gen
+
+# from trajectory_helpers.quintic_trajectory import QuinticTrajectory
+# from trajectory_helpers.path_generation import Path_Gen
 import math
 
 class TrajectoryController():
@@ -258,3 +262,14 @@ class TrajectoryController():
         self.max_acceleration = path_info["MaxAcceleration"]
         self.max_velocity = path_info["MaxVelocity"]
         self.radius = path_info["Radius"]
+        
+
+def main():
+    import cv2
+    from motion_planning.motion_planning import Motion_Planner
+
+    
+    pass 
+
+if __name__ == "__main__":
+    main()

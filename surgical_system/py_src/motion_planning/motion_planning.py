@@ -427,7 +427,7 @@ def plot_polygon(poly, ax=None, color='blue', alpha=0.4, show_vertices=False):
     
 
 def main():
-    img_path = "surgical_system/py_src/motion_planning/path3.png"
+    img_path = "surgical_system/py_src/motion_planning/path2.png"
     img = np.array(Image.open(img_path))
     img = Motion_Planner.fill_in_shape(img)
     img = cv2.resize(img, (1280, 720), interpolation=cv2.INTER_NEAREST)
@@ -436,7 +436,7 @@ def main():
     elif img.ndim == 3:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else:
-        gray = img
+        gray = img 
         
     polygon, edge = Motion_Planner._create_polygon(gray)
     # plot_polygon(polygon, show_vertices=True)
