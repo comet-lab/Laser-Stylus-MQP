@@ -181,6 +181,7 @@ export class ModeManager {
         if (this.state.drawnShapeType) {
             // A shape already exists on canvas – lock tools, highlight the right button
             cm?.disableDrawing();
+            cm?.enableDrawing();
             this.ui.toggleButtons.forEach(btn => btn.classList.remove('selected'));
             this.highlightShapeBtn(this.state.drawnShapeType);
         } else if (this.state.selectedShape && this.state.selectedShape !== 'marker') {

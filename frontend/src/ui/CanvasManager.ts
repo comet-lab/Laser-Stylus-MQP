@@ -71,6 +71,8 @@ export class CanvasManager {
     // --- CONFIG: Other Constants ---
     private readonly BORDER_THICKNESS = 4;
 
+    public onShapeModified: () => void = () => {};
+
     constructor(
         canvas: HTMLCanvasElement,
         video: HTMLVideoElement,
@@ -127,6 +129,11 @@ export class CanvasManager {
             if (this.isHeatAreaMode) this.onHeatMouseUp();
             else this.onMouseUp();
         });
+        this.fCanvas.on('object:modified', (opt) => {
+            if (opt.target && !(opt.target as any)._isMarker) {
+                this.onShapeModified();
+            }
+        });
         this.fCanvas.on('path:created', (e: any) => {
             if (e.path) {
                 e.path.set({
@@ -166,6 +173,102 @@ export class CanvasManager {
         if (this.fixturesCanvas) {
             this.fixturesCanvas.remove();
         }
+    }
+
+    // =========================================================================
+    // Preview Logic
+    // =========================================================================
+
+    // Return a snapshot of the current canvas state (markers/shapes)
+    public getCanvasDataURL(): string {
+        return this.fCanvas.toDataURL();
+    }
+
+    public getVideoSnapshotDataURL(): string {
+        //Create a temp canvas at the exact video resolution
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = this.video.videoWidth;
+        tempCanvas.height = this.video.videoHeight;
+        const ctx = tempCanvas.getContext('2d');
+
+        if (ctx) {
+            //Draw the video frame first (background)
+            ctx.drawImage(this.video, 0, 0, tempCanvas.width, tempCanvas.height);
+
+            //Draw the Fabric canvas on top (foreground)
+            //We use the raw canvas element from Fabric
+            ctx.drawImage(this.fCanvas.toCanvasElement(), 0, 0, tempCanvas.width, tempCanvas.height);
+        }
+
+        return tempCanvas.toDataURL('image/jpeg', 0.8); // JPEG is faster/smaller for video frames
+    }
+
+    public async getPreviewPath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<{ duration: number, path: Position[] }> {
+        // This method is now used only by PreviewManager for visualization
+        // It does not send data to backend, that's done by previewPath()
+
+        const pixels = this.generatePixelPath();
+        const videoPixels = pixels.map(p => ({
+            x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
+            y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
+        }));
+
+        // For preview window visualization, we still need simulation data
+        // Real path computation happens in previewPath() -> backend
+        const formData = new FormData();
+        formData.append('speed', speed.toString());
+        formData.append('density', density.toString());
+        formData.append('pixels', JSON.stringify(videoPixels));
+        formData.append('is_fill', isFillEnabled.toString());
+
+        if (raster_type) {
+            formData.append('raster_type', raster_type);
+        }
+
+        // This still calls /api/preview but won't be confused with previewPath()
+        const response = await this.postFormData('/api/preview', formData);
+
+        return {
+            duration: response.duration,
+            path: response.path
+        };
+    }
+
+    //Helper for getPreviewPath and executePath
+    private async generateRasterBlob(): Promise<Blob> {
+        const width = this.fCanvas.getWidth();
+        const height = this.fCanvas.getHeight();
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = width;
+        tempCanvas.height = height;
+        const ctx = tempCanvas.getContext('2d', { willReadFrequently: true, alpha: false });
+        if (!ctx) throw new Error("Ctx error");
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+
+        this.fCanvas.getObjects().forEach(obj => {
+            if ((obj as any)._isMarker) return;
+            if (obj instanceof fabric.Line) return;
+
+            const originalFill = obj.fill;
+            const originalStroke = obj.stroke;
+
+            if (obj instanceof fabric.Line) {
+                obj.stroke = '#000000';
+                obj.fill = 'transparent';
+            } else {
+                obj.fill = '#000000';
+                obj.stroke = 'transparent';
+            }
+            obj.render(ctx);
+            obj.fill = originalFill;
+            obj.stroke = originalStroke;
+        });
+
+        const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+        if (!blob) throw new Error("Blob error");
+        return blob;
     }
 
     // =========================================================================
@@ -257,12 +360,20 @@ export class CanvasManager {
 
     private onFixturesPointerDown(e: PointerEvent): void {
         if (!this.currentBrushType || !this.fixturesCanvas || !this.fixturesCtx) return;
+        
+        const { x, y } = this.getCanvasCoordinates(e, this.fixturesCanvas);
+
+        // --- GLOBAL MARKER DELETION ---
+        if (this.checkMarkerDeleteClick(x, y)) {
+            return; // Eat the click so we don't paint blue fixture ink
+        }
+
         if (this.fixturesApplied) {
             this.restoreDrawingState();
         }
+        
         this.isFixturesDrawing = true;
         this.fixturesCanvas.setPointerCapture(e.pointerId);
-        const { x, y } = this.getCanvasCoordinates(e, this.fixturesCanvas);
         this.lastFixturesPoint = { x, y };
         this.drawFixturesBrush(x, y);
         this.fixturesApplied = false;
@@ -341,6 +452,12 @@ export class CanvasManager {
 
     public hasFixtures(): boolean {
         if (!this.fixturesCanvas || !this.fixturesCtx) return false;
+
+        // --- GUARD CLAUSE: Prevent crash if canvas has 0 size ---
+        if (this.fixturesCanvas.width === 0 || this.fixturesCanvas.height === 0) {
+            return false;
+        }
+
         const imageData = this.fixturesCtx.getImageData(0, 0, this.fixturesCanvas.width, this.fixturesCanvas.height);
         const data = imageData.data;
         for (let i = 0; i < data.length; i += 4) {
@@ -511,8 +628,13 @@ export class CanvasManager {
     private onHeatMouseDown(opt: any) {
         if (!this.fCanvas.getElement()) return;
 
-        this.isDrawingHeatArea = true;
         const pointer = this.fCanvas.getScenePoint(opt.e);
+
+        if (this.checkMarkerDeleteClick(pointer.x, pointer.y)) {
+            return;
+        }
+
+        this.isDrawingHeatArea = true;
         this.heatStartPos = { x: pointer.x, y: pointer.y };
 
         // Create the specific "Heat Style" rectangle
@@ -521,13 +643,13 @@ export class CanvasManager {
             top: pointer.y,
             width: 0,
             height: 0,
-            fill: 'rgba(255, 69, 0, 0.3)', // Translucent Orange
-            stroke: '#ff4500',            // Solid Orange (for base)
+            fill: 'rgba(255, 69, 0, 0.3)',
+            stroke: '#ff4500',
             strokeWidth: 2,
-            strokeDashArray: [6, 6],      // Dotted/Dashed
-            selectable: false,            // NOT MOVABLE
-            evented: false,               // NO EVENTS
-            hasControls: false,           // NO HANDLES
+            strokeDashArray: [6, 6],
+            selectable: false,
+            evented: false,
+            hasControls: false,
             hasBorders: false,
             originX: 'left',
             originY: 'top'
@@ -559,7 +681,7 @@ export class CanvasManager {
 
         this.isDrawingHeatArea = false;
 
-        // Prevent tiny accidental clicks from registering as masks
+        //Prevent tiny accidental clicks from registering as masks
         if (this.activeHeatRect.width * this.activeHeatRect.scaleX < 5 ||
             this.activeHeatRect.height * this.activeHeatRect.scaleY < 5) {
             this.fCanvas.remove(this.activeHeatRect);
@@ -567,15 +689,15 @@ export class CanvasManager {
             return;
         }
 
-        // 1. Generate Mask and Send to Backend
+        //Generate Mask and Send to Backend
         await this.sendHeatMaskToServer(this.activeHeatRect);
 
-        // 2. Remove the visual rectangle (as requested: "finish drawing... it will disappear")
+        //Remove the visual rectangle (as requested: "finish drawing... it will disappear")
         this.fCanvas.remove(this.activeHeatRect);
         this.activeHeatRect = null;
         this.fCanvas.requestRenderAll();
 
-        // 3. Notify UI to enable the Reset Button
+        //Notify UI to enable the Reset Button
         this.onHeatAreaDefined();
     }
 
@@ -613,26 +735,17 @@ export class CanvasManager {
     // =========================================================================
 
     private async onMouseDown(opt: any) {
+        const pointer = this.fCanvas.getScenePoint(opt.e);
+
+        // --- GLOBAL MARKER DELETION (Always Active) ---
+        if (this.checkMarkerDeleteClick(pointer.x, pointer.y)) {
+            return; // Eat the click so we don't draw a shape/marker underneath it
+        }
+
+        // --- THERMAL MODE (Adding Markers) ---
         if (this.isMarkerMode) {
-            const pointer = this.fCanvas.getScenePoint(opt.e);
+            // If they clicked a marker but missed the X, do nothing so they don't stack markers
             if (opt.target && opt.target.type === 'group' && opt.target._isMarker) {
-                const group = opt.target as fabric.Group;
-                const groupCenter = group.getCenterPoint();
-                const clickRelX = pointer.x - groupCenter.x;
-                const clickRelY = pointer.y - groupCenter.y;
-
-                const closeBoxObj = group.getObjects()[3];
-
-                const distToX = Math.sqrt(
-                    Math.pow(clickRelX - closeBoxObj.left, 2) +
-                    Math.pow(clickRelY - closeBoxObj.top, 2)
-                );
-
-                if (distToX < 15) {
-                    this.removeMarker(group);
-                    await this.submitHeatMarkers(this.getHeatMarkersInVideoSpace());
-                    return;
-                }
                 return;
             }
             this.addHeatMarker(pointer.x, pointer.y);
@@ -640,12 +753,12 @@ export class CanvasManager {
             return;
         }
 
+        // --- DRAWING MODE (Shapes) ---
         if (this.hasPlacedShape) return;
         if (!this.currentShapeType || this.currentShapeType === 'freehand') return;
         if (opt.target) return;
 
         this.isCreatingShape = true;
-        const pointer = this.fCanvas.getScenePoint(opt.e);
         this.shapeStartPos = { x: pointer.x, y: pointer.y };
         const commonOpts = {
             left: pointer.x,
@@ -720,6 +833,36 @@ export class CanvasManager {
         }
     }
 
+    /**
+     * Checks if a click coordinates land exactly on the 'X' of any existing marker.
+     * Returns true if a marker was deleted, false otherwise.
+     */
+    private checkMarkerDeleteClick(pointerX: number, pointerY: number): boolean {
+        // Iterate backwards so if markers overlap, we delete the one on top
+        for (let i = this.markerObjects.length - 1; i >= 0; i--) {
+            const group = this.markerObjects[i];
+            const groupCenter = group.getCenterPoint();
+            const clickRelX = pointerX - groupCenter.x;
+            const clickRelY = pointerY - groupCenter.y;
+
+            // Get the close box (index 3 in your group array)
+            const closeBoxObj = group.getObjects()[3];
+
+            const distToX = Math.sqrt(
+                Math.pow(clickRelX - (closeBoxObj.left || 0), 2) +
+                Math.pow(clickRelY - (closeBoxObj.top || 0), 2)
+            );
+
+            if (distToX < 15) {
+                this.removeMarker(group);
+                // Fire and forget network call
+                this.submitHeatMarkers(this.getHeatMarkersInVideoSpace()).catch(console.error);
+                return true; 
+            }
+        }
+        return false;
+    }
+
     // =========================================================================
     // Public Drawing API
     // =========================================================================
@@ -777,6 +920,7 @@ export class CanvasManager {
                 o.evented = true;
             }
         });
+        this.fCanvas.requestRenderAll();
     }
 
     public isDrawingEnabled(): boolean {
@@ -788,31 +932,35 @@ export class CanvasManager {
     }
 
     public updateCanvasSize(width: number, height: number): void {
-        // 1. Calculate the scaling factor based on the change
-        // Prevent division by zero if initialized incorrectly
         const scaleX = this.prevWidth ? width / this.prevWidth : 1;
         const scaleY = this.prevHeight ? height / this.prevHeight : 1;
 
-        // 2. Resize the actual fabric canvas container
         this.fCanvas.setDimensions({ width, height });
 
-        // 3. Iterate through all objects to reposition them relative to the new size
         this.fCanvas.getObjects().forEach(obj => {
-            // Scale the position
+            // 1. Scale Position
             const newLeft = obj.left * scaleX;
             const newTop = obj.top * scaleY;
 
+            // 2. Scale Dimensions (FIX)
+            // We multiply the existing scale factor by the new resize ratio
+            const newScaleX = obj.scaleX * scaleX;
+            const newScaleY = obj.scaleY * scaleY;
+
             obj.set({
                 left: newLeft,
-                top: newTop
+                top: newTop,
+                scaleX: newScaleX,
+                scaleY: newScaleY
             });
 
-            // Also scale specific custom properties for Markers
+            // Marker Handling (Keep existing custom logic)
             if ((obj as any)._isMarker) {
                 (obj as any)._tipX = (obj as any)._tipX * scaleX;
                 (obj as any)._tipY = (obj as any)._tipY * scaleY;
             }
-            obj.setCoords(); // Critical, recalculate hitboxes
+
+            obj.setCoords();
         });
 
         // 4. Handle Fixtures (Raster) Canvas Scaling
@@ -1070,97 +1218,94 @@ export class CanvasManager {
     }
 
     // =========================================================================
-    // Execution & Export Logic
+    // Preview/Execute Logic (NEW)
     // =========================================================================
 
-    public async executePath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<any> {
-        // 1. Always generate the vector path (pixels)
+    /**
+     * Sends full path data to backend for preview/preparation
+     */
+    public async previewPath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<{ duration: number, path: Position[], warning?: string }> {
+        // Generate Pixel Path
         const pixels = this.generatePixelPath();
+        const width = this.fCanvas.getWidth();
+        const height = this.fCanvas.getHeight();
+
+        //Check if out of bounds. If so, abort.
+        const isOutOfBounds = pixels.some(p => p.x < 0 || p.x > width || p.y < 0 || p.y > height);
+        if (isOutOfBounds) {
+            throw new Error("OUT_OF_BOUNDS");
+        }
+
+        //Check for overlap with virtual fixtures. If there's any overlap, warn user
+        let hasFixtureOverlap = false;
+        if (this.hasFixtures() && this.fixturesCtx) {
+            // Grab the raw pixel data from the fixtures canvas
+            const imgData = this.fixturesCtx.getImageData(0, 0, width, height).data;
+            
+            for (const p of pixels) {
+                const px = Math.floor(p.x);
+                const py = Math.floor(p.y);
+                
+                // Ensure we don't check outside the array bounds
+                if (px >= 0 && px < width && py >= 0 && py < height) {
+                    // Calculate the index for the Alpha channel of this specific (x,y) pixel
+                    const alphaIndex = (py * width + px) * 4 + 3;
+                    
+                    // If the alpha channel is greater than 0, the user drew a fixture here
+                    if (imgData[alphaIndex] > 0) {
+                        hasFixtureOverlap = true;
+                        break; // Stop checking, we only need one violation to trigger the warning
+                    }
+                }
+            }
+        }
+
+        // Normalize to video space
         const videoPixels = pixels.map(p => ({
-            x: (p.x / this.fCanvas.getWidth()) * this.video.videoWidth,
-            y: (p.y / this.fCanvas.getHeight()) * this.video.videoHeight
+            x: (p.x / width) * this.video.videoWidth,
+            y: (p.y / height) * this.video.videoHeight
         }));
 
-        //this.downloadJson(videoPixels, 'path-debug.json');
-
         const formData = new FormData();
-        formData.append('speed', (Number(speed) / 1000).toString());
-        if (isFillEnabled) {
-            formData.append('raster_type', raster_type);
-        }
+        formData.append('speed', speed.toString());
         formData.append('density', density.toString());
         formData.append('pixels', JSON.stringify(videoPixels));
         formData.append('is_fill', isFillEnabled.toString());
 
-        // 2. Generate raster image IF fill is enabled
+        if (raster_type) {
+            formData.append('raster_type', raster_type);
+        }
+
+        // Add raster mask if fill is enabled
         if (isFillEnabled) {
-            const width = this.fCanvas.getWidth();
-            const height = this.fCanvas.getHeight();
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = width;
-            tempCanvas.height = height;
-            const ctx = tempCanvas.getContext('2d', { willReadFrequently: true, alpha: false });
-            if (!ctx) throw new Error("Could not create temp context");
-
-            // No smoothing for sharp mask edges
-            ctx.imageSmoothingEnabled = false;
-            (ctx as any).mozImageSmoothingEnabled = false;
-            (ctx as any).webkitImageSmoothingEnabled = false;
-            (ctx as any).msImageSmoothingEnabled = false;
-
-            // White background
-            ctx.fillStyle = "#ffffff";
-            ctx.fillRect(0, 0, width, height);
-
-            // Render objects using Fabric's internal engine to handle rotation/scaling
-            this.fCanvas.getObjects().forEach(obj => {
-                if ((obj as any)._isMarker) return; // Skip markers
-                if (obj instanceof fabric.Line) return; // Skip Lines for Raster!
-
-                // Save original state
-                const originalFill = obj.fill;
-                const originalStroke = obj.stroke;
-
-                // Set mask style (Black = Raster Area)
-                if (obj instanceof fabric.Line) {
-                    // Lines have no fill, so we must draw the stroke in black
-                    obj.stroke = '#000000';
-                    obj.fill = 'transparent';
-                } else {
-                    obj.fill = '#000000';
-                    obj.stroke = 'transparent';
-                }
-
-                // Render with transforms applied automatically
-                obj.render(ctx);
-
-                // Restore state
-                obj.fill = originalFill;
-                obj.stroke = originalStroke;
-            });
-
-            const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
-            if (!blob) throw new Error("Failed to generate image blob");
+            const blob = await this.generateRasterBlob();
             formData.append('file', blob, 'path.png');
         }
 
-        return this.postFormData('/api/execute', formData);
+        const response = await this.postFormData('/api/preview', formData);
+
+        return {
+            duration: response.duration,
+            path: response.path,
+            warning: hasFixtureOverlap ? "FIXTURE_OVERLAP" : undefined
+        };
     }
 
-    //HELPER FOR IF YOU WANT TO DOWNLOAD THE GENERATED PATH FOR DEBUGGING
-    private downloadJson(data: any, filename: string): void {
-        const jsonStr = JSON.stringify(data, null, 2);
-        const blob = new Blob([jsonStr], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+    /**
+     * Sends execute command only (path should already be prepared)
+     */
+    public async executeCommand(): Promise<any> {
+        const response = await fetch(`${this.apiBaseUrl}/api/execute`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+            throw new Error(errorData.detail || 'Execute command failed');
+        }
+
+        return response.json();
     }
 
     public async updateViewSettings(isTransformedViewOn: boolean, isThermalViewOn: boolean = false): Promise<any> {
@@ -1249,20 +1394,19 @@ export class CanvasManager {
                     prevP = finalPt;
                 }
             } else if (obj instanceof fabric.Line) {
-                // 1. Get the line's start/end points relative to its center
+                //Proper coordinate transformation for lines
                 const line = obj as fabric.Line;
                 const points = line.calcLinePoints(); // {x1, y1, x2, y2}
 
-                // 2. Transform them to world coordinates using the matrix
+                //Transform start and end points using object's transform matrix
                 const start = new fabric.Point(points.x1, points.y1).transform(matrix);
                 const end = new fabric.Point(points.x2, points.y2).transform(matrix);
 
-                // 3. Generate pixels between the REAL start and end
+                //Generate pixels between the transformed points
                 const gen = Utils.generateLinePixels(start.x, start.y, end.x, end.y);
                 for (const p of gen) pixels.push(p);
-
             } else {
-                // Generic Fallback (Rects, Lines) -> Use getCoords() which returns the 4 corners (Transformed)
+                //Generic Fallback (Rects, Lines) -> Use getCoords() which returns the 4 corners (Transformed)
                 const coords = obj.getCoords(); // Returns [TL, TR, BR, BL] absolute coordinates
                 for (let i = 0; i < coords.length; i++) {
                     const start = coords[i];

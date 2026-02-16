@@ -11,6 +11,7 @@ import { ModeManager } from '../features/settings/ModeManager';
 import { ToolHandler } from '../features/drawing/ToolHandler';
 import { ExecutionManager } from '../features/drawing/ExecutionManager';
 import { SettingsManager } from '../features/settings/SettingsManager';
+import { PreviewManager } from '../features/drawing/PreviewManager';
 
 // ---------------------------------------------------------------------------
 // Global type augmentation – MediaMTXWebRTCReader lives on window at runtime
@@ -58,6 +59,10 @@ class AppController {
     private readonly toolHandler: ToolHandler;
     private readonly executionManager: ExecutionManager;
     private readonly settingsManager: SettingsManager;
+    private readonly previewManager: PreviewManager;
+
+    private isHardwareHeightSynced: boolean = false;
+    private isChangingHeight: boolean = false;
 
     // ---------------------------------------------------------------
     // Late-initialised (created once the video track arrives)
@@ -97,11 +102,14 @@ class AppController {
             () => this.toolHandler.updateThermalButtonState(),
         );
 
+        this.previewManager = new PreviewManager(this.ui, this.state, getCM);
+
         this.executionManager = new ExecutionManager(
             this.ui,
             this.state,
             getCM,
             () => this.toolHandler.updateDrawButtonState(),
+            () => this.previewManager,
         );
 
         this.settingsManager = new SettingsManager(
@@ -194,8 +202,18 @@ class AppController {
             () => this.executionManager.onShapeComplete(),
             () => this.toolHandler.updateFixturesButtonState(),
             () => this.toolHandler.updateThermalButtonState(),
-            () => { this.ui.resetHeatAreaBtn.disabled = false; },
+            () => { this.ui.resetHeatAreaBtn.disabled = false; this.ui.heatLegend.classList.remove('hidden'); },
         );
+
+        this.canvasManager.onShapeModified = () => {
+            if (this.ui.previewToggleOn.classList.contains('active')) {
+                // The preview window is currently open, so silently refresh the data!
+                this.previewManager.refreshPreview();
+            } else {
+                // The preview window is closed. Invalidate old data to wait for new request
+                this.executionManager.onShapeComplete(); 
+            }
+        };
 
         this.toolHandler.updateDrawButtonState();
         this.toolHandler.updateFixturesButtonState();
@@ -214,6 +232,34 @@ class AppController {
         this.ui.video.requestVideoFrameCallback(this.updateCanvasLoop.bind(this));
     }
 
+    /**
+     * Central handler for window resize events.
+     * Ensures sub-systems update in the correct order to avoid layout thrashing.
+     */
+    private handleResize(): void {
+        //Layout Manager: Calculate new panel positions/sizes
+        this.settingsManager.handleResize();
+
+        //Get authoritative viewport dimensions
+        const w = this.ui.viewport.offsetWidth;
+        const h = this.ui.viewport.offsetHeight;
+
+        //Preview Manager: Resize overlay and re-project path
+        this.previewManager.updateOverlaySize();
+
+        //Canvas Manager: Scale fabric canvas and objects
+        if (this.canvasManager) {
+            //Check against internal canvas dimensions to prevent unnecessary updates
+            if (this.ui.canvas.width !== w || this.ui.canvas.height !== h) {
+                this.canvasManager.updateCanvasSize(w, h);
+            }
+        } else {
+            //If CM doesn't exist yet, ensure the raw canvas element matches viewport
+            this.ui.canvas.width = w;
+            this.ui.canvas.height = h;
+        }
+    }
+
     // ===================================================================
     // Event binding  (thin wiring – logic lives in sub-systems)
     // ===================================================================
@@ -226,6 +272,30 @@ class AppController {
         this.ui.prepareBtn.addEventListener('click', () => this.ui.preparePopup.classList.add('active'));
         this.ui.prepareCloseBtn.addEventListener('click', () => this.ui.preparePopup.classList.remove('active'));
         this.ui.prepareCancelBtn.addEventListener('click', () => this.ui.preparePopup.classList.remove('active'));
+
+        this.ui.previewToggleOn.addEventListener('click', () => {
+            this.previewManager.togglePreview(true);
+        });
+
+        this.ui.previewToggleOff.addEventListener('click', () => {
+            this.previewManager.togglePreview(false);
+        });
+
+        const refreshPreview = () => {
+            if (this.ui.previewToggleOn.classList.contains('active')) {
+                this.previewManager.refreshPreview();
+            }
+        };
+
+        this.ui.rasterBtnA.addEventListener('click', refreshPreview);
+        this.ui.rasterBtnB.addEventListener('click', refreshPreview);
+
+        let debounceTimer: any;
+        this.ui.rasterDensityInput.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(refreshPreview, 500);
+        });
+
 
         // Clicking the background overlay closes whichever modal is open
         this.ui.overlay.addEventListener('click', () => {
@@ -272,8 +342,12 @@ class AppController {
         });
         this.ui.resetHeatAreaBtn.addEventListener('click', async () => {
             if (!this.canvasManager) return;
-            this.ui.resetHeatAreaBtn.disabled = true;
-            try { await this.canvasManager.resetHeatArea(); }
+            try { 
+                await this.canvasManager.resetHeatArea();
+                this.ui.resetHeatAreaBtn.disabled = true;
+                this.ui.heatLegend.classList.add('hidden')
+
+             }
             catch (e) { console.error(e); this.ui.resetHeatAreaBtn.disabled = false; }
         });
         this.ui.clearMarkersBtn.addEventListener('click', async () => {
@@ -281,6 +355,7 @@ class AppController {
             this.canvasManager.clearMarkers();
             await this.canvasManager.submitHeatMarkers(this.canvasManager.getHeatMarkersInVideoSpace());
         });
+
 
         // --- Fixture brushes & actions ---
         this.ui.roundBrushBtn.addEventListener('click', () => this.toolHandler.handleBrushSelection('round'));
@@ -302,11 +377,21 @@ class AppController {
             this.hardware.changeRobotState(!this.ui.robotBtn.classList.contains('active'));
         });
 
+        this.ui.heightSlider.addEventListener('mousedown', () => this.isChangingHeight = true);
+        this.ui.heightSlider.addEventListener('touchstart', () => this.isChangingHeight = true, { passive: true });
+        
+        this.ui.heightSlider.addEventListener('mouseup', () => this.isChangingHeight = false);
+        this.ui.heightSlider.addEventListener('touchend', () => this.isChangingHeight = false);
+
         // Height Slider 
         this.ui.heightSlider.addEventListener('input', () => {
+            //Block the browser from sending cached defaults on boot
+            if (!this.isHardwareHeightSynced) return;
+
             const heightValue = parseInt(this.ui.heightSlider.value);
-            this.ui.heightDisplay.textContent = String(heightValue);
-            //console.log('Sending height:', heightValue);
+            this.ui.heightDisplay.textContent = String(heightValue + ' CM');
+            
+            //Send to backend
             this.wsHandler.updateState({ height: heightValue });
         });
 
@@ -321,16 +406,30 @@ class AppController {
         this.ui.canvas.addEventListener('mouseup', () => setTimeout(() => this.toolHandler.updateDrawButtonState(), 50));
         this.ui.canvas.addEventListener('touchend', () => setTimeout(() => this.toolHandler.updateDrawButtonState(), 50));
 
-        // --- Execution actions ---
+        // --- Execution actions ---;
         this.ui.executeBtn.addEventListener('click', () => this.executionManager.executePath());
         this.ui.clearBtn.addEventListener('click', () => this.executionManager.clearDrawing());
 
         // --- Fill / Raster settings ---
-        this.ui.fillAccordionToggle.addEventListener('click', () => {
-            this.ui.fillSettingsPanel.classList.toggle('open');
-            this.ui.fillAccordionToggle.classList.toggle('active');
-            this.state.fillEnabled = this.ui.fillAccordionToggle.classList.contains('active');
-        });
+        const updateFillState = (isEnabled: boolean) => {
+            this.state.fillEnabled = isEnabled;
+
+            if (isEnabled) {
+                this.ui.fillOnBtn.classList.add('active');
+                this.ui.fillOffBtn.classList.remove('active');
+                this.ui.fillSettingsPanel.classList.add('open');
+                this.ui.fillSettingsPanel.parentElement?.classList.add('has-open-panel');
+            } else {
+                this.ui.fillOnBtn.classList.remove('active');
+                this.ui.fillOffBtn.classList.add('active');
+                this.ui.fillSettingsPanel.classList.remove('open');
+                this.ui.fillSettingsPanel.parentElement?.classList.remove('has-open-panel');
+            }
+            refreshPreview();
+        };
+
+        this.ui.fillOnBtn.addEventListener('click', () => updateFillState(true));
+        this.ui.fillOffBtn.addEventListener('click', () => updateFillState(false));
 
         // Raster pattern buttons are mutually exclusive
         this.ui.rasterBtnA.addEventListener('click', () => {
@@ -363,14 +462,7 @@ class AppController {
 
         // --- Window resize ---
         window.addEventListener('resize', () => {
-            this.settingsManager.handleResize();
-            if (this.canvasManager) {
-                const w = this.ui.viewport.offsetWidth;
-                const h = this.ui.viewport.offsetHeight;
-                if (this.ui.canvas.width !== w || this.ui.canvas.height !== h) {
-                    this.canvasManager.updateCanvasSize(w, h);
-                }
-            }
+            this.handleResize();
         });
 
         // code for the zoom functionality
@@ -395,11 +487,6 @@ class AppController {
                 zoomWrapper.style.transform = `scale(${zoomLevel})`;
             }
 
-            if (zoomLevel > 1) {
-                this.ui.viewport.style.overflow = 'auto';
-            } else {
-                this.ui.viewport.style.overflow = 'hidden';
-            }
 
 
         }, { passive: false });
@@ -438,12 +525,6 @@ class AppController {
 
                 zoomWrapper.style.transform = `scale(${zoomLevel})`;
 
-                // show scrollbars when zoomed in, hide at default
-                if (zoomLevel > 1) {
-                    this.ui.viewport.style.overflow = 'auto';
-                } else {
-                    this.ui.viewport.style.overflow = 'hidden';
-                }
             }
         }, { passive: false });
 
@@ -471,6 +552,26 @@ class AppController {
                 this.ui.robotMarker.style.top = `${(state.laserY / vh) * ch}px`;
                 this.ui.robotMarker.style.display = 'block';
             }
+        }
+
+        if (state.height !== undefined && state.height !== null) {
+            //If this is our first time hearing from the robot since refreshing
+            this.isHardwareHeightSynced = true;
+
+            if (!this.isChangingHeight) {
+                //Update the physical slider position
+                this.ui.heightSlider.value = state.height.toString();
+                
+                //Update the text label next to the slider
+                if (this.ui.heightDisplay) {
+                    this.ui.heightDisplay.textContent = `${state.height + ' CM'}`;
+                }
+                
+            }
+        }
+
+        if (state.path_preview) {
+            this.previewManager.handlePathFromWebSocket(state.path_preview, state.preview_duration);
         }
 
         // --- Thermal / heat data ---

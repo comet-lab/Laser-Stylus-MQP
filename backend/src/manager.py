@@ -1,3 +1,5 @@
+#backend/src/manager.py
+
 import json
 from robot import RobotSchema
 from fastapi import WebSocket, WebSocketDisconnect
