@@ -299,9 +299,16 @@ class Handler:
         current_pose, current_vel = self.robot_controller.get_current_state()
         # Stop robot, no drift
         # print(np.linalg.norm(current_vel[:3]))
-        if np.linalg.norm(current_vel[:3]) > 4e-5:
+        if np.linalg.norm(current_vel[:3]) > 2e-5:
             # print("Setting speed 0")
-            self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
+            # self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
+            target_world_point = self.robot_controller.current_robot_to_world_position()
+            target_world_point[-1] = self.working_height
+                
+            target_pose = np.eye(4)
+            target_pose[:3, -1] = target_world_point
+            target_vel = self.robot_controller.live_control(target_pose, 0.05, KP = 5.0, KD=0.5)
+            self.robot_controller.set_velocity(target_vel, np.zeros(3))
         else:
             # print("holding")
             self.robot_controller.go_to_pose(current_pose, blocking=False)
