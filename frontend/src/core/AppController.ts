@@ -487,11 +487,7 @@ class AppController {
                 zoomWrapper.style.transform = `scale(${zoomLevel})`;
             }
 
-            if (zoomLevel > 1) {
-                this.ui.viewport.style.overflow = 'auto';
-            } else {
-                this.ui.viewport.style.overflow = 'hidden';
-            }
+    
 
 
         }, { passive: false });
@@ -530,12 +526,7 @@ class AppController {
 
                 zoomWrapper.style.transform = `scale(${zoomLevel})`;
 
-                // show scrollbars when zoomed in, hide at default
-                if (zoomLevel > 1) {
-                    this.ui.viewport.style.overflow = 'auto';
-                } else {
-                    this.ui.viewport.style.overflow = 'hidden';
-                }
+            
             }
         }, { passive: false });
 
