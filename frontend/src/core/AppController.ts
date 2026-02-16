@@ -61,6 +61,9 @@ class AppController {
     private readonly settingsManager: SettingsManager;
     private readonly previewManager: PreviewManager;
 
+    private isHardwareHeightSynced: boolean = false;
+    private isChangingHeight: boolean = false;
+
     // ---------------------------------------------------------------
     // Late-initialised (created once the video track arrives)
     // ---------------------------------------------------------------
@@ -154,19 +157,6 @@ class AppController {
 
         // Restore persisted layout positions
         this.settingsManager.restoreLayoutPositions();
-
-        //Save robot height to localStorage to keep it from shifting on page reload
-        const savedHeight = localStorage.getItem('robot_height');
-        if (savedHeight) {
-            const heightVal = parseInt(savedHeight);
-            if (!isNaN(heightVal)) {
-                //Update the Slider UI
-                this.ui.heightSlider.value = savedHeight;
-                //Update the Text Display
-                this.ui.heightDisplay.textContent = savedHeight;
-                //TODO: May need to send a wshandler.updateState to sync
-            }
-        }
     }
 
     private setMessage(str: string): void {
@@ -387,13 +377,19 @@ class AppController {
             this.hardware.changeRobotState(!this.ui.robotBtn.classList.contains('active'));
         });
 
+        this.ui.heightSlider.addEventListener('mousedown', () => this.isChangingHeight = true);
+        this.ui.heightSlider.addEventListener('touchstart', () => this.isChangingHeight = true, { passive: true });
+        
+        this.ui.heightSlider.addEventListener('mouseup', () => this.isChangingHeight = false);
+        this.ui.heightSlider.addEventListener('touchend', () => this.isChangingHeight = false);
+
         // Height Slider 
         this.ui.heightSlider.addEventListener('input', () => {
+            //Block the browser from sending cached defaults on boot
+            if (!this.isHardwareHeightSynced) return;
+
             const heightValue = parseInt(this.ui.heightSlider.value);
-            this.ui.heightDisplay.textContent = String(heightValue);
-            
-            //Save to local storage
-            localStorage.setItem('robot_height', String(heightValue));
+            this.ui.heightDisplay.textContent = String(heightValue + ' CM');
             
             //Send to backend
             this.wsHandler.updateState({ height: heightValue });
@@ -566,6 +562,22 @@ class AppController {
                 this.ui.robotMarker.style.left = `${(state.laserX / vw) * cw}px`;
                 this.ui.robotMarker.style.top = `${(state.laserY / vh) * ch}px`;
                 this.ui.robotMarker.style.display = 'block';
+            }
+        }
+
+        if (state.height !== undefined && state.height !== null) {
+            //If this is our first time hearing from the robot since refreshing
+            this.isHardwareHeightSynced = true;
+
+            if (!this.isChangingHeight) {
+                //Update the physical slider position
+                this.ui.heightSlider.value = state.height.toString();
+                
+                //Update the text label next to the slider
+                if (this.ui.heightDisplay) {
+                    this.ui.heightDisplay.textContent = `${state.height + ' CM'}`;
+                }
+                
             }
         }
 
