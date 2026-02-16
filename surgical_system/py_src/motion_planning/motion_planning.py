@@ -392,6 +392,42 @@ class Motion_Planner():
         out = np.vstack(cleaned)
         return out
     
+    @staticmethod
+    def rdp(points: np.ndarray, epsilon: float = 2.0) -> np.ndarray:
+        """
+        Ramer-Douglas-Peucker polyline simplification.
+        points: (N,2) float
+        epsilon: max perpendicular deviation in same units as points (pixels)
+        returns: (M,2) float
+        """
+        pts = np.asarray(points, dtype=float)
+        if pts.shape[0] <= 2:
+            return pts
+
+        a = pts[0]
+        b = pts[-1]
+        ab = b - a
+        ab_norm2 = float(np.dot(ab, ab))
+
+        if ab_norm2 == 0.0:
+            d = np.linalg.norm(pts - a, axis=1)
+        else:
+            # perpendicular distance from each point to line a->b
+            ap = pts - a
+            t = (ap @ ab) / ab_norm2
+            proj = a + np.outer(t, ab)
+            d = np.linalg.norm(pts - proj, axis=1)
+
+        i = int(np.argmax(d))
+        dmax = float(d[i])
+
+        if dmax > epsilon:
+            left = Motion_Planner.rdp(pts[: i + 1], epsilon)
+            right = Motion_Planner.rdp(pts[i:], epsilon)
+            return np.vstack([left[:-1], right])
+        else:
+            return np.vstack([a, b])
+    
 def plot_polygon(poly, ax=None, color='blue', alpha=0.4, show_vertices=False):
     if ax is None:
         fig, ax = plt.subplots()
