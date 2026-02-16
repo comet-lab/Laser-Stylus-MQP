@@ -48,6 +48,7 @@ class RobotSchema:
     pathPrepared: Optional[bool] = None
     executeCommand: Optional[bool] = None
     path_preview: Optional[Dict[str, List[float]]] = None
+    preview_duration: Optional[float] = None
 
     def flush(self) -> str:
         """
@@ -63,6 +64,7 @@ class RobotSchema:
         self.heat_mask = None
         self.heat_markers = None
         self.path_preview = None # Reset after sending
+        self.preview_duration = None
         self.executeCommand = None
         
         # Clear motion commands, persist laserX and laserY but not x and y

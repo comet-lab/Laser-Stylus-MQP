@@ -1,7 +1,10 @@
+//frontend/src/features/drawing/PreviewManager.ts
+
 import { UIRegistry } from '../../core/UIRegistry';
 import { AppState } from '../../core/AppState';
 import { CanvasManager } from '../../ui/CanvasManager';
 import { Position } from '../../ui/types';
+import { ToastManager } from '../../ui/ToastManager';
 
 /**
  * PreviewManager - CAD-style toolpath overlay with animated follower
@@ -111,19 +114,32 @@ export class PreviewManager {
     try {
       const response = await cm.previewPath(speed, rasterType, density, isFill);
 
+      // Trigger the soft warning
+      if (response.warning === "FIXTURE_OVERLAP") {
+        ToastManager.show("Warning: Your path crosses into a restricted fixture zone. Please double-check before executing.");
+      }
+
       if (response.path && response.path.length > 0) {
         this.handlePathData(response.path, response.duration);
       } else {
         this.ui.previewDuration.textContent = 'Waiting...';
       }
-    } catch (e) {
-      console.error('Preview refresh error:', e);
-      this.ui.previewDuration.textContent = 'Error';
-      this.clearOverlay();
+    } catch (e: any) {
+      // Handle the hard stop gracefully
+      if (e.message === "OUT_OF_BOUNDS") {
+        ToastManager.show("Error: Part of your shape is off the screen! Please move it fully inside the camera view.");
+        this.ui.previewDuration.textContent = 'Out of Bounds';
+        this.clearOverlay();
+        this.setExecuteButtonState(false); // Force the Execute button to stay disabled
+      } else {
+        console.error('Preview refresh error:', e);
+        this.ui.previewDuration.textContent = 'Error';
+        this.clearOverlay();
+      }
     }
   }
 
-  public handlePathFromWebSocket(previewData: { x: number[], y: number[] }): void {
+  public handlePathFromWebSocket(previewData: { x: number[], y: number[] }, serverDuration?: number): void {
     if (!this.isPreviewActive) return;
 
     const path: Position[] = [];
@@ -140,7 +156,7 @@ export class PreviewManager {
       const dy = path[i].y - path[i - 1].y;
       totalDistance += Math.sqrt(dx * dx + dy * dy);
     }
-    const duration = totalDistance / (speed * 10 || 1);
+    const duration = serverDuration || 10.0;;
 
     this.handlePathData(path, duration);
   }
@@ -302,18 +318,13 @@ export class PreviewManager {
       Math.floor(progress * totalPoints),
       totalPoints - 1
     );
+
+    // Grab the current point (already in correct local viewport coordinates)
     const point = this.pathData[index];
 
-    // Convert canvas coordinates to DOM viewport coordinates
-    const canvasRect = this.ui.previewOverlay.getBoundingClientRect();
-    const scaleX = canvasRect.width / this.ui.previewOverlay.width;
-    const scaleY = canvasRect.height / this.ui.previewOverlay.height;
-
-    const domX = point.x * scaleX;
-    const domY = point.y * scaleY;
-
-    this.ui.previewMarker.style.left = `${domX}px`;
-    this.ui.previewMarker.style.top = `${domY}px`;
+    // Apply directly. The browser's #app-scaler will handle the zoom automatically!
+    this.ui.previewMarker.style.left = `${point.x}px`;
+    this.ui.previewMarker.style.top = `${point.y}px`;
 
     this.animationFrameId = requestAnimationFrame(() => this.animationLoop());
   }
