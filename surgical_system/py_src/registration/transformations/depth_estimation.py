@@ -95,7 +95,8 @@ class DepthEstimation():
 
         # Sort heights
         zs = np.array(sorted(dense_stack.keys()), dtype=float)
-        Hs = np.array([dense_stack[z] for z in zs])
+        # Hs = np.array([dense_stack[z] for z in zs])
+        Hs = np.array([np.linalg.inv(dense_stack[z]) for z in zs])
 
         # ----- Project commanded point through all homographies -----
 
@@ -114,7 +115,7 @@ class DepthEstimation():
         preds[valid, 1] = v_num[valid] / denom[valid]
 
         # ----- Compute residuals -----
-        print("Predictions: ", preds)
+        # print("Predictions: ", preds)
         du = preds[:, 0] - u_obs
         dv = preds[:, 1] - v_obs
 
@@ -128,8 +129,8 @@ class DepthEstimation():
         # ----- Select best depth -----
 
         best_idx = int(np.argmin(errs))
-        print("predicted heights :", zs)
-        print("errors: :", errs)
+        # print("predicted heights :", zs)
+        # print("errors: :", errs)
         z_best = float(zs[best_idx])
         err_best = float(errs[best_idx])
         uv_best = (float(preds[best_idx, 0]), float(preds[best_idx, 1]))
@@ -222,7 +223,7 @@ class DepthEstimation():
 
     @staticmethod
     def create_dense_stack(homography_stack: dict,
-                        dz: float = 0.0005, # m
+                        dz: float = 0.0001, # m
                         extrapolate: bool = False):
         """
         Create a dense homography stack via linear interpolation.
@@ -244,6 +245,7 @@ class DepthEstimation():
         
         # --- Step 1: Sort heights ---
         heights = np.array(sorted(homography_stack.keys()), dtype=float)
+        
         Hs = [DepthEstimation.normalize_homography(homography_stack[z]) for z in heights]
         Hs = np.stack(Hs, axis=0)
         
@@ -308,7 +310,8 @@ def main():
         (0, 0),
         refine=True) 
     
-    print(z_best, err_best, uv_best, conf)
+    print("Actual Height [mm]: ", 6.16 - 2.23)
+    print("Predicted Z [mm]: ", z_best * 1000, "| Error: ", err_best, "| Best Prediction: ", uv_best, "| Confidence: ", conf)
     
 if __name__ == "__main__":
     main()
