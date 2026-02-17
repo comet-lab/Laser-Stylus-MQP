@@ -162,13 +162,24 @@ export class PreviewManager {
   public handlePathFromWebSocket(previewData: { x: number[], y: number[] }, serverDuration?: number): void {
     if (!this.isPreviewActive) return;
 
+    const newLength = Math.min(previewData.x.length, previewData.y.length);
+
+    //TODO: Get rid of this check, shouldn't be necessary if the data is being sent properly from backend
+    //If we don't get a duration, and the path is the same, drop this message
+    if (serverDuration === undefined && this.sourcePath.length === newLength) {
+        console.log("Ignored duplicate path from robot.");
+        return; 
+    }
+
     const path: Position[] = [];
     const len = Math.min(previewData.x.length, previewData.y.length);
     for (let i = 0; i < len; i++) {
       path.push({ x: previewData.x[i], y: previewData.y[i] });
     }
 
-    this.handlePathData(path, serverDuration || 10, true);
+    const finalDuration = serverDuration || (this.durationSeconds > 0 ? this.durationSeconds: 10);
+
+    this.handlePathData(path, finalDuration, true);
   }
 
   private handlePathData(videoPath: Position[], duration: number, enableExecute: boolean): void {

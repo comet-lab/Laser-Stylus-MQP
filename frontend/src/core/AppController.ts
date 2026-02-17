@@ -728,10 +728,11 @@ class AppController {
             }
         }
 
+        //TODO: Ignore this check, should be no need if data is sent from backend properly
         if (state.path_preview && !state.preview_duration) {
-            console.log("didn't get a duration, won't preview");
+            console.log("Did not receive a duration from backend. Will use default duration since none is provided with new path");
         }
-        if (state.path_preview && state.preview_duration) {
+        if (state.path_preview) {
             this.previewManager.handlePathFromWebSocket(state.path_preview, state.preview_duration);
         }
 
