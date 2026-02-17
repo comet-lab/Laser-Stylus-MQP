@@ -5,6 +5,7 @@ from scipy.spatial.transform import Rotation
 import matplotlib.pyplot as plt
 
 
+
 if __name__=='__main__':
     import sys, pathlib
     HERE = pathlib.Path(__file__).resolve().parent
@@ -15,6 +16,7 @@ if __name__=='__main__':
             break
     from registration.transformations.system_calibration import System_Calibration
     from registration.transformations.roi_selector import ROISelector
+    from registration.transformations.depth_estimation import DepthEstimation
 else:
     from registration.transformations.system_calibration import System_Calibration
     
@@ -337,7 +339,7 @@ class Camera_Registration(System_Calibration):
         
         for z in heights:
             print("Height [mm]: ", z*1000)
-            H = self.rgb_raster_scan(gridShape = np.array([9, 8]), squareSize = 0.005)
+            H = self.rgb_raster_scan(gridShape = np.array([15, 15]), squareSize = 0.0025)
             homography_stack[z] = H
             
         try:
@@ -359,7 +361,7 @@ class Camera_Registration(System_Calibration):
         
         return homography_stack
     
-    def rgb_raster_scan(self, gridShape = np.array([2, 6]), squareSize = 0.005):
+    def rgb_raster_scan(self, gridShape = np.array([2, 6]), squareSize = 0.0026):
         input(f"Press Enter to continue checkboard creation.")
         xPoints = (np.arange(gridShape[1]) - (gridShape[1] - 1) / 2) * squareSize
         yPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
@@ -374,7 +376,7 @@ class Camera_Registration(System_Calibration):
         traj = self.robot_controller.create_custom_trajectory(robot_path, 0.05)
         self.robot_controller.run_trajectory(traj, blocking=False)
         
-        time.sleep(3)
+        time.sleep(4)
         while(self.robot_controller.is_trajectory_running()):
             world_pos = self.robot_controller.current_robot_to_world_position()[:2]
             robot_positions = np.vstack((robot_positions, world_pos))
@@ -639,6 +641,13 @@ class Camera_Registration(System_Calibration):
         
         working_height = 0
         
+        path = "surgical_system/py_src/registration/calibration_info/"
+        stack_path = path + "homography_stack.npz"
+        homography_stack = DepthEstimation.load_homography_stack_npz(stack_path)
+        dense_stack = DepthEstimation.create_dense_stack(homography_stack)
+        
+        
+        
         try:
             while True:
                 
@@ -660,22 +669,7 @@ class Camera_Registration(System_Calibration):
                     disp = self.get_transformed_view(disp)
                     disp = cv2.resize(disp, (1280, 720), interpolation=cv2.INTER_NEAREST)
                     
-                if tracking:
-                    curr_position = self.robot_controller.current_robot_to_world_position()
-                    current_pixel_location = self.get_world_m_to_UI(cam_type, curr_position, warped)[0]
-                    current_pixel_location = np.asarray(current_pixel_location, dtype=np.int16)
-                    beam_waist = self.laser_controller.get_beam_width(curr_position[-1]) 
-
-                    laser_points = self.circle_perimeter_pixels(curr_position[:2], beam_waist/2.0)
-                    laser_pixels = self.get_world_m_to_UI(cam_type, laser_points, warped).astype(np.int16)
-
-                    xs = laser_pixels[:, 0]
-                    ys = laser_pixels[:, 1]
-                    h, w = disp.shape[:2]
-                    valid = (xs >= 0) & (xs < w) & (ys >= 0) & (ys < h)
-                    disp[ys[valid], xs[valid]] = (0, 255, 0)
-                    
-                    cv2.circle(disp, current_pixel_location, 5, (255, 0, 0), 2)
+                
 
                 if last_point is not None:
                     cv2.circle(disp, last_point, 5, (0, 255, 0), 2)
@@ -696,6 +690,35 @@ class Camera_Registration(System_Calibration):
                         self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
                     else:
                         robot_controller.go_to_pose(current_pose, blocking=False)
+                        
+                if tracking:
+                    curr_position = self.robot_controller.current_robot_to_world_position()
+                    
+                    u_obs, v_obs = map(float, self.get_hot_pixel(frame, method="Centroid")[:2])
+                    X_cmd, Y_cmd = map(float, curr_position[:2])
+                    z_best, err_best, uv_best, conf = DepthEstimation.estimate_depth_from_dense_stack(
+                        dense_stack,
+                        (u_obs, v_obs),
+                        (X_cmd, Y_cmd),
+                        refine=True) 
+                    
+                    # print("Actual Height [mm]: ", 6.16 - 2.23)
+                    print("Predicted Z [mm]: ", z_best * 1000, "| Error: ", err_best, "| Best Prediction: ", uv_best, "| Confidence: ", conf)
+        
+                    current_pixel_location = self.get_world_m_to_UI(cam_type, curr_position, warped)[0]
+                    current_pixel_location = np.asarray(current_pixel_location, dtype=np.int16)
+                    beam_waist = self.laser_controller.get_beam_width(curr_position[-1]) 
+
+                    laser_points = self.circle_perimeter_pixels(curr_position[:2], beam_waist/2.0)
+                    laser_pixels = self.get_world_m_to_UI(cam_type, laser_points, warped).astype(np.int16)
+
+                    xs = laser_pixels[:, 0]
+                    ys = laser_pixels[:, 1]
+                    h, w = disp.shape[:2]
+                    valid = (xs >= 0) & (xs < w) & (ys >= 0) & (ys < h)
+                    disp[ys[valid], xs[valid]] = (0, 255, 0)
+                    
+                    cv2.circle(disp, current_pixel_location, 5, (255, 0, 0), 2)
 
                 # Press 'q' or ESC to quit
                 key = cv2.waitKey(1) & 0xFF
@@ -1022,16 +1045,18 @@ if __name__ == '__main__':
     # camera_reg.run()
     
     # base 2.23 
-    heights = np.array([2.23, 2.73, 5.15, 5.65, 6.16, 7.69, 8.22, 8.75]) # mm 
+    heights = np.array([2.08, 2.65, 3.15, 3.65, 4.11, 4.60, 5.15, 5.62, 6.15, 6.64,
+                        7.18, 7.65, 8.18, 8.67, 9.30, 9.79, 10.14]) # mm 
+    
     heights = heights / 1000.0 # mm
     # stack = camera_reg.rgb_multi_layer_scan(heights)
     # stack = 
     # print(stack)
-    rgbd_cam.set_default_setting()
+    # rgbd_cam.set_default_setting()
     # robot_controller.load_edit_pose()
     # camera_reg.view_rgbd_therm_registration()
     # camera_reg.transformed_view(cam_type="thermal")
-    # camera_reg.live_control_view('color', warped=True, tracking=True)
+    camera_reg.live_control_view('color', warped=True, tracking=True)
     # camera_reg.view_rgbd_therm_heat_overlay()
     # camera_reg.draw_traj()
     therm_cam.deinitialize_cam()
