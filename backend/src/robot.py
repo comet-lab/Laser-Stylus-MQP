@@ -9,7 +9,7 @@ class RobotSchema:
     """
     Data Transfer Object representing the state of the Robot and UI.
     """
-    # Coordinates
+    #Coordinates (Real-time motion commands)
     x: Optional[float] = None
     y: Optional[float] = None
     z: Optional[float] = None
@@ -17,37 +17,37 @@ class RobotSchema:
     ry: Optional[float] = None
     rz: Optional[float] = None
     
-    # Laser & Vision State
+    #Laser and Vision State
     laserX: Optional[float] = None
     laserY: Optional[float] = None
     averageHeat: Optional[float] = None
+    maxHeat: Optional[float] = None
     beamWaist: Optional[float] = None
     
-    # Flags
+    #Flags & Views
     isLaserOn: Optional[bool] = None
     isRobotOn: Optional[bool] = None
     isLaserFiring: Optional[bool] = None
     isTransformedViewOn: Optional[bool] = None
     isThermalViewOn: Optional[bool] = None
+    request_sync: Optional[bool] = None
     
-    # Pathing & Masks
+    # 4. Settings (Parameters sent to Robot)
+    speed: Optional[float] = None
+    density: Optional[float] = None
+    height: Optional[float] = None
+    current_height: Optional[float] = None
+    raster_type: Optional[str] = None
     pathEvent: Optional[str] = None
+    
+    #Complex Data and Masks (Transient)
+    path: Optional[List[Dict[str, float]]] = None
+    heat_markers: Optional[List[Dict[str, float]]] = None
     raster_mask: Optional[str] = None
     fixtures_mask: Optional[str] = None
     heat_mask: Optional[str] = None
-    raster_type: Optional[str] = None
-    speed: Optional[float] = None
-    height: Optional[float] = None
-    current_height: Optional[float] = None
-    density: Optional[float] = None
     
-    request_sync: Optional[bool] = None
-    
-    # Complex Data
-    path: Optional[List[Dict[str, float]]] = None
-    heat_markers: Optional[List[Dict[str, float]]] = None
-    
-    #Path preparation
+    #Execution and Preview
     pathPrepared: Optional[bool] = None
     executeCommand: Optional[bool] = None
     path_preview: Optional[Dict[str, List[float]]] = None
@@ -60,18 +60,20 @@ class RobotSchema:
         """
         payload = self.to_str()
         
-        #Reset transient fields
+        # Reset transient fields
         self.raster_mask = None
         self.fixtures_mask = None
-        self.path = None
         self.heat_mask = None
+        self.path = None
         self.heat_markers = None
-        self.path_preview = None # Reset after sending
+        
+        # Reset Execution/Preview Flags
+        self.path_preview = None 
         self.preview_duration = None
         self.executeCommand = None
         self.request_sync = None
         
-        # Clear motion commands, persist laserX and laserY but not x and y
+        # Clear motion commands (persist laserX and laserY)
         self.x = None
         self.y = None
         self.z = None

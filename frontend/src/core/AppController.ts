@@ -502,20 +502,25 @@ class AppController {
 
         // Speed Slider event (Update text and send to backend)
         this.ui.speedSlider.addEventListener('input', () => {
+            this.ui.speedDisplay.textContent = this.ui.speedSlider.value;
+        });
+        this.ui.speedSlider.addEventListener('change', () => {
             const val = this.ui.speedSlider.value;
-            this.ui.speedDisplay.textContent = val;
+            console.log(`Sending final speed command to robot: ${val}`);
             this.wsHandler.updateState({ speed: parseInt(val) });
         });
 
         // Height Slider 
         this.ui.heightSlider.addEventListener('input', () => {
-            //Block the browser from sending cached defaults on boot
+            // Only update the text on the screen
+            this.ui.heightDisplay.textContent = this.ui.heightSlider.value;
+        });
+        this.ui.heightSlider.addEventListener('change', () => {
             if (!this.isHardwareHeightSynced) return;
-
             const heightValue = this.ui.heightSlider.value;
-            this.ui.heightDisplay.textContent = heightValue;
-
-            //Send to backend
+            console.log(`Sending final height command to robot: ${heightValue}`);
+            
+            // Send exactly one command to the backend
             this.wsHandler.updateState({ height: parseInt(heightValue) });
         });
 
@@ -723,7 +728,10 @@ class AppController {
             }
         }
 
-        if (state.path_preview) {
+        if (state.path_preview && !state.preview_duration) {
+            console.log("didn't get a duration, won't preview");
+        }
+        if (state.path_preview && state.preview_duration) {
             this.previewManager.handlePathFromWebSocket(state.path_preview, state.preview_duration);
         }
 
