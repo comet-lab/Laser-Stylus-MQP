@@ -245,6 +245,9 @@ export class ToolHandler {
         this.ui.clearBtn.disabled = !hasShape;
         this.ui.prepareBtn.disabled = !hasShape;
         this.ui.executeBtn.disabled = !hasShape;
+        
+        //Only enable restore if there's no shape on screen, but a backup exists
+        this.ui.restorePathBtn.disabled = hasShape || !this.state.hasBackupShape;
 
         if (hasShape) {
             // Lock every tool except the one that produced the current shape

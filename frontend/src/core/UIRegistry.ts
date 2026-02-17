@@ -31,6 +31,7 @@ export interface UIRegistry {
     prepareCancelBtn: HTMLButtonElement;
     executeBtn: HTMLButtonElement;
     clearBtn: HTMLButtonElement;
+    restorePathBtn: HTMLButtonElement;
     previewOverlay: HTMLCanvasElement;
     previewToggleOn: HTMLButtonElement;
     previewToggleOff: HTMLButtonElement;
@@ -147,6 +148,7 @@ export function createUIRegistry(): UIRegistry {
         previewDuration: document.getElementById('previewDuration') as HTMLElement,
         previewMarker: document.getElementById('preview-marker') as HTMLElement,
         clearBtn: document.getElementById('clearBtn') as HTMLButtonElement,
+        restorePathBtn: document.getElementById('restorePathBtn') as HTMLButtonElement,
 
         // Hardware Controls
         robotBtn: document.getElementById('robot-toggle-container') as HTMLButtonElement,

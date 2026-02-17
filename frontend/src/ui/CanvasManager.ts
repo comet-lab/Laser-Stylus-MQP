@@ -46,6 +46,9 @@ export class CanvasManager {
     private prevWidth: number;
     private prevHeight: number;
 
+    //Backup to repeat the path
+    private backupDrawingState: any[] = [];
+
     // --- CONFIG: Visual Defaults ---
     private readonly SHAPE_DEFAULTS = {
         fill: 'transparent',
@@ -938,12 +941,12 @@ export class CanvasManager {
         this.fCanvas.setDimensions({ width, height });
 
         this.fCanvas.getObjects().forEach(obj => {
-            // 1. Scale Position
+            //Scale Position
             const newLeft = obj.left * scaleX;
             const newTop = obj.top * scaleY;
 
-            // 2. Scale Dimensions (FIX)
-            // We multiply the existing scale factor by the new resize ratio
+            //Scale Dimensions
+            //We multiply the existing scale factor by the new resize ratio
             const newScaleX = obj.scaleX * scaleX;
             const newScaleY = obj.scaleY * scaleY;
 
@@ -954,7 +957,7 @@ export class CanvasManager {
                 scaleY: newScaleY
             });
 
-            // Marker Handling (Keep existing custom logic)
+            //Marker Handling
             if ((obj as any)._isMarker) {
                 (obj as any)._tipX = (obj as any)._tipX * scaleX;
                 (obj as any)._tipY = (obj as any)._tipY * scaleY;
@@ -992,6 +995,36 @@ export class CanvasManager {
         this.fCanvas.renderAll();
         if (this.hasFixtures() && this.fixturesCanvas && !this.fixturesCanvas.classList.contains('active')) {
             this.fixturesCanvas.classList.add('active');
+        }
+    }
+
+    public backupDrawing(): void {
+        // Grab all objects that aren't thermal markers
+        const objects = this.fCanvas.getObjects().filter(o => !(o as any)._isMarker);
+        
+        // Serialize them to JSON objects (ignoring custom marker properties)
+        this.backupDrawingState = objects.map(o => o.toObject(['_isMarker']));
+    }
+
+    public async restoreDrawing(): Promise<void> {
+        if (this.backupDrawingState.length === 0) return;
+        
+        this.clearDrawing();
+        
+        try {
+            const enlivened = await fabric.util.enlivenObjects(this.backupDrawingState);
+            
+            enlivened.forEach((obj: any) => {
+                obj.set({ selectable: true, evented: true });
+                this.fCanvas.add(obj);
+            });
+            
+            this.fCanvas.requestRenderAll();
+            this.hasPlacedShape = true;
+            this.onShapeComplete();
+            
+        } catch (error) {
+            console.error("Failed to restore drawing backup:", error);
         }
     }
 

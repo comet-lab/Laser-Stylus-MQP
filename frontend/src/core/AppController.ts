@@ -12,6 +12,7 @@ import { ToolHandler } from '../features/drawing/ToolHandler';
 import { ExecutionManager } from '../features/drawing/ExecutionManager';
 import { SettingsManager } from '../features/settings/SettingsManager';
 import { PreviewManager } from '../features/drawing/PreviewManager';
+import { ShapeType } from '../ui/types';
 
 // ---------------------------------------------------------------------------
 // Global type augmentation – MediaMTXWebRTCReader lives on window at runtime
@@ -530,8 +531,34 @@ class AppController {
         this.ui.canvas.addEventListener('touchend', () => setTimeout(() => this.toolHandler.updateDrawButtonState(), 50));
 
         // --- Execution actions ---;
-        this.ui.executeBtn.addEventListener('click', () => this.executionManager.executePath());
+        this.ui.executeBtn.addEventListener('click', () => {
+            // Take a snapshot of the geometry before executing
+            if (this.canvasManager && this.state.drawnShapeType) {
+                this.canvasManager.backupDrawing();
+                this.state.hasBackupShape = true;
+                this.state.backupShapeType = this.state.drawnShapeType;
+            }
+            this.executionManager.executePath();
+            // Update button states so the UI knows a backup exists now
+            this.toolHandler.updateDrawButtonState();
+        });
         this.ui.clearBtn.addEventListener('click', () => this.executionManager.clearDrawing());
+
+        this.ui.restorePathBtn.addEventListener('click', () => {
+            if (this.canvasManager && this.state.hasBackupShape) {
+                // Restore the state tracker
+                this.state.drawnShapeType = this.state.backupShapeType;
+                
+                // Ask CanvasManager to rebuild the geometry
+                this.canvasManager.restoreDrawing();
+                
+                // Lock the tool buttons and disable the restore button
+                this.toolHandler.updateDrawButtonState();
+                
+                // Highlight the tool button that matches the restored shape
+                this.modeManager.highlightShapeBtn(this.state.drawnShapeType as ShapeType);
+            }
+        });
 
         // --- Fill / Raster settings ---
         const updateFillState = (isEnabled: boolean) => {
