@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation
 import matplotlib.pyplot as plt
-from typing import Dict, Tuple, Optional
+
 
 if __name__=='__main__':
     import sys, pathlib
@@ -13,10 +13,10 @@ if __name__=='__main__':
         if (candidate / "robot").is_dir() and (candidate / "cameras").is_dir() and (candidate / "laser_control").is_dir():
             sys.path.insert(0, str(candidate))
             break
-    from system_calibration import System_Calibration
-    from roi_selector import ROISelector
+    from registration.transformations.system_calibration import System_Calibration
+    from registration.transformations.roi_selector import ROISelector
 else:
-    from registration.system_calibration import System_Calibration
+    from registration.transformations.system_calibration import System_Calibration
     
 from robot.robot_controller import Robot_Controller
 from cameras.thermal_cam import ThermalCam
@@ -332,344 +332,35 @@ class Camera_Registration(System_Calibration):
         return combinedImg, therm_img_points, rgb_img_points, obj_Points
     
     
-    @staticmethod
-    def project_xy(H: np.ndarray,
-                     pts: np.ndarray,
-                     eps: float = 1e-12) -> np.ndarray:
-        """
-        Vectorized homography projection.
-
-        Parameters
-        ----------
-        H   : (3,3) homography matrix
-        pts : (N,2) array of (X,Y) plane coordinates
-
-        Returns
-        -------
-        uv  : (N,2) projected pixel coordinates
-            invalid points (small denom) -> [inf, inf]
-        """
-
-        pts = np.asarray(pts, dtype=float)
-
-        # Add homogeneous coordinate
-        ones = np.ones((pts.shape[0], 1))
-        pts_h = np.hstack((pts, ones))  # (N,3)
-
-        # Apply homography
-        p = pts_h @ H.T  # (N,3)
-
-        denom = p[:, 2:3]  # (N,1)
-
-        # Avoid divide-by-zero
-        valid = np.abs(denom) >= eps
-
-        uv = np.full((pts.shape[0], 2), np.inf)
-
-        uv[valid[:, 0]] = p[valid[:, 0], :2] / denom[valid]
-
-        return uv
-
-    @staticmethod
-    def estimate_depth_from_dense_stack(
-        dense_stack: Dict[float, np.ndarray],
-        obs_uv: Tuple[float, float],
-        cmd_XY: Tuple[float, float],
-        *,
-        metric: str = "l2",
-        refine: bool = True,
-        min_valid_heights: int = 3,
-    ) -> Tuple[float, float, Tuple[float, float], float]:
-        """
-        Estimate depth (height z) using a dense homography stack.
-
-        Parameters
-        ----------
-        dense_stack : dict
-            {z: H_z} where H_z is 3x3 (ideally normalized) homography at height z.
-            z units(e.g., mm).
-        obs_uv : (u_obs, v_obs)
-            Observed pixel location of the laser spot (or feature) in the RGB image.
-        cmd_XY : (X_cmd, Y_cmd)
-            Commanded / known plane coordinates (object coordinates in the calibration plane frame).
-        metric : "l2" or "l1"
-            Error metric in pixel space.
-        refine : bool
-            If True, do a local quadratic refinement around the best discrete z (sub-grid estimate).
-        min_valid_heights : int
-            Require at least this many heights in the stack.
-
-        Returns
-        -------
-        z_hat : float
-            Estimated depth/height.
-        err_hat : float
-            Residual error at z_hat (pixels, metric-dependent).
-        uv_pred : (u_pred, v_pred)
-            Predicted pixel at z_hat.
-        conf : float
-            Simple confidence proxy in (0,1], based on error separation between best and 2nd best.
-            (Higher is better.) Use your own gating thresholds in practice.
-
-        Notes
-        -----
-        - This assumes the environment can be approximated by one height z for this point.
-        - For tilt-aware estimation, you'd solve (z0,a,b) over multiple probes instead.
-        """
-        if len(dense_stack) < min_valid_heights:
-            raise ValueError(f"dense_stack must have at least {min_valid_heights} entries.")
-
-        u_obs, v_obs = map(float, obs_uv)
-        X_cmd, Y_cmd = map(float, cmd_XY)
-
-        # Sort heights
-        zs = np.array(sorted(dense_stack.keys()), dtype=float)
-        Hs = np.array([dense_stack[z] for z in zs])
-
-        # ----- Project commanded point through all homographies -----
-
-        # Numerators
-        u_num = Hs[:, 0, 0] * X_cmd + Hs[:, 0, 1] * Y_cmd + Hs[:, 0, 2]
-        v_num = Hs[:, 1, 0] * X_cmd + Hs[:, 1, 1] * Y_cmd + Hs[:, 1, 2]
-        denom = Hs[:, 2, 0] * X_cmd + Hs[:, 2, 1] * Y_cmd + Hs[:, 2, 2]
-
-        eps = 1e-12
-        valid = np.abs(denom) >= eps
-
-        # Initialize predictions
-        preds = np.full((Hs.shape[0], 2), np.inf)
-
-        preds[valid, 0] = u_num[valid] / denom[valid]
-        preds[valid, 1] = v_num[valid] / denom[valid]
-
-        # ----- Compute residuals -----
-
-        du = preds[:, 0] - u_obs
-        dv = preds[:, 1] - v_obs
-
-        if metric == "l2":
-            errs = np.hypot(du, dv)
-        elif metric == "l1":
-            errs = np.abs(du) + np.abs(dv)
-        else:
-            raise ValueError("metric must be 'l2' or 'l1'")
-
-        # ----- Select best depth -----
-
-        best_idx = int(np.argmin(errs))
-        z_best = float(zs[best_idx])
-        err_best = float(errs[best_idx])
-        uv_best = (float(preds[best_idx, 0]), float(preds[best_idx, 1]))
-
-        # Confidence proxy
-        if zs.size >= 2:
-            sorted_errs = np.sort(errs)
-            err2 = float(sorted_errs[1])
-            conf = float(np.clip((err2 - err_best) / max(err2, 1e-9), 0.0, 1.0))
-        else:
-            conf = 0.0
-
-        if not refine or best_idx == 0 or best_idx == zs.size - 1:
-            return z_best, err_best, uv_best, conf
-
-        # ---- Local quadratic refinement on error(z) using 3 neighboring samples ----
-        # Fit e(z) ≈ a z^2 + b z + c around best_idx-1, best_idx, best_idx+1
-        z0, z1, z2 = float(zs[best_idx - 1]), float(zs[best_idx]), float(zs[best_idx + 1])
-        e0, e1, e2 = float(errs[best_idx - 1]), float(errs[best_idx]), float(errs[best_idx + 1])
-
-        # Solve for parabola coefficients via Lagrange form (stable for 3 points)
-        d01 = z0 - z1
-        d02 = z0 - z2
-        d12 = z1 - z2
-
-        a = (e0 / (d01 * d02)
-            - e1 / (d01 * d12)
-            + e2 / (d02 * d12))
-
-        b = (-e0 * (z1 + z2) / (d01 * d02)
-            + e1 * (z0 + z2) / (d01 * d12)
-            - e2 * (z0 + z1) / (d02 * d12))
-
-        if abs(a) < 1e-12:
-            # Nearly linear; refinement not meaningful
-            return z_best, err_best, uv_best, conf
- 
-        z_ref = -b / (2.0 * a)
-
-        # Clamp refined z to the local interval to avoid nonsense
-        z_ref = float(np.clip(z_ref, min(z0, z2), max(z0, z2)))
-
-        # Interpolate homography between nearest neighbors for refined z (piecewise linear)
-        if z_ref <= z1:
-            # between z0 and z1
-            t = 0.0 if z1 == z0 else (z_ref - z0) / (z1 - z0)
-            H_ref = (1.0 - t) * np.asarray(dense_stack[z0], float) + t * np.asarray(dense_stack[z1], float)
-        else:
-            # between z1 and z2
-            t = 0.0 if z2 == z1 else (z_ref - z1) / (z2 - z1)
-            H_ref = (1.0 - t) * np.asarray(dense_stack[z1], float) + t * np.asarray(dense_stack[z2], float)
-
-        u_ref, v_ref = Camera_Registration.project_xy(H_ref, X_cmd, Y_cmd)
-        du = u_ref - u_obs
-        dv = v_ref - v_obs
-        err_ref = float(np.hypot(du, dv)) if metric == "l2" else float(abs(du) + abs(dv))
-
-        # Keep refinement only if it improves
-        if np.isfinite(err_ref) and err_ref <= err_best:
-            return z_ref, err_ref, (float(u_ref), float(v_ref)), conf
-
-        return z_best, err_best, uv_best, conf
-    
-    @staticmethod
-    def load_homography_stack_from_txt(file_path: str):
-        """
-        Load homography stack dictionary from a txt file written as str(dict).
-        
-        Returns
-        -------
-        homography_stack : dict
-            {height: np.ndarray (3x3)}
-        """
-        
-        if not os.path.isfile(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
-        
-        with open(file_path, 'r') as f:
-            content = f.read()
-        
-        # Safely evaluate the dictionary
-        try:
-            raw_dict = ast.literal_eval(content)
-        except Exception as e:
-            raise ValueError(f"Unable to parse dictionary from file: {e}")
-        
-        homography_stack = {}
-        
-        for z, H in raw_dict.items():
-            H_np = np.array(H, dtype=float)
-            
-            if H_np.shape != (3, 3):
-                raise ValueError(f"Homography at height {z} is not 3x3.")
-            
-            homography_stack[float(z)] = H_np
-        
-        return homography_stack
-    
-    @staticmethod
-    def normalize_homography(H, eps=1e-9):
-        """
-        Normalize homography to remove scale ambiguity.
-        Prefer H[2,2] normalization; fallback to Frobenius.
-        """
-        H = H.astype(float)
-        
-        if abs(H[2,2]) > eps:
-            return H / H[2,2]
-        else:
-            norm = np.linalg.norm(H)
-            if norm < eps:
-                raise ValueError("Homography norm too small to normalize.")
-            return H / norm
-
-
-    def create_dense_stack(self, homography_stack: dict,
-                        dz: float = 1.0, # m
-                        extrapolate: bool = False):
-        """
-        Create a dense homography stack via linear interpolation.
-        
-        Parameters
-        ----------
-        homography_stack : dict
-            {height: 3x3 homography matrix}
-        dz : float
-            Height spacing for dense stack (same units as heights)
-        extrapolate : bool
-            If False, only interpolate within range
-        
-        Returns
-        -------
-        dense_stack : dict
-            {height: interpolated normalized 3x3 homography}
-        """
-        
-        # --- Step 1: Sort heights ---
-        heights = np.array(sorted(homography_stack.keys()), dtype=float)
-        Hs = [self.normalize_homography(homography_stack[z]) for z in heights]
-        Hs = np.stack(Hs, axis=0)
-        
-        z_min, z_max = heights[0], heights[-1]
-        
-        # --- Step 2: Create dense grid ---
-        dense_heights = np.arange(z_min, z_max + dz, dz)
-        
-        dense_stack = {}
-        
-        for z in dense_heights:
-            
-            # Exact match
-            if z in homography_stack:
-                dense_stack[z] = self.normalize_homography(homography_stack[z])
-                continue
-            
-            # If outside bounds
-            if z < z_min or z > z_max:
-                if not extrapolate:
-                    continue
-                else:
-                    # clamp to nearest
-                    if z < z_min:
-                        dense_stack[z] = Hs[0]
-                    else:
-                        dense_stack[z] = Hs[-1]
-                    continue
-            
-            # --- Step 3: Find bracketing indices ---
-            idx_upper = np.searchsorted(heights, z)
-            idx_lower = idx_upper - 1
-            
-            z0 = heights[idx_lower]
-            z1 = heights[idx_upper]
-            
-            H0 = Hs[idx_lower]
-            H1 = Hs[idx_upper]
-            
-            # --- Step 4: Linear interpolation ---
-            t = (z - z0) / (z1 - z0)
-            H_interp = (1 - t) * H0 + t * H1
-            
-            # --- Step 5: Renormalize ---
-            H_interp = self.normalize_homography(H_interp)
-            
-            dense_stack[z] = H_interp
-        
-        return dense_stack
-    
-    
-    def rgb_multi_layer_scan(self, heights: np.ndarray):
+    def rgb_multi_layer_scan(self, heights):
         homography_stack = {}
         
         for z in heights:
-            H = self.rgb_raster_scan(self, height = 0, gridShape = np.array([2, 6]), squareSize = 0.005)
+            print("Height [mm]: ", z*1000)
+            H = self.rgb_raster_scan(gridShape = np.array([9, 8]), squareSize = 0.005)
             homography_stack[z] = H
             
         try:
-            file_location = r"surgical_system\py_src\registration\calibration_info" 
-            if not os.path.isdir(file_location):
-                os.makedirs(file_location)
-                
-            file_path = file_location + "homography_stack.txt"
-            homography_file = open(file_path, 'wt')
-            homography_file.write(str(homography_stack))
-            homography_file.close()
+            file_location = os.path.join(
+                "surgical_system", "py_src", "registration", "calibration_info"
+            )
+            os.makedirs(file_location, exist_ok=True)
+
+            file_path = os.path.join(file_location, "homography_stack.npz")
+
+            # Convert dict → arrays
+            zs = np.array(sorted(homography_stack.keys()), dtype=float)
+            Hs = np.stack([homography_stack[z] for z in zs], axis=0)  # (N,3,3)
+
+            np.savez(file_path, zs=zs, Hs=Hs)
 
         except:
             print("Unable to write to file")
         
         return homography_stack
     
-    def rgb_raster_scan(self,  height = 0, gridShape = np.array([2, 6]), squareSize = 0.005,):
-        input(f"Press Enter to continue checkboard creation [{height*1000} mm].")
+    def rgb_raster_scan(self, gridShape = np.array([2, 6]), squareSize = 0.005):
+        input(f"Press Enter to continue checkboard creation.")
         xPoints = (np.arange(gridShape[1]) - (gridShape[1] - 1) / 2) * squareSize
         yPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
         xValues, yValues = np.meshgrid(xPoints, yPoints)
@@ -678,22 +369,26 @@ class Camera_Registration(System_Calibration):
         
         robot_path = np.hstack((xValues.reshape((-1, 1)), 
                                 yValues.reshape((-1, 1)), 
-                                np.full((xValues.size, 1), height)))
+                                np.full((xValues.size, 1), 0)))
         
         traj = self.robot_controller.create_custom_trajectory(robot_path, 0.05)
         self.robot_controller.run_trajectory(traj, blocking=False)
         
+        time.sleep(3)
         while(self.robot_controller.is_trajectory_running()):
             world_pos = self.robot_controller.current_robot_to_world_position()[:2]
             robot_positions = np.vstack((robot_positions, world_pos))
             color_img = self.rgbd_cam.get_latest()['color']
             rgb_laser_pixel = self.get_hot_pixel(color_img, method="Centroid")
             pixel_points = np.vstack((pixel_points, rgb_laser_pixel))
-            time.sleep(0.03)
+            print("World Pos: ", world_pos, " Pixel: ", rgb_laser_pixel)
+            time.sleep(.1)
+        self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
             
-        _imgpts = np.array(pixel_points.reshape((2, -1)), np.float32) # already is [2xn]
-        _objpts = np.array(robot_positions.reshape((2, -1)),np.float32) # need this to be [2 x n] 
+        _imgpts = np.array(pixel_points, np.float32) # already is [2xn]
+        _objpts = np.array(robot_positions, np.float32) # need this to be [2 x n] 
 
+        print(_imgpts.shape, _objpts.shape)
         H,_ = cv2.findHomography(_imgpts,_objpts)
         
         return H
@@ -1324,7 +1019,14 @@ if __name__ == '__main__':
    
     
     camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_controller)
-    camera_reg.run()
+    # camera_reg.run()
+    
+    # base 2.23 
+    heights = np.array([2.23, 2.73, 5.15, 5.65, 6.16, 7.69, 8.22, 8.75]) # mm 
+    heights = heights / 1000.0 # mm
+    # stack = camera_reg.rgb_multi_layer_scan(heights)
+    # stack = 
+    # print(stack)
     rgbd_cam.set_default_setting()
     # robot_controller.load_edit_pose()
     # camera_reg.view_rgbd_therm_registration()

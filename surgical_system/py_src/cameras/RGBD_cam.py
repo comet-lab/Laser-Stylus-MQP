@@ -351,21 +351,22 @@ def main():
      
     # rgbd_cam.display_depth_stream()
     while(True):
-        rgbd_cam.display_all_streams()
+        # rgbd_cam.display_all_streams()
     #         image = rgbd_cam.get_latest()
     #         # rgbd_cam.plot_depth_point_cloud(image['depth'])
-    #         # img = rgbd_cam.get_latest()
-    #         # if img is None:
-    #         #     continue 
-    #         # img = img['color']
-    #         # pixel = rgbd_cam.get_beam_pixel(img)
+            img = rgbd_cam.get_latest()
+            if img is None:
+                continue 
+            img = img['color']
+            pixel = rgbd_cam.get_beam_pixel(img)
+            print(pixel)
     #         # print(pixel)
     #         # rounded_pixel = np.rint(pixel).astype(int)  
     #         # cv2.circle(img, rounded_pixel, radius=5, color=(0, 255, 0), thickness=-1)
     #         # cv2.imshow("pixel marker", img)
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'):
-            break
+        # key = cv2.waitKey(1) & 0xFF
+        # if key == ord('q'):
+        #     break
     
 
 if __name__=='__main__':

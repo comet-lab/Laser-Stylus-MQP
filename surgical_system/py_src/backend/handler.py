@@ -32,6 +32,7 @@ class Handler:
         self.mock_robot = mock_robot
 
         self.path_display_pixels = None
+        self.new_path_flag = False
         
         
         self.virtual_fixture, self.dx, self.dy, self.distance_field = self.generate_virtual_fixture()
@@ -87,7 +88,12 @@ class Handler:
             status.laserX, status.laserY = int(self.desired_state.laserX), int(self.desired_state.laserY)
         else:
             status.laserX, status.laserY = status.x, status.y
-        status.path_preview = self.desired_state.path_preview
+            
+            
+        if self.new_path_flag:
+            status.path_preview = self.desired_state.path_preview
+            self.new_path_flag = False
+            
         return status.to_str()
     
     def _recv_fn(self, msg: str):
@@ -293,6 +299,7 @@ class Handler:
             "y" : y,
             "time": time
         }
+        self.new_path_flag = True
      
     def _do_path(self, traj: TrajectoryController):
         self.robot_controller.run_trajectory(traj, blocking=False, laser_on=self.desired_state.isLaserOn)
@@ -398,7 +405,7 @@ class Handler:
 
         if(self.desired_state.isRobotOn):          
             self.working_height = self.desired_state.height / 100.0 if self.desired_state.height else  0 # cm to m
-            # print(f"[Robot Height] {self.working_height} m")
+            print(f"[Robot Height] {self.working_height} m")
                 
             # print("loop",
             # "raster?", self.desired_state.raster_mask is not None,
