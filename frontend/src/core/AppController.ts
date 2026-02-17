@@ -677,22 +677,6 @@ class AppController {
 
             }
         }, { passive: false });
-
-        //Disable everything if you switch browser tabs while in real-time mode
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden && this.ui.processingModeSwitch.checked) {
-                console.warn("Safety Interlock: Tab hidden. Disabling hardware.");
-                this.hardware.changeLaserState(false);
-                this.hardware.changeRobotState(false);
-                
-                //Also stop the real-time drawing loop if active
-                if (this.state.isRealTimeDrawing) {
-                     //Manually trigger the "up" logic to finish the stroke cleanly
-                     const mockEvent = new PointerEvent('pointerup');
-                     this.realTime.handleEnd(mockEvent);
-                }
-            }
-        });
     }
 
     // ===================================================================
@@ -716,6 +700,11 @@ class AppController {
                 this.ui.robotMarker.style.top = `${(state.laserY / vh) * ch}px`;
                 this.ui.robotMarker.style.display = 'block';
             }
+        }
+
+        if (state.isLaserFiring !== undefined) {
+            // Toggles a class on both the viewport and the robot marker
+            this.ui.viewport.classList.toggle('laser-firing', state.isLaserFiring);
         }
 
         if (state.current_height !== undefined && state.current_height !== null) {

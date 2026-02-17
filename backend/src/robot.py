@@ -26,6 +26,7 @@ class RobotSchema:
     # Flags
     isLaserOn: Optional[bool] = None
     isRobotOn: Optional[bool] = None
+    isLaserFiring: Optional[bool] = None
     isTransformedViewOn: Optional[bool] = None
     isThermalViewOn: Optional[bool] = None
     

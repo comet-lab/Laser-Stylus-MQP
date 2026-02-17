@@ -16,6 +16,7 @@ export interface WebSocketMessage {
     speed: number;
     isLaserOn: boolean;
     isRobotOn: boolean;
+    isLaserFiring?: boolean;
     isTransformedViewOn: boolean;
     pathEvent: string | null;
     heat_markers?: { x: number, y: number }[];
