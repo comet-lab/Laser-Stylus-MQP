@@ -19,9 +19,9 @@ class MockCameraRegistration():
     
     def get_cam_latest(self, cam_type):
         if(cam_type == "thermal"):
-            return self.therm_cam.get_latest()
+            return self.therm_cam.get_latest()[cam_type]
         else:
-            return self.rgbd_cam.get_latest()
+            return self.rgbd_cam.get_latest()[cam_type]
         
     def moving_average_smooth(self, pixels, window):
         return pixels
@@ -49,15 +49,19 @@ class MockCameraRegistration():
     def get_world_m_to_UI(self, cam_type, world_points, warped):
         return np.zeros((1280, 2))
     
+    def get_UI_to_world_m(self, cam_type, pixel, warped, z):
+        return [[pixel[0][0], pixel[0][1], z]]
+        # return np.zeros((1280, 2))
+    
     def heat_overlay(self, rgb_img, mask = None, roi = None, invert = False, transformed_view: bool = True,
                                 alpha: float = 0.45,
                                 colormap: int = cv2.COLORMAP_JET):
+        raise NotImplementedError("This function should not be called on while mock robot is enabled")
         return np.zeros((720, 1280, 3)), np.array([]), 0, 0
     
     def tracking_display(self, disp, cam_type = 'color', warped = True):
+        raise NotImplementedError("This function should not be called on while mock robot is enabled")
         return np.zeros((720, 1280 , 3))
-
-
 
     def get_transformed_view(self, latest, cam_type):
         H = np.array([[1.2, 0.0, 0],

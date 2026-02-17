@@ -29,6 +29,7 @@ class Handler:
         self.show_path = True
         self.current_traj = None
         self._last_pose_ui = 0.0
+        self.mock_robot = mock_robot
 
         self.path_display_pixels = None
         
@@ -82,7 +83,10 @@ class Handler:
         status.heat_markers = self.desired_state.heat_markers
         # print(self.desired_state.heat_markers)
         status.maxHeat = self.desired_state.maxHeat
-        status.laserX, status.laserY = int(self.desired_state.laserX), int(self.desired_state.laserY)
+        if not self.mock_robot:
+            status.laserX, status.laserY = int(self.desired_state.laserX), int(self.desired_state.laserY)
+        else:
+            status.laserX, status.laserY = status.x, status.y
         status.path_preview = self.desired_state.path_preview
         return status.to_str()
     

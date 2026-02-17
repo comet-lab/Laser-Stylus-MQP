@@ -24,7 +24,7 @@ class MockRobotController():
         return self.pose, np.eye(4)
     
     def current_robot_to_world_position(self):
-        return self.pose
+        return self.pose[-1, 0:3]
     
     def load_home_pose(self):
         rot = Rotation.from_euler('ZYX',[0,np.pi/4,np.pi/2])
