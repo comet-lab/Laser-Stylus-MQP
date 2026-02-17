@@ -381,12 +381,30 @@ class AppController {
         this.ui.viewport.addEventListener('pointerup', (e) => this.realTime.handleEnd(e));
         this.ui.viewport.addEventListener('pointercancel', (e) => this.realTime.handleEnd(e));
 
-        // --- Processing mode toggle (real-time ↔ batch) ---
+        // --- Processing mode toggle ---
         this.ui.processingModeSwitch.addEventListener('change', () => this.modeManager.toggleMode());
 
         // --- Top-level mode buttons (Drawing / Thermal / Fixtures) ---
         this.ui.modeButtons.forEach(btn => {
             btn.addEventListener('click', () => {
+                //If clicking the tab they are already on, do nothing
+                if (btn.classList.contains('active')) return;
+
+                //If we are in real time mode and we switch tabs, turn off robot/laser
+                if (this.ui.processingModeSwitch.checked) {
+                    console.warn("Safety Interlock: In-app tab switched. Disabling hardware.");
+                    
+                    this.hardware.changeLaserState(false);
+                    this.hardware.changeRobotState(false);
+                    
+                    //Stop the drawing loop if they were mid-stroke while clicking the tab
+                    if (this.state.isRealTimeDrawing) {
+                        const mockEvent = new PointerEvent('pointerup');
+                        this.realTime.handleEnd(mockEvent);
+                    }
+                }
+
+                // Proceed with normal tab switching
                 this.ui.modeButtons.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 this.modeManager.switchMode(btn.id);
@@ -633,7 +651,21 @@ class AppController {
             }
         }, { passive: false });
 
-
+        //Disable everything if you switch browser tabs while in real-time mode
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && this.ui.processingModeSwitch.checked) {
+                console.warn("Safety Interlock: Tab hidden. Disabling hardware.");
+                this.hardware.changeLaserState(false);
+                this.hardware.changeRobotState(false);
+                
+                //Also stop the real-time drawing loop if active
+                if (this.state.isRealTimeDrawing) {
+                     //Manually trigger the "up" logic to finish the stroke cleanly
+                     const mockEvent = new PointerEvent('pointerup');
+                     this.realTime.handleEnd(mockEvent);
+                }
+            }
+        });
     }
 
     // ===================================================================
