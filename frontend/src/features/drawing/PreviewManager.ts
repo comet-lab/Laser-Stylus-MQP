@@ -109,27 +109,48 @@ export class PreviewManager {
     // Disable execute while computing new path
     this.setExecuteButtonState(false);
     this.stopAnimation();
+    ToastManager.clearAll();
 
     try {
       const response = await cm.previewPath(speed, rasterType, density, isFill);
+      const hasValidPath = response.path && response.path.length > 0;
 
-      // Trigger the soft warning
+      // 1. Handle Active Safety Warnings
       if (response.warning === "FIXTURE_OVERLAP") {
-        ToastManager.show("Warning: Your path crosses into a restricted fixture zone. Please double-check before executing.");
-      }
+        ToastManager.show(
+          "SAFETY WARNING: Your planned path crosses into a restricted fixture zone. Please confirm to allow execution.",
+          {
+            type: 'warning',
+            requireAck: true,
+            ackText: 'CONFIRM',
+            onAcknowledge: () => {
+              // Only unlock the button once the user explicitly clicks CONFIRM
+              if (hasValidPath) this.setExecuteButtonState(true);
+            }
+          }
+        );
 
-      if (response.path && response.path.length > 0) {
-        this.handlePathData(response.path, response.duration);
+        if (hasValidPath) {
+          // Draw the path to show them the mistake, but do not enable the button
+          this.handlePathData(response.path, response.duration, false);
+        }
+
+        // 2. Handle Safe Paths
+      } else if (hasValidPath) {
+        this.handlePathData(response.path, response.duration, true);
       } else {
         this.ui.previewDuration.textContent = 'Waiting...';
       }
+
     } catch (e: any) {
-      // Handle the hard stop gracefully
       if (e.message === "OUT_OF_BOUNDS") {
-        ToastManager.show("Error: Part of your shape is off the screen! Please move it fully inside the camera view.");
+        ToastManager.show(
+          "HARD STOP: Part of your shape is off the screen. Please move it fully inside the camera view.",
+          { type: 'error', requireAck: true, ackText: 'DISMISS' }
+        );
         this.ui.previewDuration.textContent = 'Out of Bounds';
         this.clearOverlay();
-        this.setExecuteButtonState(false); // Force the Execute button to stay disabled
+        this.setExecuteButtonState(false);
       } else {
         console.error('Preview refresh error:', e);
         this.ui.previewDuration.textContent = 'Error';
@@ -147,25 +168,26 @@ export class PreviewManager {
       path.push({ x: previewData.x[i], y: previewData.y[i] });
     }
 
-    this.handlePathData(path, serverDuration || 10);
+    this.handlePathData(path, serverDuration || 10, true);
   }
 
-  private handlePathData(videoPath: Position[], duration: number): void {
+  private handlePathData(videoPath: Position[], duration: number, enableExecute: boolean): void {
     if (videoPath.length === 0) {
       this.clearOverlay();
       return;
     }
 
-    //STORE SOURCE OF TRUTH (Video Coordinates)
     this.sourcePath = videoPath;
     this.durationSeconds = duration;
     this.hasPreviewedCurrentDrawing = true;
 
-    //CALCULATE SCREEN COORDINATES
     this.updatePathTransform();
 
     this.ui.previewDuration.textContent = `${duration.toFixed(1)}s`;
-    this.setExecuteButtonState(true);
+
+    if (enableExecute) {
+      this.setExecuteButtonState(true);
+    }
 
     this.drawPath();
     this.startAnimation();
