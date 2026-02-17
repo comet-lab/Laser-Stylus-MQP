@@ -29,7 +29,9 @@ class TrajectoryController():
         if self.positions.shape[0]-1 != len(self.durations) and not self.pattern == "Circle" and not self.pattern == "Custom":
             raise Exception("Durations and Postions dims do not match")
         self.positions, self.durations = self.generatePath() # Generates new points depending on pattern
+        print("Path generated")
         self.generateTrajectories(self.positions, self.durations, self.max_velocity, self.max_acceleration)
+        print("Traj generated")
 
         self.t = 0
         # self.time_step = controller_msg.time_step
@@ -114,6 +116,7 @@ class TrajectoryController():
         # endpoints
         v_way[0]  = 0.0
         v_way[-1] = 0.0
+        print("Points", self.n_points)
         for i in range(1, self.n_points-1):
             dt = durations[i] - durations[i-1]
             if dt <= 0:
@@ -129,7 +132,6 @@ class TrajectoryController():
                     v_way[i] = 0.0
         
         a_way = np.zeros_like(position)
-        
         
         self.trajectories = np.empty((self.n_points - 1, self.n_dims), dtype=object)
         for i in range(self.n_points - 1):
@@ -151,7 +153,7 @@ class TrajectoryController():
         target_vel_list = np.empty((data_num, 3))
         target_position_list = np.empty((data_num, 3))
         times = np.linspace(0, durations[-1], data_num)
-        for i in range(data_num):
+        for i in range(data_num): # very slow for large i
             movement = self.update(times[i])
             target_position = (movement['position'])
             target_position_list[i] = target_position
@@ -159,6 +161,7 @@ class TrajectoryController():
             target_vel= (movement['velocity'])
             target_vel_list[i] = target_vel
             
+        print("Plotting...")
         plt.figure(figsize=(6,4))
         plt.plot(times, target_position_list[:, 0], label="x [m]")
         plt.plot(times, target_position_list[:, 1], label="y [m]")

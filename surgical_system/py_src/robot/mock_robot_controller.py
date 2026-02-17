@@ -55,14 +55,15 @@ class MockRobotController():
                     "Pattern": "Custom",
                     "Radius": -1,
                     "Passes": 1,
-                    "MaxVelocity": max_velocity, # [m/s]
-                    "MaxAcceleration": 1.5,#[m/s/s]
+                    "MaxVelocity": max_velocity * 100, # [m/s]
+                    "MaxAcceleration": 150 ,#[m/s/s]
                     "Durations":[-1]} #time per step
         return TrajectoryController(path_info, debug=True)
 
     def run_trajectory(self, traj, blocking, laser_on):
-        print("Waypoint 0:", traj[0][0])
-        print("Waypoint Final:", traj[0][-1])
-        print("Speed", traj[1])
-        self.go_to_pose(traj[0][-1])
+        print("Waypoint 0:", traj.target_position_list[0])
+        print("Waypoint Final:", traj.target_position_list[-1])
+        target = self.get_current_state()[0]
+        target[-1, :3] = traj.target_position_list[-1]
+        self.go_to_pose(target)
 

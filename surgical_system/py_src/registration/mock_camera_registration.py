@@ -50,8 +50,8 @@ class MockCameraRegistration():
         return np.zeros((1280, 2))
     
     def get_UI_to_world_m(self, cam_type, pixel, warped, z):
-        return [[pixel[0][0], pixel[0][1], z]]
-        # return np.zeros((1280, 2))
+        ret = [[point[0], point[1], z] for point in pixel]
+        return ret
     
     def heat_overlay(self, rgb_img, mask = None, roi = None, invert = False, transformed_view: bool = True,
                                 alpha: float = 0.45,
