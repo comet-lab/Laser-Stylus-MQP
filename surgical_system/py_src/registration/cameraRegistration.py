@@ -333,15 +333,42 @@ class Camera_Registration(System_Calibration):
     
     
     @staticmethod
-    def _project_xy(H: np.ndarray, X: float, Y: float, eps: float = 1e-12) -> Tuple[float, float]:
+    def project_xy(H: np.ndarray,
+                     pts: np.ndarray,
+                     eps: float = 1e-12) -> np.ndarray:
         """
-        Project plane coordinate (X,Y,1) to pixel (u,v) using homography H with perspective divide.
+        Vectorized homography projection.
+
+        Parameters
+        ----------
+        H   : (3,3) homography matrix
+        pts : (N,2) array of (X,Y) plane coordinates
+
+        Returns
+        -------
+        uv  : (N,2) projected pixel coordinates
+            invalid points (small denom) -> [inf, inf]
         """
-        p = H @ np.array([X, Y, 1.0], dtype=float)
-        if abs(p[2]) < eps:
-            # Degenerate / numerically unstable
-            return float("inf"), float("inf")
-        return (p[0] / p[2], p[1] / p[2])
+
+        pts = np.asarray(pts, dtype=float)
+
+        # Add homogeneous coordinate
+        ones = np.ones((pts.shape[0], 1))
+        pts_h = np.hstack((pts, ones))  # (N,3)
+
+        # Apply homography
+        p = pts_h @ H.T  # (N,3)
+
+        denom = p[:, 2:3]  # (N,1)
+
+        # Avoid divide-by-zero
+        valid = np.abs(denom) >= eps
+
+        uv = np.full((pts.shape[0], 2), np.inf)
+
+        uv[valid[:, 0]] = p[valid[:, 0], :2] / denom[valid]
+
+        return uv
 
     @staticmethod
     def estimate_depth_from_dense_stack(
@@ -397,33 +424,44 @@ class Camera_Registration(System_Calibration):
 
         # Sort heights
         zs = np.array(sorted(dense_stack.keys()), dtype=float)
-        Hs = [dense_stack[z] for z in zs]
+        Hs = np.array([dense_stack[z] for z in zs])
 
-        # Compute errors over all heights
-        errs = np.empty_like(zs)
-        preds = np.empty((zs.size, 2), dtype=float)
+        # ----- Project commanded point through all homographies -----
 
-        for i, H in enumerate(Hs):
-            u_pred, v_pred = Camera_Registration._project_xy(np.asarray(H, dtype=float), X_cmd, Y_cmd)
-            preds[i] = (u_pred, v_pred)
+        # Numerators
+        u_num = Hs[:, 0, 0] * X_cmd + Hs[:, 0, 1] * Y_cmd + Hs[:, 0, 2]
+        v_num = Hs[:, 1, 0] * X_cmd + Hs[:, 1, 1] * Y_cmd + Hs[:, 1, 2]
+        denom = Hs[:, 2, 0] * X_cmd + Hs[:, 2, 1] * Y_cmd + Hs[:, 2, 2]
 
-            du = u_pred - u_obs
-            dv = v_pred - v_obs
+        eps = 1e-12
+        valid = np.abs(denom) >= eps
 
-            if metric == "l2":
-                errs[i] = float(np.hypot(du, dv))
-            elif metric == "l1":
-                errs[i] = float(abs(du) + abs(dv))
-            else:
-                raise ValueError("metric must be 'l2' or 'l1'")
+        # Initialize predictions
+        preds = np.full((Hs.shape[0], 2), np.inf)
+
+        preds[valid, 0] = u_num[valid] / denom[valid]
+        preds[valid, 1] = v_num[valid] / denom[valid]
+
+        # ----- Compute residuals -----
+
+        du = preds[:, 0] - u_obs
+        dv = preds[:, 1] - v_obs
+
+        if metric == "l2":
+            errs = np.hypot(du, dv)
+        elif metric == "l1":
+            errs = np.abs(du) + np.abs(dv)
+        else:
+            raise ValueError("metric must be 'l2' or 'l1'")
+
+        # ----- Select best depth -----
 
         best_idx = int(np.argmin(errs))
         z_best = float(zs[best_idx])
         err_best = float(errs[best_idx])
         uv_best = (float(preds[best_idx, 0]), float(preds[best_idx, 1]))
 
-        # Confidence proxy: how much better than 2nd best?
-        # (This is NOT a probability; it’s just a cheap separability score.)
+        # Confidence proxy
         if zs.size >= 2:
             sorted_errs = np.sort(errs)
             err2 = float(sorted_errs[1])
@@ -471,7 +509,7 @@ class Camera_Registration(System_Calibration):
             t = 0.0 if z2 == z1 else (z_ref - z1) / (z2 - z1)
             H_ref = (1.0 - t) * np.asarray(dense_stack[z1], float) + t * np.asarray(dense_stack[z2], float)
 
-        u_ref, v_ref = Camera_Registration._project_xy(H_ref, X_cmd, Y_cmd)
+        u_ref, v_ref = Camera_Registration.project_xy(H_ref, X_cmd, Y_cmd)
         du = u_ref - u_obs
         dv = v_ref - v_obs
         err_ref = float(np.hypot(du, dv)) if metric == "l2" else float(abs(du) + abs(dv))
@@ -612,7 +650,7 @@ class Camera_Registration(System_Calibration):
         homography_stack = {}
         
         for z in heights:
-            H = self.rgb_raster_scan(self, height = z, gridShape = np.array([2, 6]))
+            H = self.rgb_raster_scan(self, height = 0, gridShape = np.array([2, 6]), squareSize = 0.005)
             homography_stack[z] = H
             
         try:
