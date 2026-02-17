@@ -130,7 +130,6 @@ class TrajectoryController():
         
         a_way = np.zeros_like(position)
         
-        
         self.trajectories = np.empty((self.n_points - 1, self.n_dims), dtype=object)
         for i in range(self.n_points - 1):
             t0, tf = durations[i], durations[i+1]
@@ -151,7 +150,7 @@ class TrajectoryController():
         target_vel_list = np.empty((data_num, 3))
         target_position_list = np.empty((data_num, 3))
         times = np.linspace(0, durations[-1], data_num)
-        for i in range(data_num):
+        for i in range(data_num): # very slow for large i
             movement = self.update(times[i])
             target_position = (movement['position'])
             target_position_list[i] = target_position

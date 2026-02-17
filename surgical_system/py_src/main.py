@@ -160,17 +160,18 @@ async def main():
         if latest.shape != (1280, 720):
             latest = cv2.resize(latest, (1280, 720), interpolation=cv2.INTER_NEAREST)
             
-        if control_flow_handler.desired_state.heat_mask is not None:
+        if control_flow_handler.desired_state.heat_mask is not None and not mock_robot:
             latest = control_flow_handler.get_heat_overlay(latest)
         else:
             # print("trigger")
             thermal_data = camera_reg.get_cam_latest("thermal")
             control_flow_handler.desired_state.maxHeat = float(np.max(thermal_data))
 
-        if camera_reg.display_path:
+        if camera_reg.display_path and not mock_robot:
             latest = camera_reg.show_path(latest)
         
-        latest = camera_reg.tracking_display(latest, 
+        if not mock_robot:
+            latest = camera_reg.tracking_display(latest, 
                                              cam_type = 'color',
                                              warped=control_flow_handler.desired_state.isTransformedViewOn)
             
