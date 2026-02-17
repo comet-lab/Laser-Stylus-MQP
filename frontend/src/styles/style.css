@@ -1,5 +1,3 @@
-/* frontend/src/styles/style.css */
-
 /* ============================================
    FONTS & IMPORTS
    ============================================ */
@@ -19,16 +17,21 @@ body {
   height: 100%;
   width: 100%;
   user-select: none;
+  font-family: 'IBM Plex Sans', sans-serif;
 }
 
 body {
-  font-family: 'IBM Plex Sans', sans-serif;
   font-weight: 400;
   background-color: #000000;
 }
 
 * {
   box-sizing: border-box;
+}
+
+button, input, textarea, select {
+  font-family: inherit;
+  font-size: inherit;
 }
 
 #app {
@@ -290,56 +293,104 @@ pre {
 }
 
 /* ============================================
-   SLIDERS (Vertical & Horizontal)
+   POPOUT CONTROLS (Unified Speed & Height)
    ============================================ */
-.brush-container,
-.height-container {
+
+.popout-control {
+  position: relative;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.popout-trigger {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 30px;
-  width: 100%;
-}
-
-.height-container {
+  justify-content: center;
+  background-color: transparent;
+  border: 2px solid #2c343b;
+  border-radius: 8px;
+  padding: 8px 4px;
+  width: 60px;
+  height: 60px;
   gap: 4px;
-}
-
-.brush-label,
-.height-label {
+  cursor: pointer;
   color: #e0f2e0;
-  font-size: 0.8rem;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+.popout-trigger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+  border-color: #4a5568;
+}
+
+.popout-trigger:hover, .popout-trigger.active {
+  background-color: #2c343b;
+  border-color: #e0f2e0;
+}
+
+.popout-label {
+  font-size: 0.78rem;
   font-weight: bold;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  user-select: none;
+  color: #a1b0a4;
+  margin-bottom: 2px;
   pointer-events: none;
 }
 
-.height-number {
-  font-size: 1.2rem;
-  margin-bottom: 15px;
-  user-select: none;
+.popout-value {
+  font-size: 1rem;
+  font-weight: bold;
   pointer-events: none;
 }
 
-.vertical-slider-container {
-  height: 170px;
-  width: 100%;
+.popout-panel {
+  position: absolute;
+  left: 70px;
+  top: 50%;
+  background-color: #151b21;
+  border: 2px solid #2c343b;
+  border-radius: 12px;
+  padding: 15px 0;
+  width: 52px;
   display: flex;
   justify-content: center;
   align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-10px, -50%); 
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
 }
 
-.height-vertical-slider-container {
-  height: 180px;
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding-top: 20px;
+.popout-panel.active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(0, -50%);
 }
 
+.popout-slider-container {
+  position: relative;
+  width: 30px;
+  height: 40vh; 
+  max-height: 250px; 
+}
+
+.popout-range {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40vh;
+  max-width: 250px; 
+  height: 6px;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  margin: 0;
+  flex-shrink: 0; 
+}
+
+/* --- Common Slider Styling (Thumbs/Track) --- */
 .styled-range {
   -webkit-appearance: none;
   appearance: none;
@@ -353,25 +404,40 @@ pre {
   -webkit-appearance: none;
   appearance: none;
   width: 20px;
-  height: 40px;
-  border-radius: 18px;
+  height: 40px; /* Rectangular thumb */
+  border-radius: 8px;
   background: #e0f2e0;
   cursor: pointer;
   border: 2px solid #2c343b;
   box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
 }
 
+/* Brush Size Slider (Horizontal) - Kept separate */
+.brush-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 30px;
+  width: 100%;
+}
+.brush-label {
+  color: #e0f2e0;
+  font-size: 0.8rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  user-select: none;
+  pointer-events: none;
+}
+.vertical-slider-container {
+  height: 170px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
 .vertical-range {
   width: 170px;
-  height: 6px;
-  transform: rotate(-90deg);
-  transform-origin: center;
-  margin: 0;
-}
-
-.height-vertical-range {
-  width: 210px;
-  min-width: 210px;
   height: 6px;
   transform: rotate(-90deg);
   transform-origin: center;

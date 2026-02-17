@@ -19,6 +19,9 @@ export interface WebSocketMessage {
     isTransformedViewOn: boolean;
     pathEvent: string | null;
     heat_markers?: { x: number, y: number }[];
+    current_height?: number;
+
+    request_sync?: boolean;
     
     path_preview?: {
         x: number[];
@@ -35,6 +38,7 @@ export class WebSocketHandler {
     private url: string;
     private outputElement: HTMLElement | null;
     public onStateUpdate: ((newState: WebSocketMessage) => void) | null = null;
+    public onOpen: (() => void) | null = null;
 
     constructor(outputElement: HTMLElement | null) {
         this.url = `ws://${window.location.hostname}:443/ws/${import.meta.env.VITE_UI_WEBSOCKET_NAME}`;
@@ -62,6 +66,12 @@ export class WebSocketHandler {
 
         this.log("Connecting to WebSocket...");
         this.ws = new WebSocket(this.url);
+
+        this.ws.onopen = () => {
+            console.log('WebSocket Connected');
+            // Trigger the callback if defined
+            if (this.onOpen) this.onOpen();
+        };
         
         //this.ws.onopen = () => this.log("Connected to WebSocket");
         this.ws.onmessage = (event) => {

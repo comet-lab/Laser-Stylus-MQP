@@ -110,6 +110,13 @@ export interface UIRegistry {
     // Universal UI Elements
     heightSlider: HTMLInputElement;
     heightDisplay: HTMLElement;
+    heightTrigger: HTMLButtonElement;
+    heightFlyout: HTMLElement;
+
+    speedSlider: HTMLInputElement;
+    speedDisplay: HTMLElement;
+    speedTrigger: HTMLButtonElement;
+    speedFlyout: HTMLElement;
 }
 
 export function createUIRegistry(): UIRegistry {
@@ -212,5 +219,12 @@ export function createUIRegistry(): UIRegistry {
         // Universal UI Elements
         heightSlider: document.getElementById('heightSlider') as HTMLInputElement,
         heightDisplay: document.getElementById('heightDisplay') as HTMLElement,
+        heightTrigger: document.getElementById('heightTrigger') as HTMLButtonElement,
+        heightFlyout: document.getElementById('heightFlyout') as HTMLElement,
+
+        speedSlider: document.getElementById('speedSlider') as HTMLInputElement,
+        speedDisplay: document.getElementById('speedDisplay') as HTMLElement,
+        speedTrigger: document.getElementById('speedTrigger') as HTMLButtonElement,
+        speedFlyout: document.getElementById('speedFlyout') as HTMLElement,
     };
 }

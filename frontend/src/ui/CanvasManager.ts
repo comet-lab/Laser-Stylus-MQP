@@ -1491,4 +1491,19 @@ export class CanvasManager {
         }
         return response.json();
     }
+
+    /**
+     * Clears the planned path and raster mask on the server.
+     * effectively "zeroing out" the execution plan.
+     */
+    public async clearPathAndRasterOnServer(): Promise<void> {
+        const formData = new FormData();
+        //Send safe defaults
+        formData.append('speed', '10');
+        formData.append('density', '0');
+        formData.append('pixels', '[]');
+        formData.append('is_fill', 'false');
+        //By not appending a file, the backend will set raster_mask to None
+        await this.postFormData('/api/preview', formData);
+    }
 }

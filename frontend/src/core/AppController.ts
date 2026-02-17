@@ -185,7 +185,65 @@ class AppController {
 
     private setupWebSocket(): void {
         this.wsHandler.onStateUpdate = (newState: WebSocketMessage) => this.syncUiToState(newState);
+        //Add function to clean the state when connection starts
+        this.wsHandler.onOpen = () => {
+            console.log("WS Connected: Initiating Clean Slate Protocol...");
+            this.resetToDefaults();
+        };
         this.wsHandler.connect();
+    }
+
+    /**
+     * CLEAN SLATE PROTOCOL
+     * Resets the application to a safe, known state upon connection/refresh.
+     */
+    private async resetToDefaults(): Promise<void> {
+        // --- Turn off hardware ---
+        this.hardware.applyServerLaserState(false);
+        this.hardware.applyServerRobotState(false);
+
+        // --- Tool reset ---
+        document.getElementById('drawingBtn')?.click();
+        this.ui.toggleButtons.forEach(btn => btn.classList.remove('selected'));
+        this.state.selectedShape = null;
+        this.state.drawnShapeType = null;
+        this.toolHandler.updateDrawButtonState();
+
+        // --- Transformed view on by default ---
+        this.ui.transformedModeSwitch.checked = true;
+        if (this.canvasManager) {
+            // Force the view update immediately
+            await this.canvasManager.updateViewSettings(true, false);
+        }
+
+        // --- Height Sync ---
+        this.isHardwareHeightSynced = false;
+
+        //Lock the slider trigger until we get telemetry
+        this.ui.heightTrigger.disabled = true;
+        this.ui.heightDisplay.textContent = "...";
+
+        // --- Speed default 10 mm/s ---
+        this.ui.speedSlider.value = "10";
+        this.ui.speedDisplay.textContent = "10";
+
+        //Send defaults to robot immediately
+        //Also explicitly ask to report state to get the necessary info
+        this.wsHandler.updateState({ speed: 10, isLaserOn: false, isRobotOn: false, request_sync: true });
+
+        // --- Reset all masks ---
+        if (this.canvasManager) {
+            console.log("Resetting all masks on server...");
+            try {
+                await Promise.all([
+                    this.canvasManager.clearFixturesOnServer(),
+                    this.canvasManager.resetHeatArea(),
+                    this.canvasManager.clearPathAndRasterOnServer()
+                ]);
+            } catch (e) {
+                console.warn("Could not reset masks (Video might not be ready):", e);
+            }
+        }
     }
 
     /**
@@ -211,7 +269,7 @@ class AppController {
                 this.previewManager.refreshPreview();
             } else {
                 // The preview window is closed. Invalidate old data to wait for new request
-                this.executionManager.onShapeComplete(); 
+                this.executionManager.onShapeComplete();
             }
         };
 
@@ -342,12 +400,12 @@ class AppController {
         });
         this.ui.resetHeatAreaBtn.addEventListener('click', async () => {
             if (!this.canvasManager) return;
-            try { 
+            try {
                 await this.canvasManager.resetHeatArea();
                 this.ui.resetHeatAreaBtn.disabled = true;
                 this.ui.heatLegend.classList.add('hidden')
 
-             }
+            }
             catch (e) { console.error(e); this.ui.resetHeatAreaBtn.disabled = false; }
         });
         this.ui.clearMarkersBtn.addEventListener('click', async () => {
@@ -379,20 +437,67 @@ class AppController {
 
         this.ui.heightSlider.addEventListener('mousedown', () => this.isChangingHeight = true);
         this.ui.heightSlider.addEventListener('touchstart', () => this.isChangingHeight = true, { passive: true });
-        
+
         this.ui.heightSlider.addEventListener('mouseup', () => this.isChangingHeight = false);
         this.ui.heightSlider.addEventListener('touchend', () => this.isChangingHeight = false);
+
+        const togglePopout = (trigger: HTMLElement, flyout: HTMLElement, otherFlyouts: HTMLElement[]) => {
+            const isActive = flyout.classList.contains('active');
+
+            // Close any other open flyouts
+            otherFlyouts.forEach(f => {
+                f.classList.remove('active');
+                const t = document.getElementById(f.id.replace('Flyout', 'Trigger'));
+                if (t) t.classList.remove('active');
+            });
+
+            if (isActive) {
+                flyout.classList.remove('active');
+                trigger.classList.remove('active');
+            } else {
+                flyout.classList.add('active');
+                trigger.classList.add('active');
+            }
+        };
+
+        this.ui.speedTrigger.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent document click from firing
+            togglePopout(this.ui.speedTrigger, this.ui.speedFlyout, [this.ui.heightFlyout]);
+        });
+
+        this.ui.heightTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            togglePopout(this.ui.heightTrigger, this.ui.heightFlyout, [this.ui.speedFlyout]);
+        });
+
+        // Click outside to close
+        document.addEventListener('click', (e) => {
+            const target = e.target as HTMLElement;
+            if (!target.closest('.popout-control')) {
+                this.ui.speedFlyout.classList.remove('active');
+                this.ui.speedTrigger.classList.remove('active');
+                this.ui.heightFlyout.classList.remove('active');
+                this.ui.heightTrigger.classList.remove('active');
+            }
+        });
+
+        // Speed Slider event (Update text and send to backend)
+        this.ui.speedSlider.addEventListener('input', () => {
+            const val = this.ui.speedSlider.value;
+            this.ui.speedDisplay.textContent = val;
+            this.wsHandler.updateState({ speed: parseInt(val) });
+        });
 
         // Height Slider 
         this.ui.heightSlider.addEventListener('input', () => {
             //Block the browser from sending cached defaults on boot
             if (!this.isHardwareHeightSynced) return;
 
-            const heightValue = parseInt(this.ui.heightSlider.value);
-            this.ui.heightDisplay.textContent = String(heightValue + ' CM');
-            
+            const heightValue = this.ui.heightSlider.value;
+            this.ui.heightDisplay.textContent = heightValue;
+
             //Send to backend
-            this.wsHandler.updateState({ height: heightValue });
+            this.wsHandler.updateState({ height: parseInt(heightValue) });
         });
 
         // --- Shape drawing tools ---
@@ -467,7 +572,7 @@ class AppController {
 
         // code for the zoom functionality
         let zoomLevel = 1;
-        const MIN_ZOOM = 1;   
+        const MIN_ZOOM = 1;
         const MAX_ZOOM = 4;
 
         this.ui.viewport.addEventListener('wheel', (e: WheelEvent) => {
@@ -554,19 +659,19 @@ class AppController {
             }
         }
 
-        if (state.height !== undefined && state.height !== null) {
+        if (state.current_height !== undefined && state.current_height !== null) {
             //If this is our first time hearing from the robot since refreshing
             this.isHardwareHeightSynced = true;
 
             if (!this.isChangingHeight) {
                 //Update the physical slider position
-                this.ui.heightSlider.value = state.height.toString();
-                
+                this.ui.heightSlider.value = state.current_height.toString();
+
                 //Update the text label next to the slider
                 if (this.ui.heightDisplay) {
-                    this.ui.heightDisplay.textContent = `${state.height + ' CM'}`;
+                    this.ui.heightDisplay.textContent = `${state.current_height}`;
                 }
-                
+
             }
         }
 

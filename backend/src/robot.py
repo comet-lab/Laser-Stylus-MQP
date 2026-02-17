@@ -37,7 +37,10 @@ class RobotSchema:
     raster_type: Optional[str] = None
     speed: Optional[float] = None
     height: Optional[float] = None
+    current_height: Optional[float] = None
     density: Optional[float] = None
+    
+    request_sync: Optional[bool] = None
     
     # Complex Data
     path: Optional[List[Dict[str, float]]] = None
@@ -65,6 +68,7 @@ class RobotSchema:
         self.path_preview = None # Reset after sending
         self.preview_duration = None
         self.executeCommand = None
+        self.request_sync = None
         
         # Clear motion commands, persist laserX and laserY but not x and y
         self.x = None
