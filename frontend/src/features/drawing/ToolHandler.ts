@@ -267,6 +267,14 @@ export class ToolHandler {
         const hasFixtures = cm?.hasFixtures() ?? false;
         const canApply = cm?.canApplyFixtures() ?? false;
 
+        //If the eraser removed the last of the fitures, clear everything automatically
+        if (this.state.isEraserActive && !hasFixtures) {
+            // We wrap this in a setTimeout so it safely escapes the current drawing call-stack 
+            // before triggering the heavy backend wipe and UI teardown.
+            setTimeout(() => this.clearFixtures(), 0);
+            return;
+        }
+
         this.ui.clearBoundaryBtn.disabled = !hasFixtures;
         this.ui.applyFixturesBtn.disabled = !canApply;
         this.ui.roundBrushBtn.disabled = false;

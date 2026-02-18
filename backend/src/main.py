@@ -90,8 +90,6 @@ def generate_fake_raster_path(pixel_list: List[Dict[str, float]], density: float
     min_x, max_x = min(xs), max(xs)
     min_y, max_y = min(ys), max(ys)
 
-    # ADD OVERTRAVEL to simulate real laser kinematics passing the edge.
-    # This also guarantees our PATH_ESCAPES_BOUNDS frontend test triggers!
     overtravel = 5.0
     start_x_overshoot = min_x - overtravel
     end_x_overshoot = max_x + overtravel

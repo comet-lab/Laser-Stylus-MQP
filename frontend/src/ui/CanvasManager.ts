@@ -398,6 +398,7 @@ export class CanvasManager {
         this.isFixturesDrawing = false;
         this.lastFixturesPoint = null;
         this.fixturesCanvas.releasePointerCapture(e.pointerId);
+        this.onFixturesChange();
     }
 
     private restoreDrawingState(): void {
