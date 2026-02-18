@@ -143,16 +143,21 @@ async def main():
     robot_controller.go_to_pose(start_pose@home_pose,1) # Send robot to start position
 
     while (True):
-        await control_flow_handler.main_loop()            
-            
-        # Camera frame publishing
-        latest = camera_reg.get_cam_latest(cam_type=control_flow_handler.cam_type)
-        
-        if isinstance(latest, dict):
-            latest = latest.get(control_flow_handler.cam_type, None)
+        await control_flow_handler.main_loop() 
 
+        overlay = np.zeros([720,1280,3]).astype(np.uint8)
+        overlay = cv2.circle(overlay, (300,300), 100, (0,0,255), -1)
+        latest = overlay           
+            
+        # # Camera frame publishing
+        # latest = camera_reg.get_cam_latest(cam_type=control_flow_handler.cam_type)
+        
+        # if isinstance(latest, dict):
+        #     latest = latest.get(control_flow_handler.cam_type, None)
+
+        # TODO pass homography to media
         if control_flow_handler.desired_state.isTransformedViewOn:
-            latest = camera_reg.get_transformed_view(latest, cam_type=control_flow_handler.cam_type)
+            raise NotImplementedError("homography to media not implemented yet")
 
         if(type(latest) == type(None)):
             continue

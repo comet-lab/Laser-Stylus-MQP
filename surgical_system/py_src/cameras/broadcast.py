@@ -24,7 +24,8 @@ class Broadcast:
             stdin=subprocess.PIPE,
             stderr=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            text=False
+            text=False,
+            bufsize=0
         )
         threading.Thread(target=Broadcast.read_ffmpeg_stderr, args=(self.process,), daemon=True).start()
         self.connected = True
@@ -38,10 +39,11 @@ class Broadcast:
         #     frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
         # frame = cv2.resize(frame, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
         frame = np.ascontiguousarray(frame)
-        if not self.connected or self.process == None:
-            print("not connected... Initializing ffmpeg process")
-            self.build_ffmpeg(self, frame)
+        # if not self.connected or self.process == None:
+        #     print("not connected... Initializing ffmpeg process")
+        #     self.build_ffmpeg(self, frame)
         self.process.stdin.write(frame.tobytes())
+        self.process.stdin.flush()
     
     def __del__(self):
         self.process.stdin.close()
@@ -49,37 +51,20 @@ class Broadcast:
         print("FFmpeg process closed.")
 
     def build_ffmpeg(self, frame):
-        height, width = frame.shape[0], frame.shape[1]
+        # height, width = frame.shape[0], frame.shape[1]
         # TODO check nvenc available
-        ffmpeg_command = [
+        self.ffmpeg_command = [
             'ffmpeg',
-            '-y',  # Overwrite output files without asking
-            '-f', 'rawvideo',  # Input format is raw video
+            '-f', 'rawvideo',
             '-pix_fmt', 'bgr24',
-            '-s', f'{width}x{height}',
-            # '-r', '24', # framerate
-            #'-re',
-            "-r", "50",# framerate
-            '-i', '-',  # Read input from stdin pipe
-            '-c:v', 'libx264',  # Video codec H.264
-            '-preset', 'ultrafast',
-            '-tune', 'zerolatency',
-            '-x264opts', 'sync-lookahead=0:sliced-threads=1',
-            # '-c:v', 'h264_nvenc',  # Video codec nvidia encode
-            # '-preset', 'llhq', # Low latency high quality
-            # '-tune', 'ull', # Ultra low latency
-            '-rtsp_transport', 'tcp',
-            '-fflags', 'nobuffer',
-            '-flags', 'low_delay',
-            '-probesize', '32',
-            '-analyzeduration', '0',
-            '-g', '30',
-            '-bf', '0',
-            '-b:v', '6M',
-            '-f', 'rtsp',  # Output format is RTSP
-            self.rtsp_url
+            '-s', '1280x720',
+            '-framerate', '3',
+            '-i', '-',
+            '-c:v', 'rawvideo',
+            '-f', 'rawvideo',
+            'tcp://media:5000'
         ]
-        return ffmpeg_command
+        return self.ffmpeg_command
     
 
     # old_ffmpeg_command = [
