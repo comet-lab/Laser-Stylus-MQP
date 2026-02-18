@@ -49,6 +49,9 @@ export class CanvasManager {
     //Backup to repeat the path
     private backupDrawingState: any[] = [];
 
+    //Bounds of drawn path on the canvas
+    private lastDrawnBoundingBox: { minX: number, maxX: number, minY: number, maxY: number } | null = null;
+
     // --- CONFIG: Visual Defaults ---
     private readonly SHAPE_DEFAULTS = {
         fill: 'transparent',
@@ -1251,8 +1254,22 @@ export class CanvasManager {
     }
 
     // =========================================================================
-    // Preview/Execute Logic (NEW)
+    // Preview/Execute Logic
     // =========================================================================
+
+    public checkIfPathEscapes(path: Position[]): boolean {
+        if (!this.lastDrawnBoundingBox) return false;
+        const { minX, maxX, minY, maxY } = this.lastDrawnBoundingBox;
+        const TOLERANCE = 2.0; // Allow a small 2px margin for rendering differences
+
+        for (const p of path) {
+            if (p.x < minX - TOLERANCE || p.x > maxX + TOLERANCE ||
+                p.y < minY - TOLERANCE || p.y > maxY + TOLERANCE) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /**
      * Sends full path data to backend for preview/preparation
@@ -1299,6 +1316,16 @@ export class CanvasManager {
             y: (p.y / height) * this.video.videoHeight
         }));
 
+        //Calculate bounding box of the drawn path in video space
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (const p of videoPixels) {
+            if (p.x < minX) minX = p.x;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.y > maxY) maxY = p.y;
+        }
+        this.lastDrawnBoundingBox = { minX, maxX, minY, maxY };
+
         const formData = new FormData();
         formData.append('speed', speed.toString());
         formData.append('density', density.toString());
@@ -1317,10 +1344,18 @@ export class CanvasManager {
 
         const response = await this.postFormData('/api/preview', formData);
 
+        let warning = hasFixtureOverlap ? "FIXTURE_OVERLAP" : undefined;
+
+        if (!warning && response.path && response.path.length > 0) {
+            if (this.checkIfPathEscapes(response.path)) {
+                warning = "PATH_ESCAPES_BOUNDS";
+            }
+        }
+
         return {
             duration: response.duration,
             path: response.path,
-            warning: hasFixtureOverlap ? "FIXTURE_OVERLAP" : undefined
+            warning: warning
         };
     }
 
@@ -1526,17 +1561,25 @@ export class CanvasManager {
     }
 
     /**
-     * Clears the planned path and raster mask on the server.
-     * effectively "zeroing out" the execution plan.
+     * Clears the planned path and raster mask on the server,
+     * overwriting path.png with a blank white image.
      */
     public async clearPathAndRasterOnServer(): Promise<void> {
         const formData = new FormData();
-        //Send safe defaults
         formData.append('speed', '10');
         formData.append('density', '0');
         formData.append('pixels', '[]');
-        formData.append('is_fill', 'false');
-        //By not appending a file, the backend will set raster_mask to None
-        await this.postFormData('/api/preview', formData);
+        
+        //Force the backend to process the file by faking that fill is enabled
+        formData.append('is_fill', 'true'); 
+        
+        try {
+            //Borrow fixture blob generator to make a clean white image
+            const blob = await this.generateBlankFixtureBlob();
+            formData.append('file', blob, 'path.png');
+            await this.postFormData('/api/preview', formData);
+        } catch (e) {
+            console.error("Failed to reset path.png on server:", e);
+        }
     }
 }

@@ -101,7 +101,7 @@ export class PreviewManager {
     const density = this.state.fillEnabled
       ? parseFloat(this.ui.rasterDensityInput.value)
       : 0;
-    const rasterType = this.state.selectedRasterPattern || '';
+    const rasterType = 'line_raster'; //TODO: Remove entirely, unless we want to add more raster patterns in the future.
     const isFill = this.state.fillEnabled;
 
     this.ui.previewDuration.textContent = 'Computing...';
@@ -115,7 +115,7 @@ export class PreviewManager {
       const response = await cm.previewPath(speed, rasterType, density, isFill);
       const hasValidPath = response.path && response.path.length > 0;
 
-      // 1. Handle Active Safety Warnings
+      //Handle Active Safety Warnings
       if (response.warning === "FIXTURE_OVERLAP") {
         ToastManager.show(
           "SAFETY WARNING: Your planned path crosses into a restricted fixture zone. Please confirm to allow execution.",
@@ -124,21 +124,39 @@ export class PreviewManager {
             requireAck: true,
             ackText: 'CONFIRM',
             onAcknowledge: () => {
-              // Only unlock the button once the user explicitly clicks CONFIRM
+              //Only unlock the button once the user explicitly clicks CONFIRM
               if (hasValidPath) this.setExecuteButtonState(true);
             }
           }
         );
 
         if (hasValidPath) {
-          // Draw the path to show them the mistake, but do not enable the button
+          //Draw the path to show them the mistake, but do not enable the button
           this.handlePathData(response.path, response.duration, false);
         }
-
-        // 2. Handle Safe Paths
-      } else if (hasValidPath) {
+      }
+      //If the previewed path goes outside of the boundaries of the drawn path
+      //THIS IS JUST FOR THE SIMULATED RESPONSE WHEN THE ROBOT IS NOT CONNECTED
+      else if (response.warning === "PATH_ESCAPES_BOUNDS") {
+        ToastManager.show(
+          "PRECISION WARNING: The generated path extends outside your originally drawn boundaries. Please confirm to allow execution.",
+          {
+            type: 'warning', // Uses your high-vis Amber styling
+            requireAck: true,
+            ackText: 'CONFIRM',
+            onAcknowledge: () => {
+              if (hasValidPath) this.setExecuteButtonState(true);
+            }
+          }
+        );
+        // Draw the path to show them the mistake, but keep the button locked
+        if (hasValidPath) this.handlePathData(response.path, response.duration, false);
+      }
+      //Handle Safe Paths
+      else if (hasValidPath) {
         this.handlePathData(response.path, response.duration, true);
-      } else {
+      }
+      else {
         this.ui.previewDuration.textContent = 'Waiting...';
       }
 
@@ -167,8 +185,8 @@ export class PreviewManager {
     //TODO: Get rid of this check, shouldn't be necessary if the data is being sent properly from backend
     //If we don't get a duration, and the path is the same, drop this message
     if (serverDuration === undefined && this.sourcePath.length === newLength) {
-        console.log("Ignored duplicate path from robot.");
-        return; 
+      console.log("Ignored duplicate path from robot.");
+      return;
     }
 
     const path: Position[] = [];
@@ -177,9 +195,28 @@ export class PreviewManager {
       path.push({ x: previewData.x[i], y: previewData.y[i] });
     }
 
-    const finalDuration = serverDuration || (this.durationSeconds > 0 ? this.durationSeconds: 10);
+    const finalDuration = serverDuration || (this.durationSeconds > 0 ? this.durationSeconds : 10);
 
-    this.handlePathData(path, finalDuration, true);
+    ToastManager.clearAll();
+    const cm = this.getCanvasManager();
+
+    if (cm && cm.checkIfPathEscapes(path)) {
+      ToastManager.show(
+        "SAFETY WARNING: The generated path extends outside your originally drawn boundaries. Please confirm to allow execution.",
+        {
+          type: 'warning',
+          requireAck: true,
+          ackText: 'CONFIRM',
+          onAcknowledge: () => {
+            this.setExecuteButtonState(true);
+          }
+        }
+      );
+      // Pass false to keep the execute button locked until confirmed
+      this.handlePathData(path, finalDuration, false);
+    } else {
+      this.handlePathData(path, finalDuration, true);
+    }
   }
 
   private handlePathData(videoPath: Position[], duration: number, enableExecute: boolean): void {

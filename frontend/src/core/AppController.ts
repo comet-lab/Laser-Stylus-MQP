@@ -13,6 +13,7 @@ import { ExecutionManager } from '../features/drawing/ExecutionManager';
 import { SettingsManager } from '../features/settings/SettingsManager';
 import { PreviewManager } from '../features/drawing/PreviewManager';
 import { ShapeType } from '../ui/types';
+import { ToastManager } from '../ui/ToastManager';
 
 // ---------------------------------------------------------------------------
 // Global type augmentation – MediaMTXWebRTCReader lives on window at runtime
@@ -212,15 +213,13 @@ class AppController {
 
         // --- Transformed view on by default ---
         this.ui.transformedModeSwitch.checked = true;
+        this.ui.transformedModeSwitch.dispatchEvent(new Event('change'));
         if (this.canvasManager) {
-            // Force the view update immediately
             await this.canvasManager.updateViewSettings(true, false);
         }
 
         // --- Height Sync ---
         this.isHardwareHeightSynced = false;
-
-        //Lock the slider trigger until we get telemetry
         this.ui.heightTrigger.disabled = true;
         this.ui.heightDisplay.textContent = "...";
 
@@ -228,22 +227,35 @@ class AppController {
         this.ui.speedSlider.value = "10";
         this.ui.speedDisplay.textContent = "10";
 
-        //Send defaults to robot immediately
-        //Also explicitly ask to report state to get the necessary info
         this.wsHandler.updateState({ speed: 10, isLaserOn: false, isRobotOn: false, request_sync: true });
 
-        // --- Reset all masks ---
-        if (this.canvasManager) {
-            console.log("Resetting all masks on server...");
-            try {
-                await Promise.all([
-                    this.canvasManager.clearFixturesOnServer(),
-                    this.canvasManager.resetHeatArea(),
-                    this.canvasManager.clearPathAndRasterOnServer()
-                ]);
-            } catch (e) {
-                console.warn("Could not reset masks (Video might not be ready):", e);
-            }
+        // --- Reset all masks and the server memory ---
+        console.log("Resetting server environment...");
+        try {
+            await fetch(`http://${window.location.hostname}:443/api/system_reset`, {
+                method: 'POST'
+            });
+            
+            //Wait for CanvasManager to be ready before trying to upload masks!
+            const uploadBlankMasks = async () => {
+                if (this.canvasManager) {
+                    await this.canvasManager.clearFixturesOnServer();
+                    await this.canvasManager.resetHeatArea();
+                    await this.canvasManager.clearPathAndRasterOnServer();
+                    
+                    //Clear the local canvas visually once we know it exists
+                    this.canvasManager.clearFixtures();
+                    this.canvasManager.clearDrawing();
+                } else {
+                    //Check again in 250ms if the video stream hasn't loaded yet
+                    setTimeout(uploadBlankMasks, 250);
+                }
+            };
+            
+            uploadBlankMasks();
+
+        } catch (e) {
+            console.warn("Could not reach endpoints to reset masks:", e);
         }
     }
 
@@ -263,6 +275,9 @@ class AppController {
             () => this.toolHandler.updateThermalButtonState(),
             () => { this.ui.resetHeatAreaBtn.disabled = false; this.ui.heatLegend.classList.remove('hidden'); },
         );
+
+        //Force transformed view on init
+        this.canvasManager.updateViewSettings(this.ui.transformedModeSwitch.checked, false);
 
         this.canvasManager.onShapeModified = () => {
             if (this.ui.previewToggleOn.classList.contains('active')) {
@@ -330,7 +345,12 @@ class AppController {
 
         this.ui.prepareBtn.addEventListener('click', () => this.ui.preparePopup.classList.add('active'));
         this.ui.prepareCloseBtn.addEventListener('click', () => this.ui.preparePopup.classList.remove('active'));
-        this.ui.prepareCancelBtn.addEventListener('click', () => this.ui.preparePopup.classList.remove('active'));
+        this.ui.prepareCancelBtn.addEventListener('click', () => {
+            this.ui.preparePopup.classList.remove('active');
+            this.previewManager.togglePreview(false);
+            ToastManager.clearAll();
+            this.previewManager.resetPreviewState();
+        });
 
         this.ui.previewToggleOn.addEventListener('click', () => {
             this.previewManager.togglePreview(true);
@@ -345,9 +365,6 @@ class AppController {
                 this.previewManager.refreshPreview();
             }
         };
-
-        this.ui.rasterBtnA.addEventListener('click', refreshPreview);
-        this.ui.rasterBtnB.addEventListener('click', refreshPreview);
 
         let debounceTimer: any;
         this.ui.rasterDensityInput.addEventListener('input', () => {
@@ -586,7 +603,11 @@ class AppController {
         this.ui.fillOnBtn.addEventListener('click', () => updateFillState(true));
         this.ui.fillOffBtn.addEventListener('click', () => updateFillState(false));
 
-        // Raster pattern buttons are mutually exclusive
+        //TODO: Remove entirely, unless we want to add more raster patterns in the future.
+        /*
+        this.ui.rasterBtnA.addEventListener('click', refreshPreview);
+        this.ui.rasterBtnB.addEventListener('click', refreshPreview);
+
         this.ui.rasterBtnA.addEventListener('click', () => {
             this.ui.rasterBtnA.classList.add('active');
             this.ui.rasterBtnB.classList.remove('active');
@@ -597,6 +618,7 @@ class AppController {
             this.ui.rasterBtnA.classList.remove('active');
             this.state.selectedRasterPattern = 'spiral_raster';
         });
+        */
 
         // --- View-transform  ---
         this.ui.transformedModeSwitch.addEventListener('change', async () => {

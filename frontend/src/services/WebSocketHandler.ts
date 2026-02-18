@@ -63,7 +63,7 @@ export class WebSocketHandler {
     constructor(outputElement: HTMLElement | null) {
         // Fallback to local 8000 if env variable is missing
         const wsName = import.meta.env.VITE_UI_WEBSOCKET_NAME || 'ui';
-        this.url = `ws://${window.location.hostname}:8000/ws/${wsName}`;
+        this.url = `ws://${window.location.hostname}:443/ws/${wsName}`;
         this.outputElement = outputElement;
     }
 

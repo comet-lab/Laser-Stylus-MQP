@@ -27,7 +27,8 @@ export interface AppState {
 
     // --- Raster / Fill State ---
     fillEnabled: boolean;
-    selectedRasterPattern: 'line_raster' | 'spiral_raster' | null;
+    //TODO: Remove entirely, unless we want to add more raster patterns in the future.
+    selectedRasterPattern: 'line_raster' | null;
 
     // --- Application Mode ---
     currentMode: 'drawing' | 'thermal' | 'fixtures';

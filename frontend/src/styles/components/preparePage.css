@@ -139,6 +139,14 @@
   margin: 0;
   white-space: nowrap;
 }
+.row-label-2 {
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 500;
+  font-size: 10px;
+  color: #a0b0b8;
+  margin: 0;
+  white-space: nowrap;
+}
 
 .input-label, 
 .fill-setting-label {
