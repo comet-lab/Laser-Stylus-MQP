@@ -143,23 +143,30 @@ async def main():
     robot_controller.go_to_pose(start_pose@home_pose,1) # Send robot to start position
 
     while (True):
-        await control_flow_handler.main_loop()            
+        await control_flow_handler.main_loop()
+
+        overlay = np.zeros([720,1280,3]).astype(np.uint8)
+        overlay = cv2.circle(overlay, (300,300), 100, (0,0,255), -1)
+        latest = overlay
+        # print(latest.shape)
+        # print(len(latest))
             
         # Camera frame publishing
-        latest = camera_reg.get_cam_latest(cam_type=control_flow_handler.cam_type)
+        # latest = camera_reg.get_cam_latest(cam_type=control_flow_handler.cam_type)
         
-        if isinstance(latest, dict):
-            latest = latest.get(control_flow_handler.cam_type, None)
+        # if isinstance(latest, dict):
+        #     latest = latest.get(control_flow_handler.cam_type, None)
 
-        if control_flow_handler.desired_state.isTransformedViewOn:
-            latest = camera_reg.get_transformed_view(latest, cam_type=control_flow_handler.cam_type)
+        # if control_flow_handler.desired_state.isTransformedViewOn:
+        #     latest = camera_reg.get_transformed_view(latest, cam_type=control_flow_handler.cam_type)
 
-        if(type(latest) == type(None)):
-            continue
+        # if(type(latest) == type(None)):
+        #     continue
 
-        if latest.shape != (1280, 720):
-            latest = cv2.resize(latest, (1280, 720), interpolation=cv2.INTER_NEAREST)
+        # if latest.shape != (1280, 720):
+        #     latest = cv2.resize(latest, (1280, 720), interpolation=cv2.INTER_NEAREST)
 
+        # TODO stall and lower fps to reduce processing time
         if(b.connected):
             b.publish_frame(latest)
         else:

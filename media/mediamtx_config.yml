@@ -1,3 +1,4 @@
+writeQueueSize: 1024
 webrtcIpsFromInterfaces: no
 webrtcIpsFromInterfacesList:
   - wlp3s0

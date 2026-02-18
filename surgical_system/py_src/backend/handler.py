@@ -197,7 +197,7 @@ class Handler:
             elif(self.desired_state.x is not None and self.desired_state.y is not None 
                  and not self.robot_controller.is_trajectory_running()):
                 if (self.desired_state.x >= 0 and self.desired_state.y >= 0):
-                    print(f"Live controller trigger {self.desired_state.x}, {self.desired_state.y}")
+                    # print(f"Live controller trigger {self.desired_state.x}, {self.desired_state.y}")
                     self._do_live_control()
                     self.desired_state.path = None
                     

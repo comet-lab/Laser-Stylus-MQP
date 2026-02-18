@@ -1,3 +1,2 @@
-PySpin
-matplotlib.pyplot
+opencv-python
 numpy

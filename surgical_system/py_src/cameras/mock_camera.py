@@ -2,11 +2,10 @@ import numpy as np
 
 class MockCamera:
     def __init__(self, cam_type):
-        self.latest_image = np.random.randint(0, 256, (360//8, 640//8, 3), dtype=np.uint8)
-        self.cam_type = cam_type
+        pass
     
     def start_stream(self):
-        print("Starting mock camera stream")
+        raise NotImplementedError("Cameras Deprecated")
 
     def get_latest(self):
-        return {self.cam_type: self.latest_image}
+        raise NotImplementedError("Cameras Deprecated")
