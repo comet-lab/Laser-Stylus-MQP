@@ -1,47 +1,52 @@
-from PIL import Image
-import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation
 import numpy as np
-import cv2
+import time
 
-from motion_planning.motion_planning import Motion_Planner
-from robot.mock_robot_controller import MockRobotController
-from laser_control.mock_laser import MockLaser
+if __name__=='__main__':
+    from robot.robot_controller import Robot_Controller
+else:
+    from .robot.robot_controller import Robot_Controller
 
 
 def main():
-    img_path = "surgical_system/py_src/motion_planning/path2.png"
-    img = np.array(Image.open(img_path))
-    img = Motion_Planner.fill_in_shape(img)
-    img = cv2.resize(img, (1280, 720), interpolation=cv2.INTER_NEAREST)
-    if img.ndim == 3 and img.shape[2] == 4:
-        gray = cv2.cvtColor(img, cv2.COLOR_BGRA2GRAY)
-    elif img.ndim == 3:
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    else:
-        gray = img 
-        
-    polygon, edge = Motion_Planner._create_polygon(gray)
-    # plot_polygon(polygon, show_vertices=True)
-    waypoints = Motion_Planner.poly_raster(
-        polygon,
-        spacing=35.0,        # pixels
-        theta_deg=45.0,      # angle
-        margin=10.0          # inward offset
-    )
-    waypoints = Motion_Planner.smooth_corners_fillet(waypoints, radius=5, n_arc=10)
+    robot_controller = Robot_Controller()
+    home_pose = robot_controller.get_home_pose()
     
-    # plt.plot(waypoints[:, 0], waypoints[:, 1])
-    # plt.plot(edge[:, 0], edge[:, 1])
-    # plt.show()
+    mode = 1
+    height = 0.2 # m
+    x = 0
+    y = 0
+    target_pose = np.array([[1,0,0,x],[0,1,0,y],[0,0,1,height],[0,0,0,1]])
+
+    time.sleep(2)
+    returnedPose = robot_controller.go_to_pose(target_pose@home_pose,mode)
     
-    laser_obj = MockLaser()
-    mock_robot = MockRobotController(laser_obj)
+    height = 25  # [cm] height of the laser above the surface
+    numPasses = 6
+    numScans = 1
+    # targetPos = np.array([[-1.75, 0, height], # x, y, z [cm]
+    #                     [1.75, 0, height],
+    #                     [1.75, 1.75, height]])
     
+    # targetPos = [[-1.75, -1.75, height], # x, y, z [cm]
+    #                 [1.75, 1.75, height]]
     
-    traj = mock_robot.create_custom_trajectory(waypoints, 3)
-    positions = traj.target_position_list
+    targetPos = [[0, 0, height]]
+
+
+    gains = {"Positions": targetPos, 
+             "Pattern": "Circle",
+             "Radius": 2,
+             "Passes": numPasses,
+             "MaxVelocity": 0.1, # [cm/s]
+             "MaxAcceleration": 0,#[cm/s/s]
+             "Durations":[10]} #time per step
     
+    traj = robot_controller.create_trajectory(gains)
+    robot_controller.run_trajectory(traj)
+    robot_controller.close_robot()
+    
+
     
 if __name__=='__main__':
     main()

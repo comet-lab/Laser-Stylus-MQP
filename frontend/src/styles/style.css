@@ -215,6 +215,7 @@ pre {
   left: 65.5px;
   width: calc(100% - 65.5px);
   height: calc(100% - 60px);
+  overflow: hidden;
   background-color: #000;
 }
 

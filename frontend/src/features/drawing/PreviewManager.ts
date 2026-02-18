@@ -24,8 +24,7 @@ export class PreviewManager {
   private animationFrameId: number | null = null;
 
   // Visual styling
-  private readonly PATH_COLOR = '#002B4C'; // Neon Yellow
-  private readonly PATH_ARROW_COLOR = '#002B4C';
+  private readonly PATH_COLOR = '#ffff00'; // Neon Yellow
   private readonly PATH_WIDTH = 4;
   private readonly DASH_PATTERN = [12, 6];
   private readonly GLOW_COLOR = 'rgba(255, 255, 0, 0.4)';
@@ -148,7 +147,7 @@ export class PreviewManager {
       path.push({ x: previewData.x[i], y: previewData.y[i] });
     }
 
-    this.handlePathData(path, serverDuration || 15);
+    this.handlePathData(path, serverDuration || 10);
   }
 
   private handlePathData(videoPath: Position[], duration: number): void {
@@ -234,10 +233,10 @@ export class PreviewManager {
   }
 
   private drawDirectionArrows(ctx: CanvasRenderingContext2D): void {
-    const arrowSpacing = 200;
+    const arrowSpacing = 80;
     let accumulatedDist = 0;
 
-    ctx.fillStyle = this.PATH_ARROW_COLOR;
+    ctx.fillStyle = this.PATH_COLOR;
     ctx.setLineDash([]);
 
     for (let i = 1; i < this.pathData.length; i++) {

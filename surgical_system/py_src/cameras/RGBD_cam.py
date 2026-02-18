@@ -90,41 +90,37 @@ class RGBD_Cam(Camera):
                 return 
             while True:
                 self.thread_ready.wait()
-                frames = self.pipeline.poll_for_frames()
-                if frames:
-                    
-                    depth = frames.get_depth_frame()
-                    color = frames.get_color_frame()
-                    raw = np.asanyarray(depth.get_data())
-                    # print(
-                    #     "scale:", self.depth_scale,
-                    #     "raw mean:", raw.mean(),
-                    #     "meters mean:", raw.mean() * self.depth_scale
-                    # )
+                frames = self.pipeline.wait_for_frames()
+                depth = frames.get_depth_frame()
+                color = frames.get_color_frame()
+                raw = np.asanyarray(depth.get_data())
+                # print(
+                #     "scale:", self.depth_scale,
+                #     "raw mean:", raw.mean(),
+                #     "meters mean:", raw.mean() * self.depth_scale
+                # )
 
-                    # for f in self.recommended_filters:
-                    #     depth = f.process(depth)
-                    if not depth or not color:
-                        continue
-                    
-                    # depth = self.thresh.process(depth)
-                    # depth = self.depth_to_disparity.process(depth)
-                    # depth = self.decimation.process(depth)
-                    # depth = self.spatial.process(depth)
-                    # depth = self.temporal.process(depth)
-                    # depth = self.hole_filling.process(depth)
-                    # depth = self.disparity_to_depth.process(depth)
-                    depth_np = np.asanyarray(depth.get_data()) * self.depth_scale
-                    
-                    color_np = np.asanyarray(color.get_data())
-                    ts = frames.get_timestamp()  # milliseconds
-                    item = {"color": color_np, "depth": depth_np, "ts": ts}
+                # for f in self.recommended_filters:
+                #     depth = f.process(depth)
+                if not depth or not color:
+                    continue
+                
+                depth = self.thresh.process(depth)
+                depth = self.depth_to_disparity.process(depth)
+                depth = self.decimation.process(depth)
+                depth = self.spatial.process(depth)
+                depth = self.temporal.process(depth)
+                depth = self.hole_filling.process(depth)
+                depth = self.disparity_to_depth.process(depth)
+                depth_np = np.asanyarray(depth.get_data()) * self.depth_scale
+                
+                color_np = np.asanyarray(color.get_data())
+                ts = frames.get_timestamp()  # milliseconds
+                item = {"color": color_np, "depth": depth_np, "ts": ts}
 
-                    self._lock.acquire()
-                    self._latest = item
-                    self._lock.release()
-                else:
-                    time.sleep(0.0005)
+                self._lock.acquire()
+                self._latest = item
+                self._lock.release()
         finally:
             self.pipeline.stop()
             
@@ -351,22 +347,21 @@ def main():
      
     # rgbd_cam.display_depth_stream()
     while(True):
-        # rgbd_cam.display_all_streams()
+        rgbd_cam.display_all_streams()
     #         image = rgbd_cam.get_latest()
     #         # rgbd_cam.plot_depth_point_cloud(image['depth'])
-            img = rgbd_cam.get_latest()
-            if img is None:
-                continue 
-            img = img['color']
-            pixel = rgbd_cam.get_beam_pixel(img)
-            print(pixel)
+    #         # img = rgbd_cam.get_latest()
+    #         # if img is None:
+    #         #     continue 
+    #         # img = img['color']
+    #         # pixel = rgbd_cam.get_beam_pixel(img)
     #         # print(pixel)
     #         # rounded_pixel = np.rint(pixel).astype(int)  
     #         # cv2.circle(img, rounded_pixel, radius=5, color=(0, 255, 0), thickness=-1)
     #         # cv2.imshow("pixel marker", img)
-        # key = cv2.waitKey(1) & 0xFF
-        # if key == ord('q'):
-        #     break
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
+            break
     
 
 if __name__=='__main__':

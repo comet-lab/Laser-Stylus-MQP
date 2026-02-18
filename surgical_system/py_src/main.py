@@ -92,7 +92,7 @@ async def main():
         camera_reg = MockCameraRegistration(therm_cam, rgbd_cam, robot_controller, laser_obj)
     print("Starting Streams ")
     b = Broadcast(mocking=mock_robot)
-    print(f"Broadcast connection status: {b.connected}")
+    print(f"Broadcast connection status: {b.connect()}")
     
     # def camera_broadcast_fn():
     #     while True:
@@ -181,11 +181,9 @@ async def main():
         if(b.connected):
             b.publish_frame(latest)
         else:
-            b.connect(latest)
+            b.connect()
             print('connecting...')
             time.sleep(2)
-        
-        await asyncio.sleep(0.005)
   
 
 if __name__ == "__main__":

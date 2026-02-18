@@ -1,4 +1,4 @@
-import time, threading, warnings, math
+import time, threading, queue, warnings, math
 import PySpin
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,13 +10,13 @@ else:
 
 class ThermalCam(Camera):    
     def __init__(self, IRFormat="TemperatureLinear10mK", height=480, frame_rate="Rate50Hz",focal_distance=0.2, pix_Per_M = 7000):
-        super().__init__("Thermal Camera", 640, height, pix_Per_M)
+        super().__init__("Thermal Camera", 100,height, pix_Per_M)
         self.focal_distance = focal_distance
         self.IRFormat = IRFormat
         self.frame_rate = frame_rate
         self.temp_scale = 100.0      
         self.acquiring_flag = False
-
+        self.width = 640
         try:
             ### THIS CANNOT BE INIT IN THE THREAD, LEAVE THIS HERE
             self.initialize_camera()
@@ -51,15 +51,6 @@ class ThermalCam(Camera):
                 self.thread_ready.wait()
                 images = self.start_recording(1)  # returns a list of images
                 # Take that image and extract temperature info
-                # if len(images) == 0:
-                #     continue
-                if not images:          # covers [] and None
-                    continue
-
-                img0 = images[0]
-                if img0 is None:
-                    continue
-            
                 tempInfo = np.subtract(images[0]/self.temp_scale, 273.15) 
                 ts = time.time() - t
                 item = {"thermal": tempInfo, "ts": ts}

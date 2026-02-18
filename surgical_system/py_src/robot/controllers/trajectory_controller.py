@@ -1,13 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
 # from laser_controller import LaserController
 
 from .trajectory_helpers.quintic_trajectory import QuinticTrajectory
 from .trajectory_helpers.path_generation import Path_Gen
-
-# from trajectory_helpers.quintic_trajectory import QuinticTrajectory
-# from trajectory_helpers.path_generation import Path_Gen
 import math
 
 class TrajectoryController():
@@ -20,9 +16,6 @@ class TrajectoryController():
         self._laser_on = False
         self._irradiance = 0
         self.debug = debug
-        self.target_position_list = None 
-        self.target_vel_list = None
-        self.total_path_time = None
         
         # self.laser_info = controller_msg.laser_info
         
@@ -89,11 +82,10 @@ class TrajectoryController():
         self.total_distance = np.sum(distances)
         if self.durations[0] == -1:
             self.durations[0] = self.total_distance/float(self.max_velocity)
-            # print(self.durations[0])
+            print(self.durations[0])
             
         durations = (distances / np.sum(distances)) * self.durations[0]
         cumulative_durations = np.cumsum(durations)
-        self.total_path_time = cumulative_durations[-1] # total time
         if points.shape[-1] < 3: # Points are not 3D
             points = np.hstack((points, np.full((points.shape[0], 1), self.positions[0, -1])))
         
@@ -109,7 +101,7 @@ class TrajectoryController():
         self.MAX_ACCELERATION = np.full(self.n_dims, maxAcceleration) #!!!!!! FIND UNITS [m/s^2]
 
         durations = np.insert(durations, 0, 0) 
-        v_way = np.zeros_like(position)          
+        v_way = np.zeros_like(position)          # (N, D)
 
         # endpoints
         v_way[0]  = 0.0
@@ -119,23 +111,22 @@ class TrajectoryController():
             if dt <= 0:
                 raise ValueError("durations must be strictly increasing")
             v_way[i] = (position[i] - position[i-1]) / dt
-            
-            # detect corner by angle between segments
-            u = position[i]   - position[i-1]
-            v = position[i+1] - position[i]
-            if np.linalg.norm(u) > 1e-9 and np.linalg.norm(v) > 1e-9:
-                cosang = np.dot(u, v) / (np.linalg.norm(u)*np.linalg.norm(v))
-                if cosang < 0.95:   # corner threshold
-                    v_way[i] = 0.0
         
         a_way = np.zeros_like(position)
-        
         self.trajectories = np.empty((self.n_points - 1, self.n_dims), dtype=object)
         for i in range(self.n_points - 1):
-            t0, tf = durations[i], durations[i+1]
-            p0, pf = position[i], position[i+1]
-            v0, vf = v_way[i], v_way[i+1]
-            a0, af = a_way[i], a_way[i+1]
+            t0 = durations[i]
+            tf = durations[i + 1]
+
+            p0 = position[i]
+            pf = position[i + 1]
+
+            v0 = v_way[i]
+            vf = v_way[i + 1]
+
+            a0 = a_way[i]
+            af = a_way[i + 1]
+
 
             for d in range(self.n_dims):
                 self.trajectories[i, d] = QuinticTrajectory(
@@ -147,75 +138,25 @@ class TrajectoryController():
         
         time_step = 0.05
         data_num = int(math.ceil(durations[-1]/time_step)) 
-        target_vel_list = np.empty((data_num, 3))
-        target_position_list = np.empty((data_num, 3))
+        actual_vel_list = np.empty((data_num, 3))
         times = np.linspace(0, durations[-1], data_num)
-        for i in range(data_num): # very slow for large i
+        for i in range(data_num):
             movement = self.update(times[i])
-            target_position = (movement['position'])
-            target_position_list[i] = target_position
-            
-            target_vel= (movement['velocity'])
-            target_vel_list[i] = target_vel
+            target_vel = (movement['velocity'])
+            actual_vel_list[i] = target_vel
             
         plt.figure(figsize=(6,4))
-        plt.plot(times, target_position_list[:, 0], label="x [m]")
-        plt.plot(times, target_position_list[:, 1], label="y [m]")
+        plt.plot(times, actual_vel_list[:, 0], label="actual x")
+        plt.plot(times, actual_vel_list[:, 1], label="actual y")
         plt.xlabel("Time [s]")
-        plt.ylabel("Position [m]")
+        plt.ylabel("velcity [m]")
         plt.title("Time vs Position (Guess)")
         plt.grid(True)
         plt.legend()
         plt.tight_layout()
-        plt.savefig("Position(x,y) trajectory.png")
-        
-        plt.figure(figsize=(6,4))
-        
-        plt.plot(
-            target_position_list[:, 0],
-            target_position_list[:, 1],
-            label="Trajectory",
-        )
-
-        # Start and end points
-        plt.scatter(
-            target_position_list[0, 0],
-            target_position_list[0, 1],
-            c="green",
-            s=60,
-            marker="o",
-            label="Start",
-            zorder=3
-        )
-
-        plt.scatter(
-            target_position_list[-1, 0],
-            target_position_list[-1, 1],
-            c="red",
-            s=60,
-            marker="X",
-            label="Finish",
-            zorder=3
-        )
-        
-        plt.xlabel("x [m]")
-        plt.ylabel("y [m]")
-        plt.title("Position Plot (Guess)")
-        plt.grid(True)
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig("Position_plot.png", dpi=600)
-        
-        self.target_position_list = target_position_list 
-        self.target_vel_list = target_vel_list
+        plt.savefig("trajectory.png")
         # plt.show()
         # plt.close(3)
-        
-    def get_path_position(self):
-        return self.target_position_list.copy()
-
-    def get_path_velocity(self):
-        return self.target_vel_list.copy()
 
     def update(self, time):
         self.t = time
@@ -261,14 +202,3 @@ class TrajectoryController():
         self.max_acceleration = path_info["MaxAcceleration"]
         self.max_velocity = path_info["MaxVelocity"]
         self.radius = path_info["Radius"]
-        
-
-def main():
-    import cv2
-    from motion_planning.motion_planning import Motion_Planner
-
-    
-    pass 
-
-if __name__ == "__main__":
-    main()

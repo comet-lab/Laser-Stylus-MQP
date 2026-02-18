@@ -20,7 +20,7 @@ class RobotSchema:
     # Laser & Vision State
     laserX: Optional[float] = None
     laserY: Optional[float] = None
-    maxHeat: Optional[float] = None
+    averageHeat: Optional[float] = None
     beamWaist: Optional[float] = None
     
     # Flags
@@ -36,7 +36,6 @@ class RobotSchema:
     heat_mask: Optional[str] = None
     raster_type: Optional[str] = None
     speed: Optional[float] = None
-    density: Optional[float] = None
     height: Optional[float] = None
     density: Optional[float] = None
     

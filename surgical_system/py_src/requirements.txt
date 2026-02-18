@@ -8,6 +8,5 @@ pyserial>=3.5
 pyrealsense2
 pandas
 websockets
-shapely
 #Note for pyspin FLIR Camera
 # pip install spinnaker_python-2.6.0.160-cp38-cp38-linux_x86_64.whl
