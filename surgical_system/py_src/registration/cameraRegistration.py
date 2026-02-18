@@ -4,6 +4,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 import matplotlib.pyplot as plt
 
+
 if __name__=='__main__':
     import sys, pathlib
     HERE = pathlib.Path(__file__).resolve().parent
@@ -12,10 +13,10 @@ if __name__=='__main__':
         if (candidate / "robot").is_dir() and (candidate / "cameras").is_dir() and (candidate / "laser_control").is_dir():
             sys.path.insert(0, str(candidate))
             break
-    from system_calibration import System_Calibration
-    from roi_selector import ROISelector
+    from registration.transformations.system_calibration import System_Calibration
+    from registration.transformations.roi_selector import ROISelector
 else:
-    from registration.system_calibration import System_Calibration
+    from registration.transformations.system_calibration import System_Calibration
     
 from robot.robot_controller import Robot_Controller
 from cameras.thermal_cam import ThermalCam
@@ -37,8 +38,16 @@ class Camera_Registration(System_Calibration):
             print("Waiting for camera response...")
             time.sleep(0.5)
             
-        
-        
+        self.traj_points = None
+        self.display_path = False
+    
+    @staticmethod
+    def circle_perimeter_pixels(center, r, num_pts=360):
+            cx, cy = center
+            theta = np.linspace(0, 2*np.pi, num_pts, endpoint=False)
+            xs = cx + r * np.cos(theta)
+            ys = cy + r * np.sin(theta)
+            return np.stack([xs, ys], axis=1).astype(np.float16)
         
     def run(self): 
         debug = True
@@ -53,23 +62,23 @@ class Camera_Registration(System_Calibration):
         # pathToCWD = os.getcwd()        
         
         # Create checkerboard
-        self.robot_controller.load_edit_pose()
+        # self.robot_controller.load_edit_pose()
         
         self.create_checkerboard(gridShape = np.array([9, 8]), \
                                  saveLocation=self.calibration_folder, debug=debug)
         
+        self.read_calibration()
+        
         self.laser_controller.set_output(False)
         
-        self.rgb_M = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder, debug = debug)
-        self.therm_M = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder, debug = debug)
         
-        self.reprojection_test('color', self.rgb_M, gridShape = np.array([2, 2]), laserDuration = .15, \
+        self.reprojection_test('color', self.cam_M['color'], gridShape = np.array([2, 2]), laserDuration = .15, \
                         debug=debug, height=0)
         
-        self.reprojection_test('thermal', self.therm_M, gridShape = np.array([2, 2]), laserDuration = .15, \
+        self.reprojection_test('thermal', self.cam_M['thermal'], gridShape = np.array([2, 2]), laserDuration = .15, \
                         debug=debug, height=0)
         
-        self.laser_alignment()
+        # self.laser_alignment()
         # self.therm_cam.deinitialize_cam()
         # pass
     
@@ -246,6 +255,7 @@ class Camera_Registration(System_Calibration):
                             [0,0,0,1]])
         
         obj_Points = np.vstack((xValues.flatten(), yValues.flatten())).T.reshape(-1, 2)
+        robot_positions = np.zeros((1, 2))
 
         print("\nFiring in 4 seconds ...")
         for i, (x, y) in enumerate(zip(xValues.flatten(),
@@ -257,14 +267,13 @@ class Camera_Registration(System_Calibration):
             print("Firing...")
             self.laser_controller.set_output(True)
             time.sleep(laserDuration)
-            
-            
+            self.laser_controller.set_output(False)
             
             
             ### Get images ##
             therm_img = self.therm_cam.get_latest()['thermal']
+            time.sleep(0.2) # laser may still be firing
             color_img = self.rgbd_cam.get_latest()['color']
-            self.laser_controller.set_output(False)
             
             
             ## Thermal image pixel
@@ -322,15 +331,260 @@ class Camera_Registration(System_Calibration):
         # np.save    (save_dir / "laser_spots.npy",       therm_image_set)
         return combinedImg, therm_img_points, rgb_img_points, obj_Points
     
+    
+    def rgb_multi_layer_scan(self, heights):
+        homography_stack = {}
+        
+        for z in heights:
+            print("Height [mm]: ", z*1000)
+            H = self.rgb_raster_scan(gridShape = np.array([9, 8]), squareSize = 0.005)
+            homography_stack[z] = H
+            
+        try:
+            file_location = os.path.join(
+                "surgical_system", "py_src", "registration", "calibration_info"
+            )
+            os.makedirs(file_location, exist_ok=True)
+
+            file_path = os.path.join(file_location, "homography_stack.npz")
+
+            # Convert dict → arrays
+            zs = np.array(sorted(homography_stack.keys()), dtype=float)
+            Hs = np.stack([homography_stack[z] for z in zs], axis=0)  # (N,3,3)
+
+            np.savez(file_path, zs=zs, Hs=Hs)
+
+        except:
+            print("Unable to write to file")
+        
+        return homography_stack
+    
+    def rgb_raster_scan(self, gridShape = np.array([2, 6]), squareSize = 0.005):
+        input(f"Press Enter to continue checkboard creation.")
+        xPoints = (np.arange(gridShape[1]) - (gridShape[1] - 1) / 2) * squareSize
+        yPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
+        xValues, yValues = np.meshgrid(xPoints, yPoints)
+        robot_positions = np.zeros((1, 2))
+        pixel_points = np.zeros((1, 2))
+        
+        robot_path = np.hstack((xValues.reshape((-1, 1)), 
+                                yValues.reshape((-1, 1)), 
+                                np.full((xValues.size, 1), 0)))
+        
+        traj = self.robot_controller.create_custom_trajectory(robot_path, 0.05)
+        self.robot_controller.run_trajectory(traj, blocking=False)
+        
+        time.sleep(3)
+        while(self.robot_controller.is_trajectory_running()):
+            world_pos = self.robot_controller.current_robot_to_world_position()[:2]
+            robot_positions = np.vstack((robot_positions, world_pos))
+            color_img = self.rgbd_cam.get_latest()['color']
+            rgb_laser_pixel = self.get_hot_pixel(color_img, method="Centroid")
+            pixel_points = np.vstack((pixel_points, rgb_laser_pixel))
+            print("World Pos: ", world_pos, " Pixel: ", rgb_laser_pixel)
+            time.sleep(.1)
+        self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
+            
+        _imgpts = np.array(pixel_points, np.float32) # already is [2xn]
+        _objpts = np.array(robot_positions, np.float32) # need this to be [2 x n] 
+
+        print(_imgpts.shape, _objpts.shape)
+        H,_ = cv2.findHomography(_imgpts,_objpts)
+        
+        return H
+
+
+    def get_path(self, points):
+        self.traj_points = points
+    
+    def show_path(self, img, alpha=0.5):
+        
+        path = self.traj_points
+        
+        if path is None or len(path) < 2:
+            return img
+
+        out = img.copy()
+        overlay = img.copy()
+
+        pts = np.asarray(path, dtype=np.int32)
+
+        # Optional: clip to image bounds to avoid weird drawing outside
+        h, w = out.shape[:2]
+        pts[:, 0] = np.clip(pts[:, 0], 0, w - 1)
+        pts[:, 1] = np.clip(pts[:, 1], 0, h - 1)
+
+        pts_i = np.round(pts).astype(np.int32).reshape(-1, 1, 2)
+
+        # Draw polyline
+        YELLOW = (0, 255, 255)
+        GREEN = (0, 255, 0)
+        BLACK = (0, 0, 0)
+        cv2.polylines(overlay, [pts_i], isClosed=False, color=GREEN, thickness=1, lineType=cv2.LINE_AA)
+
+        # Start marker (green circle)
+        p0 = tuple(pts_i[0, 0])
+        cv2.circle(overlay, p0, 3, (0, 255, 0), -1, lineType=cv2.LINE_AA)
+        
+
+        # End marker (red X)
+        p1 = tuple(pts_i[-1, 0])
+        cv2.drawMarker(overlay, p1, (0, 0, 255),
+               markerType=cv2.MARKER_TILTED_CROSS,
+               markerSize=5,
+               thickness=2)
+        
+           
+        
+        cv2.arrowedLine(
+            overlay,
+            tuple(pts_i[0, 0]),
+            tuple(pts_i[3, 0]),
+            BLACK,
+            1, #  thickness,
+            cv2.LINE_AA,  
+            0, # Shift 
+            0.1 # Tip Length
+        )
+    
+        # ---- Alpha blend overlay onto original ----
+        cv2.addWeighted(overlay, alpha, out, 1 - alpha, 0, out)
+
+
+        return out
+    
+    def heat_overlay(self, rgb_img, mask = None, roi = None, invert = False, 
+                                transformed_view: bool = True,
+                                alpha: float = 0.45,
+                                colormap: int = cv2.COLORMAP_JET):
+
+        def normalize_rect(x0, y0, x1, y1):
+            xa, xb = sorted([x0, x1])
+            ya, yb = sorted([y0, y1])
+            return xa, ya, xb, yb
+        
+        therm_img = self.get_cam_latest('thermal')
+        therm_h, therm_w = therm_img.shape[:2]
+        disp = rgb_img.copy()
+        H, W = disp.shape[:2]
+        vmin, vmax = None, None
+        
+        
+        if mask is None and roi is None:
+            return disp, None, therm_img, None
+        
+
+            
+        if roi is not None:
+            sel = np.zeros((H, W), dtype=bool)
+            x0, y0, x1, y1 = normalize_rect(*roi)
+            x0, y0 = max(0, x0), max(0, y0)
+            x1, y1 = min(W - 1, x1), min(H - 1, y1)
+            sel[y0:y1+1, x0:x1+1] = True
+
+            
+            # cv2.rectangle(disp, (x0, y0), (x1, y1), (0, 255, 0), 1)
+
+        else:  # mask is not None
+            
+            mask_bool = ~mask.astype(bool) if invert else mask.astype(bool)
+            if mask_bool.shape[:2] != (H, W):
+                raise ValueError(f"mask shape {mask_bool.shape[:2]} must match image {(H, W)}")
+            sel = mask_bool
+
+        if not np.any(sel):
+            return disp, sel, therm_img, None
+
+        
+        # Bounding Box
+        ys, xs = np.nonzero(sel)
+        y0, y1 = int(ys.min()), int(ys.max())
+        x0, x1 = int(xs.min()), int(xs.max())
+
+        # local selection mask for bbox
+        sel_local = sel[y0:y1+1, x0:x1+1]
+        roi_h, roi_w = sel_local.shape
+        
+        ly, lx = np.nonzero(sel_local)  # local coords
+        pts_disp = np.stack([lx + x0, ly + y0], axis=1).astype(np.float32)  # (N,2) in (x,y)
+
+        if transformed_view:
+            world_pts = self.cam_transforms['color'].disp_px_to_world_m(pts_disp)
+            therm_uv = self.cam_transforms['thermal'].world_m_to_img_px(world_pts).astype('int32')
+        else:
+            therm_uv = self.cam_transforms['rgb_thermal'].img_px_to_world_m(pts_disp)[:, :2].astype('int32')
+
+        # bounds checking
+        tx = np.rint(therm_uv[:, 0]).astype(np.int32)
+        ty = np.rint(therm_uv[:, 1]).astype(np.int32)
+
+        valid = (tx >= 0) & (tx < therm_w) & (ty >= 0) & (ty < therm_h)
+
+        heat_img = np.full((roi_h, roi_w), np.nan, dtype=np.float32)
+
+        # write only where selection exists and mapping valid
+        lx_v = lx[valid]
+        ly_v = ly[valid]
+        heat_img[ly_v, lx_v] = therm_img[ty[valid], tx[valid]].astype(np.float32)
+        
+        vmin = np.nanmin(heat_img) 
+        vmax = np.nanmax(heat_img)
+
+        # --- Fixed temperature range ---
+        T_MIN = 20.0
+        T_MAX = 100.0   
+
+        # Clip temperatures
+        heat_clipped = np.clip(heat_img, T_MIN, T_MAX)
+
+        # Normalize to [0,255] using FIXED range
+        norm = np.zeros_like(heat_clipped, dtype=np.uint8)
+        finite = np.isfinite(heat_clipped)
+
+        if np.any(finite):
+            norm[finite] = (
+                255.0 * (heat_clipped[finite] - T_MIN) / (T_MAX - T_MIN)
+            ).astype(np.uint8)
+
+        # Colorize
+        heat_color = cv2.applyColorMap(norm, colormap)
+
+        # mask out invalid pixels from overlay
+        if np.any(~finite):
+            heat_color[~finite] = 0
+
+        # Alpha blend overlay 
+        roi_bgr = disp[y0:y1 + 1, x0:x1 + 1]
+        disp[y0:y1 + 1, x0:x1 + 1] = cv2.addWeighted(heat_color, alpha, roi_bgr, 1.0 - alpha, 0)
+        return disp, sel, therm_img, vmax
+    
+    
+    def tracking_display(self, disp, cam_type = 'color', warped = True):
+        curr_position = self.robot_controller.current_robot_to_world_position()
+        current_pixel_location = self.get_world_m_to_UI(cam_type, curr_position, warped)[0]
+        current_pixel_location = np.asarray(current_pixel_location, dtype=np.int16)
+        beam_waist = self.laser_controller.get_beam_width(curr_position[-1]) 
+
+        laser_points = self.circle_perimeter_pixels(curr_position[:2], beam_waist/2.0)
+        laser_pixels = self.get_world_m_to_UI(cam_type, laser_points, warped).astype(np.int16)
+
+        xs = laser_pixels[:, 0]
+        ys = laser_pixels[:, 1]
+        h, w = disp.shape[:2]
+        valid = (xs >= 0) & (xs < w) & (ys >= 0) & (ys < h)
+        disp[ys[valid], xs[valid]] = (0, 0, 255)
+        
+        cv2.circle(disp, current_pixel_location, 5, (255, 0, 0), 2)
+        return disp
+### TESTING FUNCTIONS ###
+    
     def transformed_view(self, cam_type = "color"):
         # Size of the top-down (bird's-eye) image (e.g., from calibration)
         WINDOW_NAME = "w0w"
         img = self.get_cam_latest(cam_type)
-        H = self.rgb_M.copy()  # your original homography
 
-        H_shifted, (out_w, out_h) = self.make_positive_homography(H, img.shape)
-
-        warped = cv2.warpPerspective(img, H_shifted, (out_w, out_h))
+        warped = self.cam_transforms[cam_type].warp_image_for_display(img)
+        
 
         selector = ROISelector(warped)
         cv2.namedWindow(WINDOW_NAME)
@@ -352,15 +606,8 @@ class Camera_Registration(System_Calibration):
                 break
 
         cv2.destroyAllWindows()
-    
-    def get_transformed_view(self, img, cam_type = "color"):
-        if cam_type == "color":
-            warped = cv2.warpPerspective(img, self.rgb_H_shifted, self.rgb_out)
-        else:
-            warped = img
-        return warped
-
-    def live_control_view(self, cam_type, max_vel = 0.05, window_name="Camera", frame_key="color"):
+        
+    def live_control_view(self, cam_type, max_vel = 0.05, window_name="Camera", frame_key="color", warped = True, tracking = True):
         """
         Show a live view from cam_obj and allow the user to click to get pixel locations.
         """
@@ -390,8 +637,11 @@ class Camera_Registration(System_Calibration):
         cv2.namedWindow(window_name)
         cv2.setMouseCallback(window_name, on_mouse)
         
+        working_height = 0
+        
         try:
             while True:
+                
                 frame_data = self.get_cam_latest(cam_type)
 
                 # Handle either dict or raw image
@@ -404,14 +654,33 @@ class Camera_Registration(System_Calibration):
                     continue
 
                 disp = frame.copy()
+                
+                if warped:
+                    # Test as if it was the UI 
+                    disp = self.get_transformed_view(disp)
+                    disp = cv2.resize(disp, (1280, 720), interpolation=cv2.INTER_NEAREST)
+                    
+                if tracking:
+                    curr_position = self.robot_controller.current_robot_to_world_position()
+                    current_pixel_location = self.get_world_m_to_UI(cam_type, curr_position, warped)[0]
+                    current_pixel_location = np.asarray(current_pixel_location, dtype=np.int16)
+                    beam_waist = self.laser_controller.get_beam_width(curr_position[-1]) 
+
+                    laser_points = self.circle_perimeter_pixels(curr_position[:2], beam_waist/2.0)
+                    laser_pixels = self.get_world_m_to_UI(cam_type, laser_points, warped).astype(np.int16)
+
+                    xs = laser_pixels[:, 0]
+                    ys = laser_pixels[:, 1]
+                    h, w = disp.shape[:2]
+                    valid = (xs >= 0) & (xs < w) & (ys >= 0) & (ys < h)
+                    disp[ys[valid], xs[valid]] = (0, 255, 0)
+                    
+                    cv2.circle(disp, current_pixel_location, 5, (255, 0, 0), 2)
 
                 if last_point is not None:
                     cv2.circle(disp, last_point, 5, (0, 255, 0), 2)
-                    
-                    if cam_type == "thermal" or cam_type == "color":
-                        target_position = self.pixel_to_world(last_point, cam_type)[0]
-                    else:
-                        raise(f"Wrong camera type: {cam_type}")
+                    target_position = self.get_UI_to_world_m(cam_type, last_point, warped, z = working_height)[0]
+
                 
                 if dragging and last_point is not None:
                     target_pose = np.eye(4)
@@ -427,15 +696,40 @@ class Camera_Registration(System_Calibration):
                         self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
                     else:
                         robot_controller.go_to_pose(current_pose, blocking=False)
-                    # print("stop")
-
-                
-                cv2.imshow(window_name, disp)
 
                 # Press 'q' or ESC to quit
                 key = cv2.waitKey(1) & 0xFF
-                if key == ord('q') or key == 27:
+                if key == ord('q') or key == 27:  # q or ESC
                     break
+                elif key == 82:  # Up arrow
+                    working_height += 0.005
+                elif key == 84:  # Down arrow
+                    working_height -= 0.005
+                    
+                # ----- UI text overlay -----
+                x0, y0 = 15, 25
+                line_h = 22
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                scale = 0.55
+                color = (255, 255, 255)
+                thickness = 1
+
+                cv2.putText(disp, "Controls:", (x0, y0),
+                            font, scale, color, thickness, cv2.LINE_AA)
+
+                cv2.putText(disp, "Up Arrow    : Increase working height (+0.01 m)",
+                            (x0, y0 + line_h),
+                            font, scale, color, thickness, cv2.LINE_AA)
+
+                cv2.putText(disp, "Down Arrow  : Decrease working height (-0.01 m)",
+                            (x0, y0 + 2*line_h),
+                            font, scale, color, thickness, cv2.LINE_AA)
+
+                cv2.putText(disp, "q / ESC     : Quit",
+                            (x0, y0 + 3*line_h),
+                            font, scale, color, thickness, cv2.LINE_AA)
+                    
+                cv2.imshow(window_name, disp)
 
         finally:
             cv2.destroyWindow(window_name)
@@ -452,15 +746,246 @@ class Camera_Registration(System_Calibration):
         self.robot_controller.run_trajectory(traj)
         # print(pixels)
     
+    def rgb_thermal_data(self, rgb_img, therm_img, pixel_point, transformed_view):
+        disp = rgb_img.copy()
+        disp = cv2.resize(disp, (1280, 720), interpolation=cv2.INTER_NEAREST)
+        therm_h, therm_w = therm_img.shape[:2]
+        temp = None 
+        
+        if pixel_point is not None:
+            if transformed_view == True:
+                mouse_loc = np.array([pixel_point], dtype=np.float32)
+                world_loc = self.world_to_real(mouse_loc, "color", pix_Per_M = 1)[0, :2]
+                pixel_loc = cv2.perspectiveTransform(np.array([[world_loc]]), 
+                                                        self.world_therm_M).reshape((2)).astype('int32')
+            else:
+                pixel_loc = self.rgbd_therm_cali.pixel_to_world(pixel_point)[0][:2].astype('int32')
+            
+            # print(f"Pixel Location {world_loc}")
+            if 0 <= pixel_loc[0] < therm_w and 0 <= pixel_loc[1] < therm_h:
+                temp = therm_img[pixel_loc[1], pixel_loc[0]]
+        
+        return temp
     
+    def view_rgbd_therm_registration(self, transformed_view = True):
+        debug = True
+       
+        self.therm_cam.start_stream()
+        self.rgbd_cam.start_stream()
+        
+        while not self.therm_cam.get_latest() or not self.rgbd_cam.get_latest():
+            print("Waiting for camera response...")
+            time.sleep(0.5)
+        
+        mouse_pos = None
+        window_name = "wow this is cool"
+        def on_mouse(event, x, y, flags, param):
+            nonlocal mouse_pos
+            if event == cv2.EVENT_MOUSEMOVE:
+                mouse_pos = np.array([x, y])
+                
+        cv2.namedWindow(window_name)
+        cv2.setMouseCallback(window_name, on_mouse)
+        
+        therm_img = self.get_cam_latest('thermal')
+        therm_h, therm_w = therm_img.shape[:2]
+        
+        try:
+            while True:
+                
+                rgb_img = self.get_cam_latest('color')
+                therm_img = self.get_cam_latest('thermal')
+                
+                if rgb_img is None or therm_img is None:
+                    continue
+                
+                
+                if transformed_view == True:
+                    rgb_img = self.get_transformed_view(rgb_img, cam_type="color")
 
 
+                disp = rgb_img.copy()
+                disp = cv2.resize(disp, (1280, 720), interpolation=cv2.INTER_NEAREST)
+                
+                if mouse_pos is not None:
+                    pixel_loc = self.get_UI_to_thermal(mouse_pos, transformed_view)[0]
+                    
+                    # print(f"Pixel Location {world_loc}")
+                    if 0 <= pixel_loc[0] < therm_w and 0 <= pixel_loc[1] < therm_h:
+                        temp = therm_img[pixel_loc[1], pixel_loc[0]]
+                        # print(f"Temperature: {temp}")
+                
+                        x, y = mouse_pos
+                        
+                        info = [
+                            f"Temp: {temp:.2f} C",
+                            f"x: {x}, y: {y}",
+                        ]
+
+                        for i, line in enumerate(info):
+                            cv2.putText(
+                                disp,
+                                line,
+                                (x, y + 20*i),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.5,
+                                (0, 255, 0),
+                                1,
+                                cv2.LINE_AA
+                            )
+
+                cv2.imshow(window_name, disp)
+                
+                # Press 'q' or ESC to quit
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q') or key == 27:
+                    break
+                
+        finally:
+            cv2.destroyWindow(window_name)
+            self.laser_controller.set_output(0)
+        pass 
+
+    def view_rgbd_therm_heat_overlay(self, transformed_view: bool = True,
+                                alpha: float = 0.45,
+                                colormap: int = cv2.COLORMAP_JET,
+                                window_name: str = "RGB + Thermal Overlay"):
+        """
+        Display RGB with a thermal heat overlay inside a user-selected rectangle.
+
+        Controls
+        --------
+        - Click + drag LEFT mouse to draw/resize rectangle ROI
+        - Release to "lock" ROI (overlay updates live within it)
+        - Press 'r' to reset ROI
+        - Press 'q' or ESC to quit
+        """
+
+        self.therm_cam.start_stream()
+        self.rgbd_cam.start_stream()
+
+        while not self.therm_cam.get_latest() or not self.rgbd_cam.get_latest():
+            print("Waiting for camera response...")
+            time.sleep(0.5)
+
+        # Display size (matches your existing function)
+        DISP_W, DISP_H = 1280, 720
+
+        # ROI state
+        roi = None  # (x0, y0, x1, y1) in display coordinates
+        dragging = False
+        anchor = None  # (x0, y0)
+
+        def clamp(v, lo, hi):
+            return max(lo, min(hi, v))
+
+        def normalize_rect(x0, y0, x1, y1):
+            xa, xb = sorted([x0, x1])
+            ya, yb = sorted([y0, y1])
+            return xa, ya, xb, yb
+
+        def on_mouse(event, x, y, flags, param):
+            nonlocal roi, dragging, anchor
+            if event == cv2.EVENT_LBUTTONDOWN:
+                dragging = True
+                anchor = (x, y)
+                roi = (x, y, x, y)
+
+            elif event == cv2.EVENT_MOUSEMOVE and dragging:
+                x0, y0 = anchor
+                roi = (x0, y0, x, y)
+
+            elif event == cv2.EVENT_LBUTTONUP:
+                dragging = False
+                if roi is not None:
+                    x0, y0, x1, y1 = roi
+                    x0, y0, x1, y1 = normalize_rect(x0, y0, x1, y1)
+
+                    # Clamp to display bounds
+                    x0 = clamp(x0, 0, DISP_W - 1)
+                    x1 = clamp(x1, 0, DISP_W - 1)
+                    y0 = clamp(y0, 0, DISP_H - 1)
+                    y1 = clamp(y1, 0, DISP_H - 1)
+
+                    # Require non-trivial ROI
+                    if (x1 - x0) < 5 or (y1 - y0) < 5:
+                        roi = None
+                    else:
+                        roi = (x0, y0, x1, y1)
+
+        cv2.namedWindow(window_name)
+        cv2.setMouseCallback(window_name, on_mouse)
+
+        # Get a first thermal frame for dimensions
+        therm_img = self.get_cam_latest('thermal')
+        therm_h, therm_w = therm_img.shape[:2]
+
+        try:
+            while True:
+                rgb_img = self.get_cam_latest('color')
+
+                if rgb_img is None or therm_img is None:
+                    continue
+
+                if transformed_view:
+                    rgb_img = self.get_transformed_view(rgb_img, cam_type="color")
+
+                # Display image is always resized to 1280x720 for consistent mouse mapping
+                disp = cv2.resize(rgb_img, (DISP_W, DISP_H), interpolation=cv2.INTER_NEAREST)
+                disp, finite, vmin, vmax = self.heat_overlay(disp, roi=roi, transformed_view = transformed_view)
+                    
+                if np.any(finite):
+                    cv2.putText(
+                        disp,
+                        f"ROI Temp: {vmin:.2f} .. {vmax:.2f} C",
+                        (10, 20),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.55,
+                        (0, 255, 0),
+                        1,
+                        cv2.LINE_AA,
+                    )
+
+                # Help text
+                cv2.putText(
+                    disp,
+                    "Drag LMB to select ROI | r reset | q/ESC quit",
+                    (10, DISP_H - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.55,
+                    (0, 255, 0),
+                    1,
+                    cv2.LINE_AA,
+                )
+
+                cv2.imshow(window_name, disp)
+
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('r'):
+                    roi = None
+                elif key == ord('q') or key == 27:
+                    break
+
+        finally:
+            cv2.destroyWindow(window_name)
+    
+    
+    
 if __name__ == '__main__':
+    ##################################################################################
+    #-------------------------------- Laser Config ----------------------------------#
+    ##################################################################################
+    
+    laser_controller = Laser_Arduino()  # controls whether laser is on or off
+    laser_on = False
+    laser_controller.vf_valid_flag = True
+    laser_controller.set_output(laser_on)
+    
     ##################################################################################
     #------------------------------ Robot Config ------------------------------------#
     ##################################################################################
     # Create FrankaNode object for controlling robot
-    robot_controller = Robot_Controller()
+    robot_controller = Robot_Controller(laser_controller)
     # TODO fix running in container
     home_pose = robot_controller.load_home_pose()
     # home_pose = robot_controller.load_edit_pose()
@@ -491,18 +1016,23 @@ if __name__ == '__main__':
     rgbd_cam = RGBD_Cam() #Runs a thread internally
 
     
-    ##################################################################################
-    #-------------------------------- Laser Config ----------------------------------#
-    ##################################################################################
-    
-    laser_controller = Laser_Arduino()  # controls whether laser is on or off
-    laser_on = False
-    laser_controller.set_output(laser_on)
+   
     
     camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_controller)
-    camera_reg.run()
+    # camera_reg.run()
+    
+    # base 2.23 
+    heights = np.array([2.23, 2.73, 5.15, 5.65, 6.16, 7.69, 8.22, 8.75]) # mm 
+    heights = heights / 1000.0 # mm
+    # stack = camera_reg.rgb_multi_layer_scan(heights)
+    # stack = 
+    # print(stack)
     rgbd_cam.set_default_setting()
-    camera_reg.transformed_view()
+    # robot_controller.load_edit_pose()
+    # camera_reg.view_rgbd_therm_registration()
+    # camera_reg.transformed_view(cam_type="thermal")
+    # camera_reg.live_control_view('color', warped=True, tracking=True)
+    # camera_reg.view_rgbd_therm_heat_overlay()
     # camera_reg.draw_traj()
     therm_cam.deinitialize_cam()
     # camera_reg.live_control_view("color")

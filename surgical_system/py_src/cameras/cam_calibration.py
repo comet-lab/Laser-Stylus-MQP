@@ -213,6 +213,7 @@ class CameraCalibration():
         # and they don't have to be a quadrilateral. 
 
         self.M,_ = cv2.findHomography(_imgpts,_objpts)
+        self.M_inv = np.linalg.inv(self.M)
         return self.M
     
     def world_to_pixel(self, world_coords):
@@ -431,15 +432,19 @@ class CameraCalibration():
         return np.array(points)
 
     def load_homography(self, M_pix_per_m = 7000, \
-                         fileLocation = "/calibration_info/rgb/", debug = True):
+                         fileLocation = "/calibration_info/rgb/", debug = True, img_points = None, obj_points = None):
     
-        img_points = CameraCalibration.load_pts(self.directory + fileLocation + "laser_spots.csv")
-        obj_points = CameraCalibration.load_pts(self.directory + fileLocation + "laser_world_points.csv")
+        if img_points is None or obj_points is None: 
+            img_points = CameraCalibration.load_pts(self.directory + fileLocation + "laser_spots.csv")
+            obj_points = CameraCalibration.load_pts(self.directory + fileLocation + "laser_world_points.csv")
         
         # self.generate_transform(img_points, obj_points)
         if obj_points.shape[1] == 2:
             obj_points = np.hstack((obj_points, np.zeros((obj_points.shape[0], 1))))  # Add Z coordinate as 0
-        obj_points = obj_points*M_pix_per_m
+        
+        if M_pix_per_m > 1:
+            obj_points = obj_points*M_pix_per_m
+            
         M = self.generate_transform(img_points,obj_points)
         self.M = M
         
@@ -450,7 +455,7 @@ class CameraCalibration():
         rmse  = np.sqrt((err**2).mean())   
 
         print(f"RMS reprojection error = {rmse:.3f} pixels")
-        print(f"RMS reprojection error = {rmse/M_pix_per_m*1000:.3f} mm")
+        print(f"RMS reprojection error = {rmse/M_pix_per_m*(1000 if M_pix_per_m > 1 else 1):.3f} mm")
         return M
 
     def display_2d_projection(self):

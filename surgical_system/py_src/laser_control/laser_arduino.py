@@ -1,7 +1,7 @@
 import serial
 import struct
 import time
-import math
+import numpy as np
 
 class Laser_Arduino:
     def __init__(self, port='/dev/ttyACM0'):
@@ -15,6 +15,14 @@ class Laser_Arduino:
         self.MESSAGE_LENGTH = 2
         self.START_BYTE = b'A'
         self.port.port = port
+        self.vf_valid_flag = False
+        self.FWHM = np.sqrt(2*np.log(2))
+        self.laserInfo = {
+            "wavelength": 10.6e-6,     # meters
+            "type": "AcuCO2",
+            "w0": 1.68e-4,             # meters (1/e^2 radius)
+            "power": 0.880
+        }
         try:
             self.port.close()
             self.port.open()
@@ -40,8 +48,17 @@ class Laser_Arduino:
         except:
             raise Exception
 
-    def set_output(self, laser_on):
-        self._write(1, laser_on)
+    def set_output(self, laser_on): 
+        on = laser_on and self.vf_valid_flag
+        # print("[Laser State]: ", on)
+        self._write(1, on)
+    
+    def get_beam_width(self, laser_height): # m
+        w0 = self.laserInfo['w0']
+        return w0*np.sqrt(1 + ((laser_height * self.laserInfo['wavelength'])/(np.pi*w0**2))**2) # m
+
+    def get_FWHM(self, w):
+        return w * self.FWHM
 
     def get_laser_state(self):
         self.port.reset_input_buffer()
