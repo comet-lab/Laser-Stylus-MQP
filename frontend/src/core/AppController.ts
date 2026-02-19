@@ -535,7 +535,9 @@ class AppController {
         this.ui.heightSlider.addEventListener('change', () => {
             if (!this.isHardwareHeightSynced) return;
             const heightValue = this.ui.heightSlider.value;
-            console.log(`Sending final height command to robot: ${heightValue}`);
+            const heightCm = parseFloat(heightValue) * 100;
+            const displayVal = heightCm.toFixed(1);
+            console.log(`Sending final height command to robot: ${displayVal}`);
             
             // Send exactly one command to the backend
             this.wsHandler.updateState({ height: parseInt(heightValue) });
@@ -579,6 +581,55 @@ class AppController {
                 
                 // Highlight the tool button that matches the restored shape
                 this.modeManager.highlightShapeBtn(this.state.drawnShapeType as ShapeType);
+            }
+        });
+
+        this.ui.speedInput.addEventListener('input', () => {
+            const val = parseFloat(this.ui.speedInput.value);
+            const isValid = !isNaN(val) && val >= 1 && val <= 30;
+
+            if (!isValid) {
+                //Highlight the input field red
+                this.ui.speedInput.classList.add('input-error');
+                
+                //Hard-lock the execute button
+                this.ui.executeBtn.disabled = true;
+                this.ui.executeBtn.style.pointerEvents = 'none';
+                this.ui.executeBtn.style.opacity = '0.3';
+                
+                //Lock the preview toggle
+                this.ui.previewToggleOn.style.pointerEvents = 'none';
+                this.ui.previewToggleOn.style.opacity = '0.3';
+                
+                //If preview is currently calculating/open, show an error
+                if (this.ui.previewToggleOn.classList.contains('active')) {
+                    this.ui.previewDuration.textContent = 'Invalid Speed';
+                }
+                
+                //Stop any pending auto-refreshes
+                clearTimeout(debounceTimer);
+            } else {
+                //Remove the red highlight
+                this.ui.speedInput.classList.remove('input-error');
+                
+                //Unlock the preview toggle
+                this.ui.previewToggleOn.style.pointerEvents = 'auto';
+                this.ui.previewToggleOn.style.opacity = '1';
+
+                //Changing speed changes the kinematics, so the old preview is now void.
+                if (this.ui.previewToggleOn.classList.contains('active')) {
+                    //Auto-refresh the live preview after they stop typing
+                    this.ui.previewDuration.textContent = 'Computing...';
+                    this.ui.executeBtn.disabled = true; 
+                    this.ui.executeBtn.style.pointerEvents = 'none';
+                    this.ui.executeBtn.style.opacity = '0.3';
+                    
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(refreshPreview, 500);
+                } else {
+                    //If preview is off, silently void any hidden preview state
+                    this.previewManager.resetPreviewState();
+                }
             }
         });
 
@@ -738,13 +789,17 @@ class AppController {
             //If this is our first time hearing from the robot since refreshing
             this.isHardwareHeightSynced = true;
 
+            this.ui.heightTrigger.disabled = false;
+
             if (!this.isChangingHeight) {
+                const heightCm = state.current_height * 100;
+                const displayVal = heightCm.toFixed(1);
                 //Update the physical slider position
-                this.ui.heightSlider.value = state.current_height.toString();
+                this.ui.heightSlider.value = displayVal;
 
                 //Update the text label next to the slider
                 if (this.ui.heightDisplay) {
-                    this.ui.heightDisplay.textContent = `${state.current_height}`;
+                    this.ui.heightDisplay.textContent = `${displayVal}`;
                 }
 
             }
