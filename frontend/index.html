@@ -54,6 +54,8 @@
               <div class="fill-settings-inner">
 
                 <div class="settings-group-container">
+                  <!--//TODO: Remove entirely, unless we want to add more raster patterns in the future.-->
+                  <!--
                   <div class="setting-row-wrapper secondary-wrapper">
                     <label class="row-label">Raster Pattern</label>
                     <div class="segment-control raster-control">
@@ -61,6 +63,7 @@
                       <button id="rasterB" class="segment-btn">Spiral</button>
                     </div>
                   </div>
+                -->
 
                   <div class="setting-row-wrapper secondary-wrapper">
                     <label for="densityRaster" class="row-label">Spacing</label>
@@ -76,6 +79,7 @@
           <div class="preview-action-container">
             <div class="setting-row-wrapper preview-wrapper">
               <span class="row-label">Preview Path</span>
+              <span class = "row-label-2">(Required to Execute)</span>
               <div class="segment-control preview-control">
                 <button id="previewOff" class="segment-btn active">OFF</button>
                 <button id="previewOn" class="segment-btn">ON</button>
@@ -207,6 +211,16 @@
             </svg>
           </span>
           <span class="btn-text">CLEAR PATH</span>
+        </button>
+
+        <button id="restorePathBtn" class="action-btn batch-ui drawing-ui-only" disabled>
+          <span class="btn-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E0F2E0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+              <path d="M3 3v5h5"></path>
+            </svg>
+          </span>
+          <span class="btn-text">RESTORE LAST PATH</span>
         </button>
 
         <button id="clearBoundaryBtn" class="action-btn fixtures-ui-only hidden" disabled>
@@ -350,13 +364,32 @@
                 <path d="M1.5 24.5L24.5 1.5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
             </button>
-            <div class="height-container">
-              <span class="height-label">Height</span>
-              <span class="height-label height-number" id="heightDisplay">0 CM</span>
-              <div class="height-vertical-slider-container">
-                <input type="range" id="heightSlider" min="0" max="40" value="0"
-                  class="styled-range height-vertical-range">
+            <div id="slider-controls" class="tool-group" style="margin-top: 15px;">
+
+              <div class="popout-control real-time-ui hidden-mode" id="speedControlGroup">
+                <button class="popout-trigger" id="speedTrigger">
+                  <span class="popout-label">SPEED</span>
+                  <span class="popout-value" id="speedDisplay">10</span>
+                </button>
+                <div class="popout-panel" id="speedFlyout">
+                  <div class="popout-slider-container">
+                    <input type="range" id="speedSlider" min="1" max="100" step="1" value="10" class="styled-range popout-range">
+                  </div>
+                </div>
               </div>
+
+              <div class="popout-control" id="heightControlGroup">
+                <button class="popout-trigger" id="heightTrigger">
+                  <span class="popout-label">HEIGHT</span>
+                  <span class="popout-value" id="heightDisplay">...</span>
+                </button>
+                <div class="popout-panel" id="heightFlyout">
+                  <div class="popout-slider-container">
+                    <input type="range" id="heightSlider" min="0" max="40" value="0" class="styled-range popout-range">
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
 
@@ -422,7 +455,7 @@
         <div class="legend-core">
           <div class="gradient-bar"></div>
           <div class="gradient-labels">
-            <span>100</span>
+            <span>100+</span>
             <span>60</span>
             <span>20</span>
           </div>

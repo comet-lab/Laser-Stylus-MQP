@@ -102,7 +102,7 @@ export class PreviewManager {
     const density = this.state.fillEnabled
       ? parseFloat(this.ui.rasterDensityInput.value)
       : 0;
-    const rasterType = this.state.selectedRasterPattern || '';
+    const rasterType = 'line_raster'; //TODO: Remove entirely, unless we want to add more raster patterns in the future.
     const isFill = this.state.fillEnabled;
 
     this.ui.previewDuration.textContent = 'Computing...';
@@ -110,27 +110,66 @@ export class PreviewManager {
     // Disable execute while computing new path
     this.setExecuteButtonState(false);
     this.stopAnimation();
+    ToastManager.clearAll();
 
     try {
       const response = await cm.previewPath(speed, rasterType, density, isFill);
+      const hasValidPath = response.path && response.path.length > 0;
 
-      // Trigger the soft warning
+      //Handle Active Safety Warnings
       if (response.warning === "FIXTURE_OVERLAP") {
-        ToastManager.show("Warning: Your path crosses into a restricted fixture zone. Please double-check before executing.");
-      }
+        ToastManager.show(
+          "SAFETY WARNING: Your planned path crosses into a restricted fixture zone. Please confirm to allow execution.",
+          {
+            type: 'warning',
+            requireAck: true,
+            ackText: 'CONFIRM',
+            onAcknowledge: () => {
+              //Only unlock the button once the user explicitly clicks CONFIRM
+              if (hasValidPath) this.setExecuteButtonState(true);
+            }
+          }
+        );
 
-      if (response.path && response.path.length > 0) {
-        this.handlePathData(response.path, response.duration);
-      } else {
+        if (hasValidPath) {
+          //Draw the path to show them the mistake, but do not enable the button
+          this.handlePathData(response.path, response.duration, false);
+        }
+      }
+      //If the previewed path goes outside of the boundaries of the drawn path
+      //THIS IS JUST FOR THE SIMULATED RESPONSE WHEN THE ROBOT IS NOT CONNECTED
+      else if (response.warning === "PATH_ESCAPES_BOUNDS") {
+        ToastManager.show(
+          "PRECISION WARNING: The generated path extends outside your originally drawn boundaries. Please confirm to allow execution.",
+          {
+            type: 'warning', // Uses your high-vis Amber styling
+            requireAck: true,
+            ackText: 'CONFIRM',
+            onAcknowledge: () => {
+              if (hasValidPath) this.setExecuteButtonState(true);
+            }
+          }
+        );
+        // Draw the path to show them the mistake, but keep the button locked
+        if (hasValidPath) this.handlePathData(response.path, response.duration, false);
+      }
+      //Handle Safe Paths
+      else if (hasValidPath) {
+        this.handlePathData(response.path, response.duration, true);
+      }
+      else {
         this.ui.previewDuration.textContent = 'Waiting...';
       }
+
     } catch (e: any) {
-      // Handle the hard stop gracefully
       if (e.message === "OUT_OF_BOUNDS") {
-        ToastManager.show("Error: Part of your shape is off the screen! Please move it fully inside the camera view.");
+        ToastManager.show(
+          "HARD STOP: Part of your shape is off the screen. Please move it fully inside the camera view.",
+          { type: 'error', requireAck: true, ackText: 'DISMISS' }
+        );
         this.ui.previewDuration.textContent = 'Out of Bounds';
         this.clearOverlay();
-        this.setExecuteButtonState(false); // Force the Execute button to stay disabled
+        this.setExecuteButtonState(false);
       } else {
         console.error('Preview refresh error:', e);
         this.ui.previewDuration.textContent = 'Error';
@@ -142,31 +181,62 @@ export class PreviewManager {
   public handlePathFromWebSocket(previewData: { x: number[], y: number[] }, serverDuration?: number): void {
     if (!this.isPreviewActive) return;
 
+    const newLength = Math.min(previewData.x.length, previewData.y.length);
+
+    //TODO: Get rid of this check, shouldn't be necessary if the data is being sent properly from backend
+    //If we don't get a duration, and the path is the same, drop this message
+    if (serverDuration === undefined && this.sourcePath.length === newLength) {
+      console.log("Ignored duplicate path from robot.");
+      return;
+    }
+
     const path: Position[] = [];
     const len = Math.min(previewData.x.length, previewData.y.length);
     for (let i = 0; i < len; i++) {
       path.push({ x: previewData.x[i], y: previewData.y[i] });
     }
 
-    this.handlePathData(path, serverDuration || 15);
+    const finalDuration = serverDuration || (this.durationSeconds > 0 ? this.durationSeconds : 10);
+
+    ToastManager.clearAll();
+    const cm = this.getCanvasManager();
+
+    if (cm && cm.checkIfPathEscapes(path)) {
+      ToastManager.show(
+        "SAFETY WARNING: The generated path extends outside your originally drawn boundaries. Please confirm to allow execution.",
+        {
+          type: 'warning',
+          requireAck: true,
+          ackText: 'CONFIRM',
+          onAcknowledge: () => {
+            this.setExecuteButtonState(true);
+          }
+        }
+      );
+      // Pass false to keep the execute button locked until confirmed
+      this.handlePathData(path, finalDuration, false);
+    } else {
+      this.handlePathData(path, finalDuration, true);
+    }
   }
 
-  private handlePathData(videoPath: Position[], duration: number): void {
+  private handlePathData(videoPath: Position[], duration: number, enableExecute: boolean): void {
     if (videoPath.length === 0) {
       this.clearOverlay();
       return;
     }
 
-    //STORE SOURCE OF TRUTH (Video Coordinates)
     this.sourcePath = videoPath;
     this.durationSeconds = duration;
     this.hasPreviewedCurrentDrawing = true;
 
-    //CALCULATE SCREEN COORDINATES
     this.updatePathTransform();
 
     this.ui.previewDuration.textContent = `${duration.toFixed(1)}s`;
-    this.setExecuteButtonState(true);
+
+    if (enableExecute) {
+      this.setExecuteButtonState(true);
+    }
 
     this.drawPath();
     this.startAnimation();

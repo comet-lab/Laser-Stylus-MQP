@@ -245,6 +245,9 @@ export class ToolHandler {
         this.ui.clearBtn.disabled = !hasShape;
         this.ui.prepareBtn.disabled = !hasShape;
         this.ui.executeBtn.disabled = !hasShape;
+        
+        //Only enable restore if there's no shape on screen, but a backup exists
+        this.ui.restorePathBtn.disabled = hasShape || !this.state.hasBackupShape;
 
         if (hasShape) {
             // Lock every tool except the one that produced the current shape
@@ -263,6 +266,14 @@ export class ToolHandler {
         const cm = this.getCanvasManager();
         const hasFixtures = cm?.hasFixtures() ?? false;
         const canApply = cm?.canApplyFixtures() ?? false;
+
+        //If the eraser removed the last of the fitures, clear everything automatically
+        if (this.state.isEraserActive && !hasFixtures) {
+            // We wrap this in a setTimeout so it safely escapes the current drawing call-stack 
+            // before triggering the heavy backend wipe and UI teardown.
+            setTimeout(() => this.clearFixtures(), 0);
+            return;
+        }
 
         this.ui.clearBoundaryBtn.disabled = !hasFixtures;
         this.ui.applyFixturesBtn.disabled = !canApply;

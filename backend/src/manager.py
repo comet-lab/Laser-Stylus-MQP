@@ -15,6 +15,11 @@ class ConnectionManager:
         self.robot_connections = ConnectionManager.ConnectionGroup("Robot")
         self.current_state = RobotSchema()
         self.desired_state = RobotSchema()
+        self.desired_state.isLaserOn = False
+        self.desired_state.isRobotOn = False
+        self.desired_state.isTransformedViewOn = True # Default to Transformed
+        self.desired_state.isThermalViewOn = False
+        self.desired_state.speed = 10.0
 
     async def connect(self, websocket: WebSocket, group):
         await websocket.accept()

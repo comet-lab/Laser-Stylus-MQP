@@ -31,6 +31,7 @@ export interface UIRegistry {
     prepareCancelBtn: HTMLButtonElement;
     executeBtn: HTMLButtonElement;
     clearBtn: HTMLButtonElement;
+    restorePathBtn: HTMLButtonElement;
     previewOverlay: HTMLCanvasElement;
     previewToggleOn: HTMLButtonElement;
     previewToggleOff: HTMLButtonElement;
@@ -110,6 +111,13 @@ export interface UIRegistry {
     // Universal UI Elements
     heightSlider: HTMLInputElement;
     heightDisplay: HTMLElement;
+    heightTrigger: HTMLButtonElement;
+    heightFlyout: HTMLElement;
+
+    speedSlider: HTMLInputElement;
+    speedDisplay: HTMLElement;
+    speedTrigger: HTMLButtonElement;
+    speedFlyout: HTMLElement;
 }
 
 export function createUIRegistry(): UIRegistry {
@@ -140,6 +148,7 @@ export function createUIRegistry(): UIRegistry {
         previewDuration: document.getElementById('previewDuration') as HTMLElement,
         previewMarker: document.getElementById('preview-marker') as HTMLElement,
         clearBtn: document.getElementById('clearBtn') as HTMLButtonElement,
+        restorePathBtn: document.getElementById('restorePathBtn') as HTMLButtonElement,
 
         // Hardware Controls
         robotBtn: document.getElementById('robot-toggle-container') as HTMLButtonElement,
@@ -212,5 +221,12 @@ export function createUIRegistry(): UIRegistry {
         // Universal UI Elements
         heightSlider: document.getElementById('heightSlider') as HTMLInputElement,
         heightDisplay: document.getElementById('heightDisplay') as HTMLElement,
+        heightTrigger: document.getElementById('heightTrigger') as HTMLButtonElement,
+        heightFlyout: document.getElementById('heightFlyout') as HTMLElement,
+
+        speedSlider: document.getElementById('speedSlider') as HTMLInputElement,
+        speedDisplay: document.getElementById('speedDisplay') as HTMLElement,
+        speedTrigger: document.getElementById('speedTrigger') as HTMLButtonElement,
+        speedFlyout: document.getElementById('speedFlyout') as HTMLElement,
     };
 }
