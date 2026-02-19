@@ -334,7 +334,7 @@ class Camera_Registration(System_Calibration):
         return combinedImg, therm_img_points, rgb_img_points, obj_Points
     
     
-    def rgb_multi_layer_scan(self, heights):
+    def rgb_multi_layer_scan(self, heights, file_name = "homography_stack.npz"):
         homography_stack = {}
         
         for z in heights:
@@ -342,13 +342,14 @@ class Camera_Registration(System_Calibration):
             H = self.rgb_raster_scan(gridShape = np.array([15, 15]), squareSize = 0.0025)
             homography_stack[z] = H
             
+            
         try:
             file_location = os.path.join(
                 "surgical_system", "py_src", "registration", "calibration_info"
             )
             os.makedirs(file_location, exist_ok=True)
 
-            file_path = os.path.join(file_location, "homography_stack.npz")
+            file_path = os.path.join(file_location, file_name)
 
             # Convert dict → arrays
             zs = np.array(sorted(homography_stack.keys()), dtype=float)
@@ -362,36 +363,46 @@ class Camera_Registration(System_Calibration):
         return homography_stack
     
     def rgb_raster_scan(self, gridShape = np.array([2, 6]), squareSize = 0.0026):
-        input(f"Press Enter to continue checkboard creation.")
+        input(f"Press Enter to continue depth estimation creation.")
         xPoints = (np.arange(gridShape[1]) - (gridShape[1] - 1) / 2) * squareSize
         yPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
         xValues, yValues = np.meshgrid(xPoints, yPoints)
-        robot_positions = np.zeros((1, 2))
-        pixel_points = np.zeros((1, 2))
+        robot_positions = np.zeros((0, 2))
+        pixel_points = np.empty((0, 2))
         
         robot_path = np.hstack((xValues.reshape((-1, 1)), 
                                 yValues.reshape((-1, 1)), 
                                 np.full((xValues.size, 1), 0)))
         
-        traj = self.robot_controller.create_custom_trajectory(robot_path, 0.05)
+        start_pos = robot_path[0, :]
+        start_pose = np.eye(4)
+        start_pose[:3, -1] = start_pos
+        print("Heading to starting location")
+        self.robot_controller.go_to_pose(start_pose @ self.home_pose)
+        
+        traj = self.robot_controller.create_custom_trajectory(robot_path, 0.025)
         self.robot_controller.run_trajectory(traj, blocking=False)
         
-        time.sleep(4)
+        # time.sleep(1)
         while(self.robot_controller.is_trajectory_running()):
             world_pos = self.robot_controller.current_robot_to_world_position()[:2]
             robot_positions = np.vstack((robot_positions, world_pos))
             color_img = self.rgbd_cam.get_latest()['color']
             rgb_laser_pixel = self.get_hot_pixel(color_img, method="Centroid")
             pixel_points = np.vstack((pixel_points, rgb_laser_pixel))
-            print("World Pos: ", world_pos, " Pixel: ", rgb_laser_pixel)
-            time.sleep(.1)
-        self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
+            # print("World Pos: ", world_pos, " Pixel: ", rgb_laser_pixel)
+            time.sleep(1/30.0)
+        # self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
             
         _imgpts = np.array(pixel_points, np.float32) # already is [2xn]
         _objpts = np.array(robot_positions, np.float32) # need this to be [2 x n] 
 
-        print(_imgpts.shape, _objpts.shape)
-        H,_ = cv2.findHomography(_imgpts,_objpts)
+        # print(_objpts.shape, _imgpts.shape)
+        H,_ = cv2.findHomography(_imgpts, _objpts)
+        
+        proj_world = DepthEstimation.project_xy(H, _imgpts)
+        world_error = np.linalg.norm(_objpts - proj_world, axis=1)
+        print("World reprojection error [mm]:", np.mean(world_error) * 1000)
         
         return H
 
@@ -609,7 +620,8 @@ class Camera_Registration(System_Calibration):
 
         cv2.destroyAllWindows()
         
-    def live_control_view(self, cam_type, max_vel = 0.05, window_name="Camera", frame_key="color", warped = True, tracking = True):
+    def live_control_view(self, cam_type, max_vel = 0.05, window_name="Camera", frame_key="color", 
+                          warped = True, tracking = True, depth_path = "homography_stack.npz"):
         """
         Show a live view from cam_obj and allow the user to click to get pixel locations.
         """
@@ -642,9 +654,10 @@ class Camera_Registration(System_Calibration):
         working_height = 0
         
         path = "surgical_system/py_src/registration/calibration_info/"
-        stack_path = path + "homography_stack.npz"
+        stack_path = path + depth_path
+        print("[Depth Estimation] Loading file: ", stack_path)
         homography_stack = DepthEstimation.load_homography_stack_npz(stack_path)
-        dense_stack = DepthEstimation.create_dense_stack(homography_stack)
+        dense_stack = DepthEstimation.create_dense_stack(homography_stack, dz=0.00025)
         
         
         
@@ -703,7 +716,7 @@ class Camera_Registration(System_Calibration):
                         refine=True) 
                     
                     # print("Actual Height [mm]: ", 6.16 - 2.23)
-                    print("Predicted Z [mm]: ", z_best * 1000, "| Error: ", err_best, "| Best Prediction: ", uv_best, "| Confidence: ", conf)
+                    # print("Predicted Z [mm]: ", z_best * 1000, "| Error: ", err_best, "| Best Prediction: ", uv_best, "| Confidence: ", conf)
         
                     current_pixel_location = self.get_world_m_to_UI(cam_type, curr_position, warped)[0]
                     current_pixel_location = np.asarray(current_pixel_location, dtype=np.int16)
@@ -736,6 +749,8 @@ class Camera_Registration(System_Calibration):
                 scale = 0.55
                 color = (255, 255, 255)
                 thickness = 1
+                
+                
 
                 cv2.putText(disp, "Controls:", (x0, y0),
                             font, scale, color, thickness, cv2.LINE_AA)
@@ -750,6 +765,10 @@ class Camera_Registration(System_Calibration):
 
                 cv2.putText(disp, "q / ESC     : Quit",
                             (x0, y0 + 3*line_h),
+                            font, scale, color, thickness, cv2.LINE_AA)
+                
+                cv2.putText(disp, f"Estimated Height [mm] {z_best * 1000:0.2}",
+                            (x0, y0 + 4*line_h),
                             font, scale, color, thickness, cv2.LINE_AA)
                     
                 cv2.imshow(window_name, disp)
@@ -1045,18 +1064,22 @@ if __name__ == '__main__':
     # camera_reg.run()
     
     # base 2.23 
-    heights = np.array([2.08, 2.65, 3.15, 3.65, 4.11, 4.60, 5.15, 5.62, 6.15, 6.64,
+    heights = np.array([2.08, 2.65, 3.15, 3.65, 4.11, 4.68, 5.15, 5.62, 6.15, 6.64,
                         7.18, 7.65, 8.18, 8.67, 9.30, 9.79, 10.14]) # mm 
     
+    # heights = np.array([2.08, 2.65, 3.15, 3.65])
+
+    
     heights = heights / 1000.0 # mm
-    # stack = camera_reg.rgb_multi_layer_scan(heights)
+    depth_path = "homography_stack.npz"
+    # stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
     # stack = 
     # print(stack)
     # rgbd_cam.set_default_setting()
     # robot_controller.load_edit_pose()
     # camera_reg.view_rgbd_therm_registration()
     # camera_reg.transformed_view(cam_type="thermal")
-    camera_reg.live_control_view('color', warped=True, tracking=True)
+    camera_reg.live_control_view('color', warped=True, tracking=True, depth_path= depth_path) 
     # camera_reg.view_rgbd_therm_heat_overlay()
     # camera_reg.draw_traj()
     therm_cam.deinitialize_cam()

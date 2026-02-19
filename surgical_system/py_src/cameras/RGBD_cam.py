@@ -224,7 +224,6 @@ class RGBD_Cam(Camera):
         if color_image is None:
             return
         color_image = color_image['color']
-        cv2.namedWindow('Color Stream', cv2.WINDOW_AUTOSIZE)
         cv2.imshow('Depth Stream', color_image)
         cv2.waitKey(1)
         
@@ -351,22 +350,18 @@ def main():
      
     # rgbd_cam.display_depth_stream()
     while(True):
-        # rgbd_cam.display_all_streams()
-    #         image = rgbd_cam.get_latest()
-    #         # rgbd_cam.plot_depth_point_cloud(image['depth'])
-            img = rgbd_cam.get_latest()
-            if img is None:
-                continue 
-            img = img['color']
-            pixel = rgbd_cam.get_beam_pixel(img)
-            print(pixel)
-    #         # print(pixel)
-    #         # rounded_pixel = np.rint(pixel).astype(int)  
-    #         # cv2.circle(img, rounded_pixel, radius=5, color=(0, 255, 0), thickness=-1)
-    #         # cv2.imshow("pixel marker", img)
-        # key = cv2.waitKey(1) & 0xFF
-        # if key == ord('q'):
-        #     break
+        image = rgbd_cam.get_latest()
+        color_image = image['color']
+        if color_image is None:
+            return
+        pixel = rgbd_cam.get_beam_pixel(color_image)
+        rounded_pixel = np.rint(pixel).astype(int)  
+        img = cv2.circle(color_image, rounded_pixel, radius=2, color=(0, 255, 0), thickness=-1)
+
+        cv2.imshow('Color Stream', img)
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
+            break
     
 
 if __name__=='__main__':

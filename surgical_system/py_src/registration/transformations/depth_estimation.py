@@ -30,14 +30,13 @@ class DepthEstimation():
         # Apply homography
         p = pts_h @ H.T  # (N,3)
 
-        denom = p[:, 2:3]  # (N,1)
-
-        # Avoid divide-by-zero
-        valid = np.abs(denom) >= eps
+        denom = p[:, 2:3]                 # (N,1)
+        valid = np.abs(denom) >= eps      # (N,1)
 
         uv = np.full((pts.shape[0], 2), np.inf)
 
-        uv[valid[:, 0]] = p[valid[:, 0], :2] / denom[valid]
+        m = valid[:, 0]                   # (N,)
+        uv[m] = p[m, :2] / denom[m, :] 
 
         return uv
 

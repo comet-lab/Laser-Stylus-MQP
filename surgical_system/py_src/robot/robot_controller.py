@@ -104,6 +104,8 @@ class Robot_Controller():
     def robot_stop(self):
         velocity = self.franka_client.send_velocity(np.array([0, 0, 0]), np.array([0, 0, 0]))
         time.sleep(1)
+        pose, _ = self.get_current_state()
+        self.go_to_pose(pose)
         return velocity
     
     def align_robot_input(self, new_pose):
