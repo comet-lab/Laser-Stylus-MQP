@@ -62,9 +62,12 @@ class MockCameraRegistration():
     def tracking_display(self, disp, cam_type = 'color', warped = True):
         raise NotImplementedError("This function should not be called on while mock robot is enabled")
         return np.zeros((720, 1280 , 3))
-
-    def get_transformed_view(self, latest, cam_type):
-        H = np.array([[1.2, 0.0, 0],
+    
+    def get_transform_matrix(self):
+        return np.array([[1.2, 0.0, 0],
                   [0.2, 1.1, 0],
                   [0.0012, 0.0035, 1]])
+
+    def get_transformed_view(self, latest, cam_type):
+        H = self.get_transform_matrix()
         return cv2.warpPerspective(latest, H, (1280//8,720//8))

@@ -11,6 +11,7 @@ from scipy.spatial.transform import Rotation
 from robot.robot import RobotSchema
 from dataclasses import dataclass, asdict
 import matplotlib.pyplot as plt
+from backend.async_sender import Sender
 
 # Classes
 mock_robot = os.getenv("MOCK_ROBOT", "0") == "1"
@@ -92,7 +93,8 @@ async def main():
         camera_reg = MockCameraRegistration(therm_cam, rgbd_cam, robot_controller, laser_obj)
     print("Starting Streams ")
     b = Broadcast(mocking=mock_robot)
-    print(f"Broadcast connection status: {b.connected}")
+    homography_socket = Sender("media", int(os.getenv("HOMOGRAPHY_PORT", 5001)))
+    print(f"Broadcast connection status: {b.connect()}")
     
     # def camera_broadcast_fn():
     #     while True:
@@ -155,9 +157,17 @@ async def main():
         # if isinstance(latest, dict):
         #     latest = latest.get(control_flow_handler.cam_type, None)
 
-        # TODO pass homography to media
+        H = np.eye(3)
         if control_flow_handler.desired_state.isTransformedViewOn:
-            raise NotImplementedError("homography to media not implemented yet")
+            H = camera_reg.get_transform_matrix()
+                
+        H = H.astype(np.dtype(os.getenv("HOMOGRAPHY_DTYPE", "float32"))).reshape((9,))
+            
+        homography_socket.send(
+            H, 
+            lambda obj: obj.tobytes(),
+            lambda x, y: np.array_equal(x, y)
+        )
 
         if(type(latest) == type(None)):
             continue
@@ -165,12 +175,12 @@ async def main():
         if latest.shape != (1280, 720):
             latest = cv2.resize(latest, (1280, 720), interpolation=cv2.INTER_NEAREST)
             
-        if control_flow_handler.desired_state.heat_mask is not None and not mock_robot:
-            latest = control_flow_handler.get_heat_overlay(latest)
-        else:
-            # print("trigger")
-            thermal_data = camera_reg.get_cam_latest("thermal")
-            control_flow_handler.desired_state.maxHeat = float(np.max(thermal_data))
+        # if control_flow_handler.desired_state.heat_mask is not None and not mock_robot:
+        #     latest = control_flow_handler.get_heat_overlay(latest)
+        # else:
+        #     # print("trigger")
+        #     thermal_data = camera_reg.get_cam_latest("thermal")
+        #     control_flow_handler.desired_state.maxHeat = float(np.max(thermal_data))
 
         if camera_reg.display_path and not mock_robot:
             latest = camera_reg.show_path(latest)
@@ -183,7 +193,7 @@ async def main():
         if(b.connected):
             b.publish_frame(latest)
         else:
-            b.connect(latest)
+            b.connect()
             print('connecting...')
             time.sleep(2)
         

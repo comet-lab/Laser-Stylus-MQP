@@ -28,6 +28,10 @@ services:
       - VITE_UI_WEBSOCKET_NAME=${UI_WEBSOCKET_NAME}
   media:
     build: ./media
+    environment:
+      - MOCK_ROBOT=1
+      - OVERLAY_PORT=${OVERLAY_PORT}
+      - HOMOGRAPHY_PORT=${HOMOGRAPHY_PORT}
     ports:
       - "8554:8554/tcp"
       - "8554:8554/udp"
@@ -40,6 +44,7 @@ services:
       - "8001:8001/udp"
       - "8001:8001/tcp"
       - "5000:5000"
+      - "5001:5001"
   surgical_system:
     build: ./surgical_system
     environment:

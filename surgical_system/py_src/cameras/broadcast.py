@@ -9,6 +9,17 @@ class Broadcast:
         self.process = None
         host = "media" if mocking else "localhost"
         self.rtsp_url=f"rtsp://{host}:8554/mystream"
+        self.ffmpeg_command = [
+            'ffmpeg',
+            '-f', 'rawvideo',
+            '-pix_fmt', 'bgr24',
+            '-s', '1280x720',
+            '-framerate', '3',
+            '-i', '-',
+            '-c:v', 'rawvideo',
+            '-f', 'rawvideo',
+            'tcp://media:5000'
+        ]
 
         # ffmpeg -re -f lavfi -i testsrc=size=640x360:rate=30 -c:v libx264 -preset ultrafast -tune zerolatency -movflags +global_header -rtsp_transport tcp -f rtsp rtsp://localhost:8554/mystream
 
@@ -18,9 +29,9 @@ class Broadcast:
         for line in proc.stderr:
             print("FFmpeg:", line.decode(), end='')
     
-    def connect(self, frame) -> bool:
+    def connect(self) -> bool:
         self.process = subprocess.Popen(
-            self.build_ffmpeg(frame),
+            self.ffmpeg_command,
             stdin=subprocess.PIPE,
             stderr=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -49,22 +60,6 @@ class Broadcast:
         self.process.stdin.close()
         self.process.wait()
         print("FFmpeg process closed.")
-
-    def build_ffmpeg(self, frame):
-        # height, width = frame.shape[0], frame.shape[1]
-        # TODO check nvenc available
-        self.ffmpeg_command = [
-            'ffmpeg',
-            '-f', 'rawvideo',
-            '-pix_fmt', 'bgr24',
-            '-s', '1280x720',
-            '-framerate', '3',
-            '-i', '-',
-            '-c:v', 'rawvideo',
-            '-f', 'rawvideo',
-            'tcp://media:5000'
-        ]
-        return self.ffmpeg_command
     
 
     # old_ffmpeg_command = [
