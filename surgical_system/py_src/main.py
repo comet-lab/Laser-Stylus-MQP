@@ -35,13 +35,22 @@ from backend.handler import Handler
 async def main():
     camera_calibration = False
     
-            
+    ##################################################################################
+    #-------------------------------- Laser Config ----------------------------------#
+    ##################################################################################
+    
+    laser_obj = None
+    if(not mock_robot):
+        laser_obj = Laser_Arduino()  # controls whether laser is on or off
+        laser_obj.set_output(False)
+    else:
+        laser_obj = MockLaser()
     
     ##################################################################################
     #------------------------------ Robot Config ------------------------------------#
     ##################################################################################
     # Create FrankaNode object for controlling robot
-    robot_controller = Robot_Controller() if not mock_robot else MockRobotController()
+    robot_controller = Robot_Controller(laser_obj) if not mock_robot else MockRobotController(laser_obj)
     home_pose = robot_controller.load_home_pose()
     start_pos = np.array([0,0,0.1]) # [m,m,m]
     start_pose = np.array([[1.0, 0, 0, start_pos[0]],
@@ -74,18 +83,6 @@ async def main():
         therm_cam = MockCamera(cam_type="thermal")
         rgbd_cam = MockCamera(cam_type="color")
         
-
-    
-    ##################################################################################
-    #-------------------------------- Laser Config ----------------------------------#
-    ##################################################################################
-    
-    laser_obj = None
-    if(not mock_robot):
-        laser_obj = Laser_Arduino()  # controls whether laser is on or off
-        laser_obj.set_output(False)
-    else:
-        laser_obj = MockLaser()
         
     # TODO mock camera registration object
     camera_reg = None

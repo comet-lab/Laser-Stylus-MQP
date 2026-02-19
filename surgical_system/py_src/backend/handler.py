@@ -122,8 +122,8 @@ class Handler:
             robot_path = self.cam_reg.pixel_to_world(pixels, cam_type=self.cam_type, z = self.working_height)
         speed = self.desired_state.speed if self.desired_state.speed != None else 0.01 # m/s
         traj = self.robot_controller.create_custom_trajectory(robot_path, speed)
-        self.laser_obj.set_output(self.desired_state.isLaserOn)
-        self.robot_controller.run_trajectory(traj, blocking=False)
+        # self.laser_obj.set_output(self.desired_state.isLaserOn)
+        self.robot_controller.run_trajectory(traj, blocking=False, laser_on=self.desired_state.isLaserOn)
         
     def _do_hold_pose(self):
         current_pose, current_vel = self.robot_controller.get_current_state()
@@ -201,7 +201,7 @@ class Handler:
                     # TODO check outside boundary
                     # Disable laser
                     # Pull laser back into closest valid position
-                    print(f"Live controller trigger {self.desired_state.x}, {self.desired_state.y}")
+                    # print(f"Live controller trigger {self.desired_state.x}, {self.desired_state.y}")
                     self._do_live_control()
                     self.desired_state.path = None
                     

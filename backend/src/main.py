@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException, WebSocket, UploadFile, Request
+from fastapi import FastAPI, HTTPException, WebSocket, UploadFile, Request, Form, File
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import base64
 from robot import RobotSchema
 from manager import ConnectionManager
+import json
 
 app = FastAPI()
 
@@ -28,43 +29,48 @@ def read_item(stream_name: str):
 def health():
     return None
 
-@app.post("/api/path")
-async def submit_path(request: dict):
-    pixels = request.get("pixels", [])
-    
-    if len(pixels) == 0:
-        raise HTTPException(status_code=400, detail="No pixels provided")
-    
-    print(f"Received path with {len(pixels)} pixels")
-    manager.desired_state.path = pixels
-    print("BROADCASTING")
-    await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
-    
-    return {
-        "status": "success",
-        "pixel_count": len(pixels),
-        "message": f"Path with {len(pixels)} pixels dispatched to robot"
-    }
+@app.post("/api/execute")
+async def execute_bundled_command(
+    speed: float = Form(...),
+    raster_type: str = Form(...),
+    density: float = Form(...),
+    pixels: str = Form(...),
+    file: UploadFile = File(...)
+):
+    # Parse the pixel path
+    try:
+        pixel_list = json.loads(pixels)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid pixel data format")
 
-@app.post("/api/settings")
-async def submit_settings(request: Request):
-    data = await request.json()
-    raster_type = data.get("raster_type")
-    speed = data.get("speed")
-    print(data)
+    # Process and save the raster mask
+    file_content = await file.read()
+    save_directory = "saved_masks"
+    os.makedirs(save_directory, exist_ok=True)
+    file_location = f"{save_directory}/{file.filename}"
     
+    with open(file_location, "wb") as f:
+        f.write(file_content)
+
+    # Encode for websocket transmission
+    encoded_utf8 = base64.b64encode(file_content).decode('utf-8')
+
+    # Update the global desired state
+    manager.desired_state.speed = speed
     manager.desired_state.raster_type = raster_type
-    manager.desired_state.speed = float(speed)
+    manager.desired_state.density = density
+    manager.desired_state.path = pixel_list
+    manager.desired_state.raster_mask = encoded_utf8
 
-    print(f"Received settings: raster_type={raster_type}, speed={speed}")
-    print("BROADCASTING")
+    # Broadcast once to the robot
+    # This sends one single json packet containing all updated fields
+    print(f"Bundled Execution: Broadcasting {len(pixel_list)} pixels at speed {speed}. Density is {density}, raster type is {raster_type}")
     await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
-    
+
     return {
         "status": "success",
-        "raster_type": raster_type,
-        "speed": speed,
-        "message": "Settings dispatched to robot"
+        "message": "Full execution packet dispatched to robot",
+        "pixel_count": len(pixel_list)
     }
 
 @app.post("/api/view_settings")
@@ -91,37 +97,34 @@ async def submit_settings(request: Request):
     }
 
 
-@app.post("/api/raster_mask")   
-async def submit_raster_mask(file: UploadFile):
-    # Validate extension
-    extension = file.filename.split('.')[-1]
-    if extension != "png":
-        raise HTTPException(status_code=400, detail=f"Incompatible file extension: {extension}")
-    
-    # Read the file content
-    file_content = file.file.read()
+@app.post("/api/heat_markers")
+async def submit_heat_markers(markers: str = Form(...)):
+    try:
+        markers_list = json.loads(markers)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid markers format")
 
-    #Save the file to disk
-    save_directory = "saved_masks"
-    os.makedirs(save_directory, exist_ok=True) # Create folder if it doesn't exist
-    
-    file_location = f"{save_directory}/{file.filename}"
-    
-    with open(file_location, "wb") as f:
-        f.write(file_content)
-    
-    print(f"File saved to {file_location}")
+    if not markers_list or not isinstance(markers_list, list):
+        raise HTTPException(status_code=400, detail="Markers must be an array")
 
-    # Proceed with your existing logic
-    encoded_b64 = base64.b64encode(file_content) # png is base 64 encoded
-    encoded_utf8 = encoded_b64.decode('utf-8') # re-encode to utf-8 to send over websocket
-    
-    manager.desired_state.raster_mask = encoded_utf8
-    print("Sending raster")
-    print("BROADCASTING")
-    await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
-    
-    return {"filename": file.filename, "saved_at": file_location}
+    for i, m in enumerate(markers_list):
+        if not isinstance(m, dict) or "x" not in m or "y" not in m:
+            raise HTTPException(status_code=400, detail=f"Marker {i} must have x and y")
+
+    manager.desired_state.heat_markers = markers_list
+
+    print(f"Received heat markers: {markers_list}")
+    await manager.broadcast_to_group(
+        group=manager.robot_connections,
+        state=manager.desired_state
+    )
+
+    return {
+        "status": "success",
+        "marker_count": len(markers_list),
+        "markers": markers_list,
+        "message": "Heat markers dispatched to robot"
+    }
 
 manager = ConnectionManager()
 
