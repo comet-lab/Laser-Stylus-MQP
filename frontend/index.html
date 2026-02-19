@@ -37,7 +37,8 @@
 
           <div class="setting-row-wrapper">
             <label for="speedInput" class="row-label">Robot Speed (mm/s)</label>
-            <input type="number" id="speedInput" class="row-input" value="10" step="10" min="1" max="100"
+            <span class = "row-label-speed align-right">(Max 30)</span>
+            <input type="number" id="speedInput" class="row-input" value="10" step="5" min="1" max="30"
               placeholder="10">
           </div>
 
@@ -54,6 +55,8 @@
               <div class="fill-settings-inner">
 
                 <div class="settings-group-container">
+                  <!--//TODO: Remove entirely, unless we want to add more raster patterns in the future.-->
+                  <!--
                   <div class="setting-row-wrapper secondary-wrapper">
                     <label class="row-label">Raster Pattern</label>
                     <div class="segment-control raster-control">
@@ -61,9 +64,10 @@
                       <button id="rasterB" class="segment-btn">Spiral</button>
                     </div>
                   </div>
+                -->
 
                   <div class="setting-row-wrapper secondary-wrapper">
-                    <label for="densityRaster" class="row-label">Density</label>
+                    <label for="densityRaster" class="row-label">Spacing</label>
                     <input type="number" id="densityRaster" class="row-input" value="10" step="1" min="1" max="20"
                       placeholder="10">
                   </div>
@@ -76,6 +80,7 @@
           <div class="preview-action-container">
             <div class="setting-row-wrapper preview-wrapper">
               <span class="row-label">Preview Path</span>
+              <span class = "row-label-2">(Required to Execute)</span>
               <div class="segment-control preview-control">
                 <button id="previewOff" class="segment-btn active">OFF</button>
                 <button id="previewOn" class="segment-btn">ON</button>
@@ -206,7 +211,17 @@
                 stroke-linejoin="round" />
             </svg>
           </span>
-          <span class="btn-text">CLEAR PATH</span>
+          <span class="btn-text">CLEAR</span>
+        </button>
+
+        <button id="restorePathBtn" class="action-btn batch-ui drawing-ui-only" disabled>
+          <span class="btn-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E0F2E0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+              <path d="M3 3v5h5"></path>
+            </svg>
+          </span>
+          <span class="btn-text">REPEAT</span>
         </button>
 
         <button id="clearBoundaryBtn" class="action-btn fixtures-ui-only hidden" disabled>
@@ -216,7 +231,7 @@
                 stroke-linejoin="round" />
             </svg>
           </span>
-          <span class="btn-text">CLEAR FIXTURES</span>
+          <span class="btn-text">CLEAR</span>
         </button>
 
         <button id="clearMarkersBtn" class="action-btn thermal-ui hidden" disabled>
@@ -234,7 +249,7 @@
             <path
               d="M1 12C0.716667 12 0.479333 11.904 0.288 11.712C0.0966668 11.52 0.000666667 11.2827 0 11V1C0 0.71667 0.0960001 0.479337 0.288 0.288004C0.48 0.0966702 0.717333 0.000670115 1 3.44827e-06C1.28267 -0.000663218 1.52033 0.0953369 1.713 0.288004C1.90567 0.48067 2.00133 0.718003 2 1V11C2 11.2833 1.904 11.521 1.712 11.713C1.52 11.905 1.28267 12.0007 1 12ZM16.175 7H5C4.71667 7 4.47933 6.904 4.288 6.712C4.09667 6.52 4.00067 6.28267 4 6C3.99933 5.71734 4.09533 5.48 4.288 5.288C4.48067 5.096 4.718 5 5 5H16.175L13.3 2.1C13.1167 1.91667 13.0207 1.68767 13.012 1.413C13.0033 1.13834 13.0993 0.90067 13.3 0.700003C13.4833 0.51667 13.7167 0.425004 14 0.425004C14.2833 0.425004 14.5167 0.51667 14.7 0.700003L19.3 5.3C19.4 5.4 19.471 5.50834 19.513 5.625C19.555 5.74167 19.5757 5.86667 19.575 6C19.5743 6.13334 19.5537 6.25834 19.513 6.375C19.4723 6.49167 19.4013 6.6 19.3 6.7L14.7 11.3C14.5167 11.4833 14.2877 11.575 14.013 11.575C13.7383 11.575 13.5007 11.4833 13.3 11.3C13.1 11.1 13 10.8627 13 10.588C13 10.3133 13.1 10.0757 13.3 9.875L16.175 7Z" />
           </svg>
-          <span class="btn-text">PREPARE PATH</span>
+          <span class="btn-text">PREPARE</span>
         </button>
 
         <button id="applyFixturesBtn" class="action-btn action-btn-prepare fixtures-ui-only hidden" disabled>
@@ -242,7 +257,7 @@
             xmlns="http://www.w3.org/2000/svg">
             <path d="M1.5 13L9.5 21L24.5 5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
-          <span class="btn-text">APPLY FIXTURES</span>
+          <span class="btn-text">APPLY</span>
         </button>
 
         <button id="resetHeatAreaBtn" class="action-btn thermal-ui hidden" disabled>
@@ -350,13 +365,32 @@
                 <path d="M1.5 24.5L24.5 1.5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
             </button>
-            <div class="height-container">
-              <span class="height-label">Height</span>
-              <span class="height-label height-number" id="heightDisplay">0 CM</span>
-              <div class="height-vertical-slider-container">
-                <input type="range" id="heightSlider" min="0" max="40" value="0"
-                  class="styled-range height-vertical-range">
+            <div id="slider-controls" class="tool-group" style="margin-top: 15px;">
+
+              <div class="popout-control real-time-ui hidden-mode" id="speedControlGroup">
+                <button class="popout-trigger" id="speedTrigger">
+                  <span class="popout-label">SPEED</span>
+                  <span class="popout-value" id="speedDisplay">10</span>
+                </button>
+                <div class="popout-panel" id="speedFlyout">
+                  <div class="popout-slider-container">
+                    <input type="range" id="speedSlider" min="1" max="30" step="1" value="10" class="styled-range popout-range">
+                  </div>
+                </div>
               </div>
+
+              <div class="popout-control" id="heightControlGroup">
+                <button class="popout-trigger" id="heightTrigger">
+                  <span class="popout-label">HEIGHT</span>
+                  <span class="popout-value" id="heightDisplay">...</span>
+                </button>
+                <div class="popout-panel" id="heightFlyout">
+                  <div class="popout-slider-container">
+                    <input type="range" id="heightSlider" min="0" step="0.5" max="40" value="0" class="styled-range popout-range">
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
 
@@ -422,7 +456,7 @@
         <div class="legend-core">
           <div class="gradient-bar"></div>
           <div class="gradient-labels">
-            <span>100</span>
+            <span>100+</span>
             <span>60</span>
             <span>20</span>
           </div>

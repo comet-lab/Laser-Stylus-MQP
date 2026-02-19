@@ -1,3 +1,5 @@
+//frontend/src/features/drawing/ExecutionManager.ts
+
 import { UIRegistry } from '../../core/UIRegistry';
 import { AppState } from '../../core/AppState';
 import { CanvasManager } from '../../ui/CanvasManager';
@@ -53,7 +55,7 @@ export class ExecutionManager {
 
         const previewMgr = this.getPreviewManager();
         if (!previewMgr.hasPreviewedCurrent()) {
-            ToastManager.show('Please preview the path first', 'warning');
+            ToastManager.show('Please preview the path first', { type: 'warning' });
             return;
         }
 
@@ -151,22 +153,41 @@ export class ExecutionManager {
             }
         } catch (e) {
             console.error(e);
-            ToastManager.show("Execution command failed.", "error");
+            ToastManager.show("Execution command failed.", { type: 'error' });
             this.ui.executeBtn.disabled = false;
         }
     }
 
-    clearDrawing(): void {
+    async clearDrawing(): Promise<void> {
+        //Clear any lingering warnings/toasts immediately
+        ToastManager.clearAll();
+
         const cm = this.getCanvasManager();
-        cm?.clearDrawing();
+        const previewMgr = this.getPreviewManager();
+
+        if (cm) {
+            //Clear the local visual canvas
+            cm.clearDrawing();
+            
+            //Wipe the path and raster data from the server's memory!
+            //This prevents the robot from holding onto a "ghost" path.
+            try {
+                await cm.clearPathAndRasterOnServer();
+            } catch (e) {
+                console.error("Failed to clear path on server:", e);
+            }
+        }
+
         this.state.drawnShapeType = null;
 
-        const previewMgr = this.getPreviewManager();
+        //This resets the UI: Turns off the preview toggle, clears duration, clears the overlay, and safely disables the execute button.
         previewMgr.resetPreviewState();
 
+        //Sync the drawing tool buttons
         this.updateExecuteButtonState();
         this.updateDrawButtonState();
 
+        //Re-enable the active drawing tool so they can immediately draw again
         if (cm && this.state.selectedShape && this.state.selectedShape !== 'marker') {
             cm.setShapeType(this.state.selectedShape);
             cm.enableDrawing();

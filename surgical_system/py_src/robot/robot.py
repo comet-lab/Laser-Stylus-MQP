@@ -11,18 +11,35 @@ class RobotSchema:
     rx: float = None
     ry: float = None
     rz: float = None
+    
+    
     laserX: float = None
     laserY: float = None
     beamWaist: float = None
+    maxHeat: float = None
+    
     isLaserOn: bool = None
     isRobotOn: bool = None
+    
     isTransformedViewOn: bool = None
     isThermalViewOn: bool = None
+    
     pathEvent: str = None
     raster_mask: str = None
     raster_type: str = None
+    density: float = None
+    
+    heat_mask: str = None
+    fixtures_mask: str = None
     speed: float = None
+    height: float = None
+    current_height: float = None
+    
+    
     path: List[Dict[str, float]] = None
+    heat_markers: List[Dict[str, float]] = None
+    executeCommand: bool = None
+    path_preview: Dict[str, List[float]] = None
 
 
     @staticmethod

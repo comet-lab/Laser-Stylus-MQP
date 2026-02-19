@@ -92,7 +92,7 @@ async def main():
         camera_reg = MockCameraRegistration(therm_cam, rgbd_cam, robot_controller, laser_obj)
     print("Starting Streams ")
     b = Broadcast(mocking=mock_robot)
-    print(f"Broadcast connection status: {b.connect()}")
+    print(f"Broadcast connection status: {b.connected}")
     
     # def camera_broadcast_fn():
     #     while True:
@@ -159,13 +159,30 @@ async def main():
 
         if latest.shape != (1280, 720):
             latest = cv2.resize(latest, (1280, 720), interpolation=cv2.INTER_NEAREST)
+            
+        if control_flow_handler.desired_state.heat_mask is not None and not mock_robot:
+            latest = control_flow_handler.get_heat_overlay(latest)
+        else:
+            # print("trigger")
+            thermal_data = camera_reg.get_cam_latest("thermal")
+            control_flow_handler.desired_state.maxHeat = float(np.max(thermal_data))
 
+        if camera_reg.display_path and not mock_robot:
+            latest = camera_reg.show_path(latest)
+        
+        if not mock_robot:
+            latest = camera_reg.tracking_display(latest, 
+                                             cam_type = 'color',
+                                             warped=control_flow_handler.desired_state.isTransformedViewOn)
+            
         if(b.connected):
             b.publish_frame(latest)
         else:
-            b.connect()
             print('connecting...')
+            b.connect(latest)
             time.sleep(2)
+        
+        await asyncio.sleep(0.005)
   
 
 if __name__ == "__main__":

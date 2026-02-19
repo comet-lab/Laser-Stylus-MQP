@@ -11,6 +11,7 @@ from typing import Optional
 import random
 import math
 from typing import Optional, List, Dict, Any
+from shapely.geometry import Polygon, Point
 
 app = FastAPI()
 
@@ -31,6 +32,23 @@ def read_item(stream_name: str):
 @app.get("/health")
 def health():
     return None
+
+@app.post("/api/system_reset")
+async def system_reset():
+    """
+    Clears the server's desired state memory.
+    """
+    # Wipe the desired state memory
+    manager.desired_state.raster_mask = None
+    manager.desired_state.fixtures_mask = None
+    manager.desired_state.heat_mask = None
+    manager.desired_state.path = None
+    
+    # Tell the robot that everything is gone
+    print("System Reset: Wiping path data from memory.")
+    await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
+    
+    return {"status": "success", "message": "Environment memory reset. Awaiting blank masks from UI."}
 
 @app.post("/api/fixtures")
 async def execute_fixtures(file: UploadFile = File(...)):
@@ -72,6 +90,10 @@ def generate_fake_raster_path(pixel_list: List[Dict[str, float]], density: float
     min_x, max_x = min(xs), max(xs)
     min_y, max_y = min(ys), max(ys)
 
+    overtravel = 5.0
+    start_x_overshoot = min_x - overtravel
+    end_x_overshoot = max_x + overtravel
+
     generated_path = []
     
     step = max(10.0, 200.0 / (density if density > 0 else 1)) 
@@ -81,8 +103,8 @@ def generate_fake_raster_path(pixel_list: List[Dict[str, float]], density: float
     point_resolution = 10.0 
 
     while current_y <= max_y:
-        start_x = min_x if going_right else max_x
-        end_x = max_x if going_right else min_x
+        start_x = start_x_overshoot if going_right else end_x_overshoot
+        end_x = end_x_overshoot if going_right else start_x_overshoot
         
         dist = abs(end_x - start_x)
         num_sub_steps = int(dist / point_resolution)
@@ -149,12 +171,12 @@ async def preview_path(
     await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
 
     # --- REAL MODE (Default): Return empty path, Frontend waits for WS ---
-    # return {
-    #     "status": "pending",
-    #     "duration": 0,
-    #     "path": [], 
-    #     "message": "Computation initiated on Robot"
-    # }
+    return {
+        "status": "pending",
+        "duration": 0,
+        "path": [], 
+        "message": "Computation initiated on Robot"
+    }
 
     # --- FAKE MODE (Uncomment for testing without Robot) ---
     final_path = []

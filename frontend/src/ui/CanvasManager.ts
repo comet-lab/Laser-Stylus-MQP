@@ -46,6 +46,12 @@ export class CanvasManager {
     private prevWidth: number;
     private prevHeight: number;
 
+    //Backup to repeat the path
+    private backupDrawingState: any[] = [];
+
+    //Bounds of drawn path on the canvas
+    private lastDrawnBoundingBox: { minX: number, maxX: number, minY: number, maxY: number } | null = null;
+
     // --- CONFIG: Visual Defaults ---
     private readonly SHAPE_DEFAULTS = {
         fill: 'transparent',
@@ -392,6 +398,7 @@ export class CanvasManager {
         this.isFixturesDrawing = false;
         this.lastFixturesPoint = null;
         this.fixturesCanvas.releasePointerCapture(e.pointerId);
+        this.onFixturesChange();
     }
 
     private restoreDrawingState(): void {
@@ -938,12 +945,12 @@ export class CanvasManager {
         this.fCanvas.setDimensions({ width, height });
 
         this.fCanvas.getObjects().forEach(obj => {
-            // 1. Scale Position
+            //Scale Position
             const newLeft = obj.left * scaleX;
             const newTop = obj.top * scaleY;
 
-            // 2. Scale Dimensions (FIX)
-            // We multiply the existing scale factor by the new resize ratio
+            //Scale Dimensions
+            //We multiply the existing scale factor by the new resize ratio
             const newScaleX = obj.scaleX * scaleX;
             const newScaleY = obj.scaleY * scaleY;
 
@@ -954,7 +961,7 @@ export class CanvasManager {
                 scaleY: newScaleY
             });
 
-            // Marker Handling (Keep existing custom logic)
+            //Marker Handling
             if ((obj as any)._isMarker) {
                 (obj as any)._tipX = (obj as any)._tipX * scaleX;
                 (obj as any)._tipY = (obj as any)._tipY * scaleY;
@@ -992,6 +999,36 @@ export class CanvasManager {
         this.fCanvas.renderAll();
         if (this.hasFixtures() && this.fixturesCanvas && !this.fixturesCanvas.classList.contains('active')) {
             this.fixturesCanvas.classList.add('active');
+        }
+    }
+
+    public backupDrawing(): void {
+        // Grab all objects that aren't thermal markers
+        const objects = this.fCanvas.getObjects().filter(o => !(o as any)._isMarker);
+        
+        // Serialize them to JSON objects (ignoring custom marker properties)
+        this.backupDrawingState = objects.map(o => o.toObject(['_isMarker']));
+    }
+
+    public async restoreDrawing(): Promise<void> {
+        if (this.backupDrawingState.length === 0) return;
+        
+        this.clearDrawing();
+        
+        try {
+            const enlivened = await fabric.util.enlivenObjects(this.backupDrawingState);
+            
+            enlivened.forEach((obj: any) => {
+                obj.set({ selectable: true, evented: true });
+                this.fCanvas.add(obj);
+            });
+            
+            this.fCanvas.requestRenderAll();
+            this.hasPlacedShape = true;
+            this.onShapeComplete();
+            
+        } catch (error) {
+            console.error("Failed to restore drawing backup:", error);
         }
     }
 
@@ -1218,8 +1255,22 @@ export class CanvasManager {
     }
 
     // =========================================================================
-    // Preview/Execute Logic (NEW)
+    // Preview/Execute Logic
     // =========================================================================
+
+    public checkIfPathEscapes(path: Position[]): boolean {
+        if (!this.lastDrawnBoundingBox) return false;
+        const { minX, maxX, minY, maxY } = this.lastDrawnBoundingBox;
+        const TOLERANCE = 2.0; // Allow a small 2px margin for rendering differences
+
+        for (const p of path) {
+            if (p.x < minX - TOLERANCE || p.x > maxX + TOLERANCE ||
+                p.y < minY - TOLERANCE || p.y > maxY + TOLERANCE) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /**
      * Sends full path data to backend for preview/preparation
@@ -1266,6 +1317,16 @@ export class CanvasManager {
             y: (p.y / height) * this.video.videoHeight
         }));
 
+        //Calculate bounding box of the drawn path in video space
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        for (const p of videoPixels) {
+            if (p.x < minX) minX = p.x;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.y > maxY) maxY = p.y;
+        }
+        this.lastDrawnBoundingBox = { minX, maxX, minY, maxY };
+
         const formData = new FormData();
         formData.append('speed', speed.toString());
         formData.append('density', density.toString());
@@ -1284,10 +1345,18 @@ export class CanvasManager {
 
         const response = await this.postFormData('/api/preview', formData);
 
+        let warning = hasFixtureOverlap ? "FIXTURE_OVERLAP" : undefined;
+
+        if (!warning && response.path && response.path.length > 0) {
+            if (this.checkIfPathEscapes(response.path)) {
+                warning = "PATH_ESCAPES_BOUNDS";
+            }
+        }
+
         return {
             duration: response.duration,
             path: response.path,
-            warning: hasFixtureOverlap ? "FIXTURE_OVERLAP" : undefined
+            warning: warning
         };
     }
 
@@ -1490,5 +1559,28 @@ export class CanvasManager {
             throw new Error(errorText || `Request to ${endpoint} failed`);
         }
         return response.json();
+    }
+
+    /**
+     * Clears the planned path and raster mask on the server,
+     * overwriting path.png with a blank white image.
+     */
+    public async clearPathAndRasterOnServer(): Promise<void> {
+        const formData = new FormData();
+        formData.append('speed', '10');
+        formData.append('density', '0');
+        formData.append('pixels', '[]');
+        
+        //Force the backend to process the file by faking that fill is enabled
+        formData.append('is_fill', 'true'); 
+        
+        try {
+            //Borrow fixture blob generator to make a clean white image
+            const blob = await this.generateBlankFixtureBlob();
+            formData.append('file', blob, 'path.png');
+            await this.postFormData('/api/preview', formData);
+        } catch (e) {
+            console.error("Failed to reset path.png on server:", e);
+        }
     }
 }
