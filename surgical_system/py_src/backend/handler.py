@@ -94,6 +94,7 @@ class Handler:
             
         if self.new_path_flag:
             status.path_preview = self.desired_state.path_preview
+            print(f"[send_fn Handler] Sending Speed: {self.desired_state.path_preview['time']}")
             self.new_path_flag = False
             
         return status.to_str()
@@ -409,7 +410,7 @@ class Handler:
 
         if(self.desired_state.isRobotOn):          
             self.working_height = self.desired_state.height / 100.0 if self.desired_state.height else  0 # cm to m
-            print(f"[Robot Height] {self.working_height} m")
+            # print(f"[Robot Height] {self.working_height} m")
                 
             # print("loop",
             # "raster?", self.desired_state.raster_mask is not None,

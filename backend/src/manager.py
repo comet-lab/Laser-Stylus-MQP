@@ -67,6 +67,10 @@ class ConnectionManager:
                         pass
                     state.update(message)
                     await self.broadcast_to_group(forwarding_group, state)
+                    if(forwarding_group == self.frontend_connections):
+                        if('path_preview' in message.keys() and message['path_preview'] is not None):
+                            message['path_preview']['time'] = message['path_preview']['time'][0]
+                            print("TIME:",message['path_preview']['time'])
                     
                     # RESET EVENT: 
                     # If we just broadcasted a pathEvent (start/end), reset it to None 
