@@ -40,7 +40,7 @@ class Broadcast:
         frame = np.ascontiguousarray(frame)
         if not self.connected or self.process == None:
             print("not connected... Initializing ffmpeg process")
-            self.build_ffmpeg(self, frame)
+            self.connect(self, frame)
         self.process.stdin.write(frame.tobytes())
     
     def __del__(self):

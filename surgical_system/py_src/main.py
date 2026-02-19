@@ -178,8 +178,8 @@ async def main():
         if(b.connected):
             b.publish_frame(latest)
         else:
-            b.connect(latest)
             print('connecting...')
+            b.connect(latest)
             time.sleep(2)
         
         await asyncio.sleep(0.005)

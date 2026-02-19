@@ -33,6 +33,7 @@ class RobotSchema:
     fixtures_mask: str = None
     speed: float = None
     height: float = None
+    current_height: float = None
     
     
     path: List[Dict[str, float]] = None
