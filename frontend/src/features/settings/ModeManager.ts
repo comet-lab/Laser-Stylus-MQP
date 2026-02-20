@@ -1,5 +1,3 @@
-//frontend/src/features/settings/ModeManager.ts
-
 import { UIRegistry }    from '../../core/UIRegistry';
 import { AppState }      from '../../core/AppState';
 import { CanvasManager } from '../../ui/CanvasManager';
@@ -37,6 +35,9 @@ export class ModeManager {
         const cm = this.getCanvasManager();
 
         if (isRealTime) {
+            // Feature: Close the Prepare Path menu if they switch to real-time mode
+            this.ui.preparePopup.classList.remove('active');
+
             this.ui.batchUiElements.forEach(el => el.classList.add('hidden-mode'));
             this.ui.realTimeUIElements.forEach(el => el.classList.remove('hidden-mode'));
             cm?.disableDrawing();
@@ -54,6 +55,9 @@ export class ModeManager {
         this.state.selectedShape   = null;
         this.state.drawnShapeType  = null;
         this.updateDrawButtonState();
+        
+        // Sync hardware button visibility based on the new mode
+        this.updateHardwareUIVisibility();
     }
 
     // ---------------------------------------------------------------
@@ -65,7 +69,7 @@ export class ModeManager {
      * reconciles both the UI and CanvasManager state.
      *
      * @param modeId  – the `id` attribute of the mode button that was clicked
-     *                  (e.g. 'drawingBtn', 'thermalBtn', 'fixturesBtn').
+     * (e.g. 'drawingBtn', 'thermalBtn', 'fixturesBtn').
      */
     switchMode(modeId: string): void {
         console.log('Switching to mode:', modeId);
@@ -103,6 +107,9 @@ export class ModeManager {
                 this.activateDrawingMode(cm);
                 break;
         }
+
+        // Sync hardware button visibility based on the newly selected tab
+        this.updateHardwareUIVisibility();
     }
 
     // ---------------------------------------------------------------
@@ -212,5 +219,22 @@ export class ModeManager {
             line:     this.ui.lineBtn,
         };
         map[shape]?.classList.add('selected');
+    }
+
+    /** * Dims the hardware toggles to visually indicate they cannot be used
+     * while on the Thermal or Fixtures tab during Real-Time mode.
+     * (We don't use 'pointer-events: none' so we can still catch clicks and show a Toast)
+     */
+    private updateHardwareUIVisibility(): void {
+        const isRealTime = this.ui.processingModeSwitch.checked;
+        const isNotDrawing = this.state.currentMode !== 'drawing';
+
+        if (isRealTime && isNotDrawing) {
+            this.ui.laserBtn.classList.add('locked');
+            this.ui.robotBtn.classList.add('locked');
+        } else {
+            this.ui.laserBtn.classList.remove('locked');
+            this.ui.robotBtn.classList.remove('locked');
+        }
     }
 }
