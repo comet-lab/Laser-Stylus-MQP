@@ -47,6 +47,7 @@ export interface WebSocketMessage {
     path_preview?: {
         x: number[];
         y: number[];
+        time?: number[] | number; // Added to catch the nested duration
     };
     preview_duration?: number;
 }
