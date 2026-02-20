@@ -248,6 +248,7 @@ pre {
   width: calc(100% - var(--left-panel-width));
   height: calc(100% - var(--top-panel-height));
   background-color: #000;
+  overflow: hidden;
 }
 
 #viewport::after {
@@ -269,10 +270,40 @@ pre {
     inset 0 0 40px 4px rgba(255, 170, 0, 0.6); 
 }
 
+/* === ZOOM INDICATOR === */
+#zoom-indicator {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  background-color: rgba(21, 27, 33, 0.85);
+  border: 2px solid #2c343b;
+  color: #e0f2e0;
+  padding: 6px 12px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 700;
+  font-size: calc(var(--base-scale) * 0.85);
+  z-index: 60;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#zoom-indicator.hidden {
+  display: flex !important; /* Override your global .hidden */
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
 #zoom-wrapper {
   width: 100%;
   height: 100%;
-  transform-origin: center center;
+  transform-origin: 0 0;
   will-change: transform;
 }
 
