@@ -42,6 +42,11 @@ class Camera_Registration(System_Calibration):
             
         self.traj_points = None
         self.display_path = False
+        depth_path = "/homography_stack.npz"
+        stack_path = self.directory + self.calibration_folder + depth_path
+        print("[Depth Estimation] Loading file: ", stack_path)
+        self.homography_stack = DepthEstimation.load_homography_stack_npz(stack_path)
+        self.dense_stack = DepthEstimation.create_dense_stack(self.homography_stack, dz=0.00025)
     
     @staticmethod
     def circle_perimeter_pixels(center, r, num_pts=360):
@@ -589,8 +594,71 @@ class Camera_Registration(System_Calibration):
         
         cv2.circle(disp, current_pixel_location, 5, (255, 0, 0), 2)
         return disp
-### TESTING FUNCTIONS ###
     
+    
+        
+    def scan_region_for_depth(self, traj):
+        self.robot_controller.run_trajectory(traj, blocking=False)
+        points = np.zeros((0, 3))
+        depths = []
+        
+        print("[Camera Reg] Scanning Features")
+        while(self.robot_controller.is_trajectory_running()):
+            curr_position = self.robot_controller.current_robot_to_world_position()[:2]
+            color_img = self.rgbd_cam.get_latest()['color']
+                    
+            u_obs, v_obs = map(float, self.get_hot_pixel(color_img, method="Centroid")[:2])
+            X_cmd, Y_cmd = map(float, curr_position[:2])
+            z_best, err_best, uv_best, conf = DepthEstimation.estimate_depth_from_dense_stack(
+                self.dense_stack,
+                (u_obs, v_obs),
+                (X_cmd, Y_cmd),
+                refine=True) 
+            
+            point = np.append(curr_position, z_best)
+            points = np.vstack((points, point))
+            print("[Camera Reg] Points Scanned: ", point)
+            # print("World Pos: ", world_pos, " Pixel: ", rgb_laser_pixel)
+            time.sleep(1/30.0)
+            
+        depth, meta = DepthEstimation.generate_depth_mapping(points, cell_size=0.001)
+        
+        return depth, meta
+        
+        
+    
+### TESTING FUNCTIONS ###
+    def exp_depth_scan(self):
+        input(f"Press Enter to continue depth estimation creation.")
+        gridShape = np.array([15, 15])
+        squareSize = 0.0025
+        
+        xPoints = (np.arange(gridShape[1]) - (gridShape[1] - 1) / 2) * squareSize
+        yPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
+        xValues, yValues = np.meshgrid(xPoints, yPoints)
+        
+        
+        robot_path = np.hstack((xValues.reshape((-1, 1)), 
+                                yValues.reshape((-1, 1)), 
+                                np.full((xValues.size, 1), 0)))
+        
+        start_pos = robot_path[0, :]
+        start_pose = np.eye(4)
+        start_pose[:3, -1] = start_pos
+        print("Heading to starting location")
+        self.robot_controller.go_to_pose(start_pose @ self.home_pose)
+        
+        traj = self.robot_controller.create_custom_trajectory(robot_path, 0.025)
+        depth, meta = self.scan_region_for_depth(traj)
+        
+        save_location = self.directory + self.calibration_folder + "/depth_map.npz"
+        DepthEstimation.save_depth_npz(save_location, depth, meta)
+        return depth, meta
+        
+        
+    
+        
+        
     def transformed_view(self, cam_type = "color"):
         # Size of the top-down (bird's-eye) image (e.g., from calibration)
         WINDOW_NAME = "w0w"
@@ -1064,10 +1132,10 @@ if __name__ == '__main__':
     # camera_reg.run()
     
     # base 2.23 
-    heights = np.array([2.08, 2.65, 3.15, 3.65, 4.11, 4.68, 5.15, 5.62, 6.15, 6.64,
-                        7.18, 7.65, 8.18, 8.67, 9.30, 9.79, 10.14]) # mm 
+    # heights = np.array([2.08, 2.65, 3.15, 3.65, 4.11, 4.68, 5.15, 5.62, 6.15, 6.64,
+    #                     7.18, 7.65, 8.18, 8.67, 9.30, 9.79, 10.14]) # mm 
     
-    # heights = np.array([2.08, 2.65, 3.15, 3.65])
+    heights = np.array([2.08, 2.65, 3.15, 3.65, 5.15, 5.62, 6.15, 6.64, 10.14])
 
     
     heights = heights / 1000.0 # mm
@@ -1079,7 +1147,13 @@ if __name__ == '__main__':
     # robot_controller.load_edit_pose()
     # camera_reg.view_rgbd_therm_registration()
     # camera_reg.transformed_view(cam_type="thermal")
-    camera_reg.live_control_view('color', warped=True, tracking=True, depth_path= depth_path) 
+    # camera_reg.live_control_view('color', warped=True, tracking=True, depth_path= depth_path) 
+    
+    camera_reg.exp_depth_scan()
+    path = "surgical_system/py_src/registration/calibration_info/depth_map.npz"
+    depth, meta = DepthEstimation.load_depth_npz(path)
+    DepthEstimation.plot_depth_surface(depth, meta)
+    
     # camera_reg.view_rgbd_therm_heat_overlay()
     # camera_reg.draw_traj()
     therm_cam.deinitialize_cam()
