@@ -65,6 +65,8 @@ class AppController {
 
     private isHardwareHeightSynced: boolean = false;
     private isChangingHeight: boolean = false;
+    private lastViewportWidth: number = 0;
+    private lastViewportHeight: number = 0;
 
     // ---------------------------------------------------------------
     // Late-initialised (created once the video track arrives)
@@ -317,6 +319,12 @@ class AppController {
         //Get authoritative viewport dimensions
         const w = this.ui.viewport.offsetWidth;
         const h = this.ui.viewport.offsetHeight;
+
+        if (w === 0 || h === 0) return;
+        if (w === this.lastViewportWidth && h === this.lastViewportHeight) return;
+
+        this.lastViewportWidth = w;
+        this.lastViewportHeight = h;
 
         //Preview Manager: Resize overlay and re-project path
         this.previewManager.updateOverlaySize();
