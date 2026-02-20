@@ -1,4 +1,5 @@
 // frontend/src/services/WebSocketHandler.ts
+import { ToastManager } from '../ui/ToastManager';
 
 // Define the state interface matching backend RobotSchema (robot.py)
 export interface WebSocketMessage {
@@ -61,6 +62,8 @@ export class WebSocketHandler {
     public onStateUpdate: ((newState: WebSocketMessage) => void) | null = null;
     public onOpen: (() => void) | null = null;
 
+    private isReconnecting: boolean = false;
+
     constructor(outputElement: HTMLElement | null) {
         // Fallback to local 8000 if env variable is missing
         const wsName = import.meta.env.VITE_UI_WEBSOCKET_NAME || 'ui';
@@ -91,6 +94,13 @@ export class WebSocketHandler {
 
         this.ws.onopen = () => {
             console.log('WebSocket Connected');
+
+            if (this.isReconnecting) {
+                ToastManager.clearAll();
+                ToastManager.show("Connection restored!", { type: 'info', durationMs: 3000 });
+                this.isReconnecting = false;
+            }
+
             if (this.onOpen) this.onOpen();
         };
         
@@ -108,6 +118,16 @@ export class WebSocketHandler {
         this.ws.onclose = () => {
             console.warn('WebSocket Disconnected. Reconnecting in 2 seconds...');
             this.log("Disconnected");
+
+            if (!this.isReconnecting) {
+                ToastManager.show(
+                    "Connection lost! Hardware controls and live updates are disabled.", 
+                    { type: 'error', requireAck: true, ackText: 'DISMISS' }
+                );
+                
+                this.isReconnecting = true;
+            }
+
             // Optional: Auto-reconnect logic
             setTimeout(() => this.connect(), 2000);
         };
