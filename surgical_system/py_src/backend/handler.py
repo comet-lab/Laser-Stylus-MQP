@@ -298,7 +298,7 @@ class Handler:
         # print(pixels)
         time = [total_time]
         # print(f"Total Time: {total_time}")
-        print("[package_path Handler] pixels:", pixels)
+        # print("[package_path Handler] pixels:", pixels)
         self.desired_state.path_preview = {
             "x" : x,
             "y" : y,
