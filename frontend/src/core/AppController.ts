@@ -65,6 +65,14 @@ class AppController {
 
     private isHardwareHeightSynced: boolean = false;
     private isChangingHeight: boolean = false;
+    private lastViewportWidth: number = 0;
+    private lastViewportHeight: number = 0;
+
+    private zoomLevel: number = 1;
+    private panX: number = 0;
+    private panY: number = 0;
+    private readonly MIN_ZOOM = 1;
+    private readonly MAX_ZOOM = 4;
 
     // ---------------------------------------------------------------
     // Late-initialised (created once the video track arrives)
@@ -235,14 +243,14 @@ class AppController {
             await fetch(`http://${window.location.hostname}:443/api/system_reset`, {
                 method: 'POST'
             });
-            
+
             //Wait for CanvasManager to be ready before trying to upload masks!
             const uploadBlankMasks = async () => {
                 if (this.canvasManager) {
                     await this.canvasManager.clearFixturesOnServer();
                     await this.canvasManager.resetHeatArea();
                     await this.canvasManager.clearPathAndRasterOnServer();
-                    
+
                     //Clear the local canvas visually once we know it exists
                     this.canvasManager.clearFixtures();
                     this.canvasManager.clearDrawing();
@@ -251,7 +259,7 @@ class AppController {
                     setTimeout(uploadBlankMasks, 250);
                 }
             };
-            
+
             uploadBlankMasks();
 
         } catch (e) {
@@ -317,6 +325,12 @@ class AppController {
         //Get authoritative viewport dimensions
         const w = this.ui.viewport.offsetWidth;
         const h = this.ui.viewport.offsetHeight;
+
+        if (w === 0 || h === 0) return;
+        if (w === this.lastViewportWidth && h === this.lastViewportHeight) return;
+
+        this.lastViewportWidth = w;
+        this.lastViewportHeight = h;
 
         //Preview Manager: Resize overlay and re-project path
         this.previewManager.updateOverlaySize();
@@ -411,10 +425,10 @@ class AppController {
                 //If we are in real time mode and we switch tabs, turn off robot/laser
                 if (this.ui.processingModeSwitch.checked) {
                     console.warn("Safety Interlock: In-app tab switched. Disabling hardware.");
-                    
+
                     this.hardware.changeLaserState(false);
                     this.hardware.changeRobotState(false);
-                    
+
                     //Stop the drawing loop if they were mid-stroke while clicking the tab
                     if (this.state.isRealTimeDrawing) {
                         const mockEvent = new PointerEvent('pointerup');
@@ -538,7 +552,7 @@ class AppController {
             const heightCm = parseFloat(heightValue) * 100;
             const displayVal = heightCm.toFixed(1);
             console.log(`Sending final height command to robot: ${displayVal}`);
-            
+
             // Send exactly one command to the backend
             this.wsHandler.updateState({ height: parseInt(heightValue) });
         });
@@ -572,13 +586,13 @@ class AppController {
             if (this.canvasManager && this.state.hasBackupShape) {
                 // Restore the state tracker
                 this.state.drawnShapeType = this.state.backupShapeType;
-                
+
                 // Ask CanvasManager to rebuild the geometry
                 this.canvasManager.restoreDrawing();
-                
+
                 // Lock the tool buttons and disable the restore button
                 this.toolHandler.updateDrawButtonState();
-                
+
                 // Highlight the tool button that matches the restored shape
                 this.modeManager.highlightShapeBtn(this.state.drawnShapeType as ShapeType);
             }
@@ -591,27 +605,27 @@ class AppController {
             if (!isValid) {
                 //Highlight the input field red
                 this.ui.speedInput.classList.add('input-error');
-                
+
                 //Hard-lock the execute button
                 this.ui.executeBtn.disabled = true;
                 this.ui.executeBtn.style.pointerEvents = 'none';
                 this.ui.executeBtn.style.opacity = '0.3';
-                
+
                 //Lock the preview toggle
                 this.ui.previewToggleOn.style.pointerEvents = 'none';
                 this.ui.previewToggleOn.style.opacity = '0.3';
-                
+
                 //If preview is currently calculating/open, show an error
                 if (this.ui.previewToggleOn.classList.contains('active')) {
                     this.ui.previewDuration.textContent = 'Invalid Speed';
                 }
-                
+
                 //Stop any pending auto-refreshes
                 clearTimeout(debounceTimer);
             } else {
                 //Remove the red highlight
                 this.ui.speedInput.classList.remove('input-error');
-                
+
                 //Unlock the preview toggle
                 this.ui.previewToggleOn.style.pointerEvents = 'auto';
                 this.ui.previewToggleOn.style.opacity = '1';
@@ -620,10 +634,10 @@ class AppController {
                 if (this.ui.previewToggleOn.classList.contains('active')) {
                     //Auto-refresh the live preview after they stop typing
                     this.ui.previewDuration.textContent = 'Computing...';
-                    this.ui.executeBtn.disabled = true; 
+                    this.ui.executeBtn.disabled = true;
                     this.ui.executeBtn.style.pointerEvents = 'none';
                     this.ui.executeBtn.style.opacity = '0.3';
-                    
+
                     clearTimeout(debounceTimer);
                     debounceTimer = setTimeout(refreshPreview, 500);
                 } else {
@@ -693,66 +707,163 @@ class AppController {
             this.handleResize();
         });
 
-        // code for the zoom functionality
-        let zoomLevel = 1;
-        const MIN_ZOOM = 1;
-        const MAX_ZOOM = 4;
-
-        this.ui.viewport.addEventListener('wheel', (e: WheelEvent) => {
-            if (!e.ctrlKey) return;
-
-            e.preventDefault();
-
-            const zoomSpeed = 0.0015;
-
-            zoomLevel *= (1 - e.deltaY * zoomSpeed);
-
-            // prevents the zoom from going below the min or max that we set. These can be changed
-            zoomLevel = Math.min(Math.max(zoomLevel, MIN_ZOOM), MAX_ZOOM);
-
-            const zoomWrapper = document.getElementById('zoom-wrapper');
-            if (zoomWrapper) {
-                zoomWrapper.style.transform = `scale(${zoomLevel})`;
+        //DISABLE DEFAULT BROWSER ZOOM
+        document.addEventListener('wheel', (e: WheelEvent) => {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
             }
-
-
-
         }, { passive: false });
 
-        // pinch zoom
-        zoomLevel = 1;
+        document.addEventListener('keydown', (e: KeyboardEvent) => {
+            if (e.ctrlKey || e.metaKey) {
+                // Check for +, -, =, and 0 
+                if (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '0') {
+                    e.preventDefault();
+                }
+            }
+        });
 
-        const zoomWrapper = document.getElementById('zoom-wrapper');
+        //Calculates clamp boundaries and applies the transform
+        const updateTransform = () => {
+            if (!this.ui.zoomWrapper) return;
+            
+            //Clamp Pan to prevent dragging the canvas entirely off-screen
+            const rect = this.ui.viewport.getBoundingClientRect();
+            const maxPanX = 0;
+            const minPanX = rect.width - (rect.width * this.zoomLevel);
+            const maxPanY = 0;
+            const minPanY = rect.height - (rect.height * this.zoomLevel);
+
+            //If zoomed all the way out, snap to center
+            if (this.zoomLevel <= this.MIN_ZOOM) {
+                this.panX = 0;
+                this.panY = 0;
+                this.zoomLevel = this.MIN_ZOOM;
+            } else {
+                this.panX = Math.min(Math.max(this.panX, minPanX), maxPanX);
+                this.panY = Math.min(Math.max(this.panY, minPanY), maxPanY);
+            }
+
+            this.ui.zoomWrapper.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.zoomLevel})`;
+
+            // --- Update UI Indicator ---
+            if (this.ui.zoomIndicator && this.ui.zoomText) {
+                if (this.zoomLevel > this.MIN_ZOOM) {
+                    this.ui.zoomIndicator.classList.remove('hidden');
+                    this.ui.zoomText.textContent = `${Math.round(this.zoomLevel * 100)}%`;
+                } else {
+                    this.ui.zoomIndicator.classList.add('hidden');
+                }
+            }
+        };
+
+        //Zoom in not just on center
+        const applyZoomAt = (clientX: number, clientY: number, newZoom: number) => {
+            const viewportRect = this.ui.viewport.getBoundingClientRect();
+
+            //Convert screen coordinates to viewport-local coordinates
+            const x = clientX - viewportRect.left;
+            const y = clientY - viewportRect.top;
+
+            //Find where that point currently lies on the unscaled/unpanned canvas
+            const unscaledX = (x - this.panX) / this.zoomLevel;
+            const unscaledY = (y - this.panY) / this.zoomLevel;
+
+            this.zoomLevel = newZoom;
+
+            //Recalculate panning so the unscaled point remains exactly under the cursor
+            this.panX = x - (unscaledX * this.zoomLevel);
+            this.panY = y - (unscaledY * this.zoomLevel);
+
+            updateTransform();
+        };
+
+        // --- Mouse Wheel Zooming ---
+        this.ui.viewport.addEventListener('wheel', (e: WheelEvent) => {
+            if (!e.ctrlKey && !e.metaKey) return;
+            e.preventDefault();
+
+            const zoomSpeed = 0.003;
+            const delta = -e.deltaY * zoomSpeed;
+            const newZoom = Math.min(Math.max(this.zoomLevel * (1 + delta), this.MIN_ZOOM), this.MAX_ZOOM);
+
+            applyZoomAt(e.clientX, e.clientY, newZoom);
+        }, { passive: false });
+
+        // --- Desktop Panning (Middle mouse or Alt left click) ---
+        let isMousePanning = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        this.ui.viewport.addEventListener('pointerdown', (e: PointerEvent) => {
+            //Button 1 is middle mouse. Or fallback to alt click for trackpads.
+            if (e.button === 1 || (e.button === 0 && e.altKey)) {
+                isMousePanning = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                e.preventDefault();
+            }
+        });
+
+        window.addEventListener('pointermove', (e: PointerEvent) => {
+            if (isMousePanning) {
+                e.preventDefault();
+                this.panX += e.clientX - lastMouseX;
+                this.panY += e.clientY - lastMouseY;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                updateTransform();
+            }
+        });
+
+        window.addEventListener('pointerup', () => { isMousePanning = false; });
+        window.addEventListener('pointercancel', () => { isMousePanning = false; });
+
+        // --- iPad Touch pinch to zoom and 2 finger pan ---
         let initialDistance = 0;
         let startZoom = 1;
+        let lastCenter = { x: 0, y: 0 };
 
-        function getDistance(touches: TouchList) {
+        const getDistance = (touches: TouchList) => {
             const dx = touches[0].clientX - touches[1].clientX;
             const dy = touches[0].clientY - touches[1].clientY;
             return Math.sqrt(dx * dx + dy * dy);
-        }
+        };
+
+        const getCenter = (touches: TouchList) => {
+            return {
+                x: (touches[0].clientX + touches[1].clientX) / 2,
+                y: (touches[0].clientY + touches[1].clientY) / 2
+            };
+        };
 
         this.ui.viewport.addEventListener('touchstart', (e: TouchEvent) => {
             if (e.touches.length === 2) {
+                e.preventDefault();
                 initialDistance = getDistance(e.touches);
-                startZoom = zoomLevel;
+                startZoom = this.zoomLevel;
+                lastCenter = getCenter(e.touches);
             }
         }, { passive: false });
 
         this.ui.viewport.addEventListener('touchmove', (e: TouchEvent) => {
-            if (e.touches.length === 2 && zoomWrapper) {
+            if (e.touches.length === 2 && this.ui.zoomWrapper) {
                 e.preventDefault();
 
                 const currentDistance = getDistance(e.touches);
+                const currentCenter = getCenter(e.touches);
+
+                //Handle the panning shift caused by two fingers dragging across the screen
+                this.panX += currentCenter.x - lastCenter.x;
+                this.panY += currentCenter.y - lastCenter.y;
+                lastCenter = currentCenter;
+
+                //Handle the scaling
                 const scaleFactor = currentDistance / initialDistance;
+                const newZoom = Math.min(Math.max(startZoom * scaleFactor, this.MIN_ZOOM), this.MAX_ZOOM);
 
-                zoomLevel = startZoom * scaleFactor;
-
-                // clamp zoom
-                zoomLevel = Math.min(Math.max(zoomLevel, MIN_ZOOM), MAX_ZOOM);
-
-                zoomWrapper.style.transform = `scale(${zoomLevel})`;
-
+                // Zoom exactly towards the center point of the two fingers
+                applyZoomAt(currentCenter.x, currentCenter.y, newZoom);
             }
         }, { passive: false });
     }
@@ -805,12 +916,23 @@ class AppController {
             }
         }
 
-        //TODO: Ignore this check, should be no need if data is sent from backend properly
-        if (state.path_preview && !state.preview_duration) {
-            console.log("Did not receive a duration from backend. Will use default duration since none is provided with new path");
-        }
         if (state.path_preview) {
-            this.previewManager.handlePathFromWebSocket(state.path_preview, state.preview_duration);
+            //Check for duration at the root level first (Your ideal schema)
+            let duration = state.preview_duration;
+
+            //Fallback: Check if it is nested inside path_preview (Robot backend schema)
+            if (duration === undefined && state.path_preview.time !== undefined) {
+                //Safely extract whether it's an array or a direct number 10.5
+                duration = Array.isArray(state.path_preview.time)
+                    ? state.path_preview.time[0]
+                    : state.path_preview.time;
+            }
+
+            if (!duration) {
+                console.log("Did not receive a duration from backend. Will use default duration.");
+            }
+
+            this.previewManager.handlePathFromWebSocket(state.path_preview, duration);
         }
 
         // --- Thermal / heat data ---

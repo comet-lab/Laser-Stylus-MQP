@@ -1,25 +1,45 @@
-/*frontend/src/styles/style.css*/
+/*frontend/src/styles/components/style.css*/
 
-/* ============================================
-   FONTS & IMPORTS
-   ============================================ */
+/* === FONTS & IMPORTS === */
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;700&display=swap');
 @import url('./components/buttons.css');
 @import url('./components/settingsPage.css');
 @import url('./components/preparePage.css');
 @import url('./components/previewPage.css');
 
-/* ============================================
-   GLOBAL STYLES & RESET
-   ============================================ */
+/* === GLOBAL VARIABLES (Responsive Scaling) === */
+:root {
+  /* DEFAULT: iPad Air & Tablets */
+  --top-panel-height: 76px; 
+  --left-panel-width: 82px;
+  --base-scale: 1.15rem;
+  --toggle-width: clamp(240px, 26vw, 340px); 
+  --slider-width: 36px;
+  --popout-offset: 12px;
+}
+
+/* DESKTOP CAPPING */
+@media (pointer: fine) and (min-width: 1024px) {
+  :root {
+    --top-panel-height: 60px;
+    --left-panel-width: 65.5px;
+    --base-scale: 1rem;
+    --toggle-width: 300px; 
+    --slider-width: 36px; 
+    --popout-offset: 10px;
+  }
+}
+
+/* === GLOBAL STYLES & RESET === */
 html,
 body {
   margin: 0 !important;
   padding: 0 !important;
   height: 100%;
   width: 100%;
-  user-select: none;
   font-family: 'IBM Plex Sans', sans-serif;
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 body {
@@ -29,11 +49,25 @@ body {
 
 * {
   box-sizing: border-box;
+  user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-button, input, textarea, select {
+button, 
+input, 
+textarea, 
+select {
   font-family: inherit;
   font-size: inherit;
+  user-select: auto;
+  -moz-user-select: auto;
+  -ms-user-select: auto;
+  -webkit-user-select: auto;
 }
 
 #app {
@@ -71,11 +105,9 @@ pre {
   display: none !important;
 }
 
-/* ============================================
-   TOP PANEL (Header/Status)
-   ============================================ */
+/* === TOP PANEL (Header/Status) === */
 #top-panel {
-  height: 60px;
+  height: var(--top-panel-height);
   flex-shrink: 0;
   position: relative;
   display: flex;
@@ -85,7 +117,6 @@ pre {
   gap: 10px;
 }
 
-/* Status Panels */
 .status-message {
   display: flex;
   height: 100%;
@@ -123,9 +154,9 @@ pre {
   color: #e0f2e0;
   margin-left: auto;
   padding-right: 10px;
+  font-size: calc(var(--base-scale) * 0.9);
 }
 
-/* Mode Switcher */
 .mode-label {
   display: flex;
   align-items: center;
@@ -134,7 +165,7 @@ pre {
   color: #e0f2e0;
   font-family: 'IBM Plex Sans', sans-serif;
   font-weight: 700;
-  font-size: 14px;
+  font-size: calc(var(--base-scale) * 0.9);
   letter-spacing: 1px;
   padding: 0 12px 0 16px;
   flex-shrink: 0;
@@ -162,15 +193,13 @@ pre {
   height: 100%;
 }
 
-/* ============================================
-   LEFT PANEL (Toolbar)
-   ============================================ */
+/* === LEFT PANEL (Toolbar) === */
 #left-panel {
-  height: calc(100% - 60px);
+  height: calc(100% - var(--top-panel-height));
   position: relative;
   display: flex;
   flex-direction: column;
-  width: 65.5px;
+  width: var(--left-panel-width);
   flex-shrink: 0;
   background-color: #0f1419;
 }
@@ -211,17 +240,17 @@ pre {
   width: 100%;
 }
 
-/* ============================================
-   VIEWPORT AREA (Geometry Only)
-   ============================================ */
+/* === VIEWPORT AREA (Geometry Only) === */
 #viewport {
   position: absolute;
-  top: 60px;
-  left: 65.5px;
-  width: calc(100% - 65.5px);
-  height: calc(100% - 60px);
+  top: var(--top-panel-height);
+  left: var(--left-panel-width);
+  width: calc(100% - var(--left-panel-width));
+  height: calc(100% - var(--top-panel-height));
   background-color: #000;
+  overflow: hidden;
 }
+
 #viewport::after {
   content: "";
   position: absolute;
@@ -234,16 +263,47 @@ pre {
   transition: box-shadow 0.1s ease-in-out;
   z-index: 55;
 }
+
 #viewport.laser-firing::after {
   box-shadow: 
     inset 0 0 0 4px #ffaa00, 
     inset 0 0 40px 4px rgba(255, 170, 0, 0.6); 
 }
 
+/* === ZOOM INDICATOR === */
+#zoom-indicator {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  background-color: rgba(21, 27, 33, 0.85);
+  border: 2px solid #2c343b;
+  color: #e0f2e0;
+  padding: 6px 12px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 700;
+  font-size: calc(var(--base-scale) * 0.85);
+  z-index: 60;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#zoom-indicator.hidden {
+  display: flex !important; /* Override your global .hidden */
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
 #zoom-wrapper {
   width: 100%;
   height: 100%;
-  transform-origin: center center;
+  transform-origin: 0 0;
   will-change: transform;
 }
 
@@ -303,17 +363,14 @@ pre {
 }
 
 #preview-marker {
-  border: 3px solid #FFA500
+  border: 3px solid #FFA500;
 }
 
 #robot-marker {
   border: 3px solid #70ff57;
 }
 
-/* ============================================
-   POPOUT CONTROLS (Unified Speed & Height)
-   ============================================ */
-
+/* === POPOUT CONTROLS (Unified Speed & Height) === */
 .popout-control {
   position: relative;
   width: 100%;
@@ -330,13 +387,14 @@ pre {
   border: 2px solid #2c343b;
   border-radius: 8px;
   padding: 8px 4px;
-  width: 60px;
-  height: 60px;
+  width: calc(var(--left-panel-width) * 0.85);
+  height: calc(var(--left-panel-width) * 0.85);
   gap: 4px;
   cursor: pointer;
   color: #e0f2e0;
   transition: background-color 0.2s, border-color 0.2s;
 }
+
 .popout-trigger:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -344,13 +402,14 @@ pre {
   border-color: #4a5568;
 }
 
-.popout-trigger:hover, .popout-trigger.active {
+.popout-trigger:hover, 
+.popout-trigger.active {
   background-color: #2c343b;
   border-color: #e0f2e0;
 }
 
 .popout-label {
-  font-size: 0.78rem;
+  font-size: calc(var(--base-scale) * 0.75);
   font-weight: bold;
   color: #a1b0a4;
   margin-bottom: 2px;
@@ -358,15 +417,16 @@ pre {
 }
 
 .popout-value {
-  font-size: 1rem;
+  font-size: var(--base-scale);
   font-weight: bold;
   pointer-events: none;
 }
 
 .popout-panel {
   position: absolute;
-  left: 70px;
   top: 50%;
+  left: calc(100% + var(--popout-offset));
+  right: auto;
   background-color: #151b21;
   border: 2px solid #2c343b;
   border-radius: 12px;
@@ -389,6 +449,16 @@ pre {
   transform: translate(0, -50%);
 }
 
+body.sidebar-right .popout-panel {
+  left: auto;
+  right: calc(100% + var(--popout-offset));
+  transform: translate(10px, -50%); 
+}
+
+body.sidebar-right .popout-panel.active {
+  transform: translate(0, -50%);
+}
+
 .popout-slider-container {
   position: relative;
   width: 30px;
@@ -408,7 +478,6 @@ pre {
   flex-shrink: 0; 
 }
 
-/* --- Common Slider Styling (Thumbs/Track) --- */
 .styled-range {
   -webkit-appearance: none;
   appearance: none;
@@ -422,7 +491,7 @@ pre {
   -webkit-appearance: none;
   appearance: none;
   width: 20px;
-  height: 40px; /* Rectangular thumb */
+  height: 40px;
   border-radius: 8px;
   background: #e0f2e0;
   cursor: pointer;
@@ -430,7 +499,7 @@ pre {
   box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
 }
 
-/* Brush Size Slider (Horizontal) - Kept separate */
+/* Brush Size Slider (Horizontal) */
 .brush-container {
   display: flex;
   flex-direction: column;
@@ -438,15 +507,17 @@ pre {
   margin-top: 30px;
   width: 100%;
 }
+
 .brush-label {
   color: #e0f2e0;
-  font-size: 0.8rem;
+  font-size: calc(var(--base-scale) * 0.8);
   font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 1px;
   user-select: none;
   pointer-events: none;
 }
+
 .vertical-slider-container {
   height: 170px;
   width: 100%;
@@ -454,6 +525,7 @@ pre {
   justify-content: center;
   align-items: center;
 }
+
 .vertical-range {
   width: 170px;
   height: 6px;
@@ -462,10 +534,7 @@ pre {
   margin: 0;
 }
 
-/* ============================================
-   LAYOUT MODIFIERS (Menu Position)
-   ============================================ */
-/* --- Menu Bottom --- */
+/* === LAYOUT MODIFIERS (Menu Position) === */
 body.menu-bottom #top-panel {
   position: absolute;
   top: auto;
@@ -477,13 +546,13 @@ body.menu-bottom #top-panel {
 body.menu-bottom #viewport,
 body.menu-bottom #left-panel {
   top: 0;
-  bottom: 60px;
-  height: calc(100% - 60px);
+  bottom: var(--top-panel-height);
+  height: calc(100% - var(--top-panel-height));
 }
 
 body.menu-bottom #preparePopup {
   top: var(--popup-edge-offset);
-  left: calc(var(--popup-edge-offset) + 65px);
+  left: calc(var(--popup-edge-offset) + var(--left-panel-width));
   right: auto;
   bottom: auto;
 }
@@ -494,39 +563,35 @@ body.menu-bottom #settings-icon-section {
   margin-bottom: 0;
 }
 
-/* --- Sidebar Right --- */
 body.sidebar-right #left-panel {
   position: absolute;
   left: auto;
   right: 0;
-  top: 60px;
+  top: var(--top-panel-height);
   bottom: 0;
 }
 
 body.sidebar-right #viewport {
   left: 0;
-  right: 65.5px;
-  width: calc(100% - 65.5px);
+  right: var(--left-panel-width);
+  width: calc(100% - var(--left-panel-width));
 }
 
-/* --- Combined: Menu Bottom + Sidebar Right --- */
 body.menu-bottom.sidebar-right #left-panel {
   top: 0;
-  bottom: 60px;
+  bottom: var(--top-panel-height);
 }
 
 body.menu-bottom.sidebar-right #viewport {
   top: 0;
   left: 0;
-  right: 65.5px;
-  bottom: 60px;
-  width: calc(100% - 65.5px);
-  height: calc(100% - 60px);
+  right: var(--left-panel-width);
+  bottom: var(--top-panel-height);
+  width: calc(100% - var(--left-panel-width));
+  height: calc(100% - var(--top-panel-height));
 }
 
-/* ============================================
-   THERMAL GRADIENT LEGEND (ULTRA-SLIM)
-   ============================================ */
+/* === THERMAL GRADIENT LEGEND (ULTRA-SLIM) === */
 #thermal-gradient-legend {
   position: absolute;
   left: 20px;
@@ -557,19 +622,12 @@ body.menu-bottom.sidebar-right #viewport {
   height: 200px;
   background: linear-gradient(to top,
       #00007F 0%,
-      /* Dark Blue (20°C) */
       #0000FF 12.5%,
-      /* Blue */
       #00FFFF 37.5%,
-      /* Cyan */
       #00FF00 50%,
-      /* Green (60°C) */
       #FFFF00 62.5%,
-      /* Yellow */
       #FF0000 87.5%,
-      /* Red */
       #7F0000 100%
-      /* Dark Red (100°C) */
     );
   border: 1px solid #e0f2e0;
   border-radius: 4px;
@@ -579,7 +637,6 @@ body.menu-bottom.sidebar-right #viewport {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-
   color: #e0f2e0;
   font-family: 'IBM Plex Sans', sans-serif;
   font-size: 12px;
@@ -596,11 +653,8 @@ body.menu-bottom.sidebar-right #viewport {
   text-align: left;
 }
 
-/* ============================================
-   INLINE ROBOT WARNING
-   ============================================ */
+/* === INLINE ROBOT WARNING === */
 #inline-robot-warning {
-  /* Width is intentionally omitted here; it is calculated dynamically in JS */
   flex-shrink: 0;
   flex-grow: 0;
   box-sizing: border-box;
@@ -640,10 +694,8 @@ body.menu-bottom.sidebar-right #viewport {
   filter: brightness(115%);
 }
 
-/* ============================================
-   Z-INDEX MANAGEMENT
-   ============================================ */
-/* Layer Order (Bottom to Top):
+/* === Z-INDEX MANAGEMENT ===
+   Layer Order (Bottom to Top):
    1. Video Stream (0)
    2. Drawing / Fabric Canvas (10)
    3. Preview Path Overlay (20)
@@ -654,47 +706,52 @@ body.menu-bottom.sidebar-right #viewport {
    8. Popups (Settings/Prepare) (101)
 */
 
-/* Level 1 */
-#video {
-  z-index: 0;
-}
+#video { z-index: 0; }
 
-/* Level 2 */
 .fabric-canvas-container,
 .fabric-canvas-container .lower-canvas,
-.fabric-canvas-container .upper-canvas {
-  z-index: 10 !important;
-}
+.fabric-canvas-container .upper-canvas { z-index: 10 !important; }
 
-/* Level 3 */
-#previewOverlay {
-  z-index: 20 !important;
-}
+#previewOverlay { z-index: 20 !important; }
+#fixturesCanvas { z-index: 30 !important; }
 
-/* Level 4 */
-#fixturesCanvas {
-  z-index: 30 !important;
-}
-
-/* Level 5 */
 #robot-marker,
-#preview-marker {
-  z-index: 50 !important;
-}
+#preview-marker { z-index: 50 !important; }
 
-/* Level 6 */
 #left-panel,
-#top-panel {
-  z-index: 60;
-}
+#top-panel { z-index: 60; }
 
-/* Level 7 */
-#overlay {
-  z-index: 100;
-}
+#overlay { z-index: 100; }
 
-/* Level 8 */
 #preparePopup,
-#settingsPopup {
-  z-index: 101;
+#settingsPopup { z-index: 101; }
+
+/* === TOP PANEL BUTTONS === */
+#status-panel-left .action-btn {
+  display: flex;
+  flex-direction: row; 
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--base-scale) * 0.6); 
+  padding: 0 calc(var(--base-scale)); 
+  height: 90%; 
+  min-width: fit-content;
+}
+
+#status-panel-left .btn-text {
+  font-size: calc(var(--base-scale) * 0.85); 
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+}
+
+#status-panel-left .btn-icon {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#status-panel-left .action-btn svg {
+  width: calc(var(--base-scale) * 1.2);
+  height: calc(var(--base-scale) * 1.2);
 }

@@ -12,6 +12,7 @@ import { ToastManager } from '../../ui/ToastManager';
 export class PreviewManager {
   private ctx: CanvasRenderingContext2D;
   private isPreviewActive: boolean = false;
+  private ignoreWebsocketPaths: boolean = false;
   // "Source of Truth": The path in raw video coordinates
   private sourcePath: Position[] = [];
   private pathData: Position[] = [];
@@ -116,6 +117,10 @@ export class PreviewManager {
       const response = await cm.previewPath(speed, rasterType, density, isFill);
       const hasValidPath = response.path && response.path.length > 0;
 
+      if (hasValidPath) {
+        this.ignoreWebsocketPaths = true;
+      }
+
       //Handle Active Safety Warnings
       if (response.warning === "FIXTURE_OVERLAP") {
         ToastManager.show(
@@ -181,6 +186,11 @@ export class PreviewManager {
   public handlePathFromWebSocket(previewData: { x: number[], y: number[] }, serverDuration?: number): void {
     if (!this.isPreviewActive) return;
 
+    if (this.ignoreWebsocketPaths) {
+      console.log("Simulated HTTP path is active. Ignoring WS path echo.");
+      return;
+    }
+
     const newLength = Math.min(previewData.x.length, previewData.y.length);
 
     //TODO: Get rid of this check, shouldn't be necessary if the data is being sent properly from backend
@@ -221,8 +231,11 @@ export class PreviewManager {
   }
 
   private handlePathData(videoPath: Position[], duration: number, enableExecute: boolean): void {
-    if (videoPath.length === 0) {
+    //Catch empty or single-point paths before they break the renderer
+    if (videoPath.length < 2) {
       this.clearOverlay();
+      this.setExecuteButtonState(false); // Force lock the execute button
+      this.ui.previewDuration.textContent = '--';
       return;
     }
 
@@ -234,9 +247,8 @@ export class PreviewManager {
 
     this.ui.previewDuration.textContent = `${duration.toFixed(1)}s`;
 
-    if (enableExecute) {
-      this.setExecuteButtonState(true);
-    }
+    // Explicitly apply the boolean state to lock/unlock the button
+    this.setExecuteButtonState(enableExecute);
 
     this.drawPath();
     this.startAnimation();
@@ -400,11 +412,11 @@ export class PreviewManager {
     const canvas = this.ui.previewOverlay;
     const viewport = this.ui.viewport;
 
-    // 1. Match Canvas to DOM
+    //Match Canvas to DOM
     canvas.width = viewport.offsetWidth;
     canvas.height = viewport.offsetHeight;
 
-    // 2. Re-calculate path positions for new size
+    //Re-calculate path positions for new size
     if (this.sourcePath.length > 0) {
       this.updatePathTransform();
 
@@ -420,6 +432,7 @@ export class PreviewManager {
 
   public resetPreviewState(): void {
     this.hasPreviewedCurrentDrawing = false;
+    this.ignoreWebsocketPaths = false;
     this.pathData = [];
     this.sourcePath = [];
     this.durationSeconds = 0;

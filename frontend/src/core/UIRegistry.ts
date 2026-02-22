@@ -18,6 +18,9 @@ export interface UIRegistry {
     overlay: HTMLElement;
     settingsPopup: HTMLElement;
     preparePopup: HTMLElement;
+    zoomWrapper: HTMLElement;
+    zoomIndicator: HTMLElement,
+    zoomText: HTMLElement,
 
     // --- Action Buttons ---
     settingsBtn: HTMLButtonElement;
@@ -132,6 +135,9 @@ export function createUIRegistry(): UIRegistry {
         overlay: document.getElementById('overlay') as HTMLElement,
         settingsPopup: document.getElementById('settingsPopup') as HTMLElement,
         preparePopup: document.getElementById('preparePopup') as HTMLElement,
+        zoomWrapper: document.getElementById('zoom-wrapper') as HTMLElement,
+        zoomIndicator: document.getElementById('zoom-indicator') as HTMLElement,
+        zoomText: document.getElementById('zoom-text') as HTMLElement,
 
         // Action Buttons
         settingsBtn: document.getElementById('settingsBtn') as HTMLButtonElement,

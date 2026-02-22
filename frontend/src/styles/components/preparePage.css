@@ -1,8 +1,6 @@
 /*frontend/src/styles/components/preparePage.css*/
 
-/* ============================================
-   PREPARE PATH MODAL
-   ============================================ */
+/* === PREPARE PATH MODAL === */
 #preparePopup {
   position: absolute;
   top: 10%;
@@ -17,20 +15,24 @@
   flex-direction: column;
   overflow: hidden;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  /* Layout positioning variable */
   --popup-edge-offset: 10px;
+  transition: right 0.3s ease;
+}
+
+/* Dynamically adjust position if the toolbar is mounted on the right */
+body.sidebar-right #preparePopup {
+  right: calc(3% + var(--left-panel-width) + 10px);
 }
 
 #preparePopup.active {
   display: flex;
 }
 
-/* --- Header --- */
 .prepare-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 1.5rem;
+  padding: calc(var(--base-scale) * 1) calc(var(--base-scale) * 1.5);
   border-bottom: 2px solid #2c343b;
   flex-shrink: 0;
 }
@@ -39,15 +41,15 @@
   margin: 0;
   font-family: 'IBM Plex Sans', sans-serif;
   font-weight: 700;
-  font-size: 24px;
+  font-size: calc(var(--base-scale) * 1.5);
 }
 
 #prepareCloseBtn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: calc(var(--base-scale) * 2.5);
+  height: calc(var(--base-scale) * 2.5);
   border-radius: 12px;
   background-color: #2c343b;
   color: #e0f2e0;
@@ -72,7 +74,6 @@
   box-shadow: inset 2px 2px 8px rgba(0, 0, 0, 0.5);
 }
 
-/* --- Body & Layout --- */
 .prepare-body {
   display: flex;
   flex-grow: 1;
@@ -80,8 +81,8 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 1.5rem 2rem;
-  gap: 1rem;
+  padding: calc(var(--base-scale) * 1.5) calc(var(--base-scale) * 2);
+  gap: calc(var(--base-scale) * 1);
   box-sizing: border-box;
 }
 
@@ -90,13 +91,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: calc(var(--base-scale) * 0.75);
 }
 
 /* --- Common Input Wrappers --- */
 .setting-row-wrapper {
   width: 100%;
-  height: 54px;
+  height: calc(var(--base-scale) * 3.375);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -115,7 +116,7 @@
 .secondary-wrapper {
   background-color: #0f1419;
   border: 1px solid #2c343b;
-  height: 48px;
+  height: calc(var(--base-scale) * 3);
 }
 
 .settings-group-container {
@@ -134,28 +135,31 @@
 .row-label {
   font-family: 'IBM Plex Sans', sans-serif;
   font-weight: 600;
-  font-size: 14px;
+  font-size: calc(var(--base-scale) * 0.875);
   color: #E0F2E0;
   margin: 0;
   white-space: nowrap;
 }
+
 .row-label-2 {
   font-family: 'IBM Plex Sans', sans-serif;
   font-weight: 500;
-  font-size: 10px;
+  font-size: calc(var(--base-scale) * 0.6);
   color: #a0b0b8;
   margin: 0;
   white-space: nowrap;
   text-align: left;
 }
+
 .row-label-speed {
   font-family: 'IBM Plex Sans', sans-serif;
   font-weight: 500;
-  font-size: 10px;
+  font-size: calc(var(--base-scale) * 0.6);
   color: #a0b0b8;
   margin: 0;
   white-space: nowrap;
 }
+
 .row-label-speed.align-right {
   margin-left: auto;
   margin-right: 12px;
@@ -172,15 +176,14 @@
 .input-label {
   margin-bottom: 0.5rem;
   font-weight: 500;
-  font-size: 1.2rem;
+  font-size: calc(var(--base-scale) * 1.2);
 }
 
 .fill-setting-label {
-  font-size: 14px;
+  font-size: calc(var(--base-scale) * 0.875);
   margin: 0;
 }
 
-/* Numeric Inputs */
 .row-input,
 .styled-input, 
 .styled-input-density {
@@ -195,10 +198,11 @@
 }
 
 .row-input {
-  width: 80px;
+  width: calc(var(--base-scale) * 5);
   padding: 8px 10px;
-  font-size: 14px;
+  font-size: calc(var(--base-scale) * 0.875);
 }
+
 .row-input.input-error {
   border-color: #ef4444 !important;
   color: #ef4444 !important;
@@ -209,15 +213,15 @@
 .styled-input {
   width: 100%;
   padding: 12px 15px;
-  font-size: 1.1rem;
+  font-size: calc(var(--base-scale) * 1.1);
   background: #161b2296;
   border-width: 2px;
 }
 
 .styled-input-density {
-  width: 80px;
+  width: calc(var(--base-scale) * 5);
   padding: 8px 12px;
-  font-size: 14px;
+  font-size: calc(var(--base-scale) * 0.875);
   background-color: #161b22;
   border-width: 2px;
 }
@@ -234,7 +238,6 @@
   background: #1c2128;
 }
 
-/* Remove Spinners */
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {
   -webkit-appearance: none;
@@ -248,7 +251,7 @@ input::-webkit-inner-spin-button {
   border-radius: 6px;
   padding: 2px;
   border: 1px solid #2c343b;
-  height: 36px;
+  height: calc(var(--base-scale) * 2.25);
 }
 
 .segment-btn {
@@ -262,7 +265,7 @@ input::-webkit-inner-spin-button {
   color: #5c6b75;
   font-family: 'IBM Plex Sans', sans-serif;
   font-weight: 600;
-  font-size: 13px;
+  font-size: calc(var(--base-scale) * 0.8125);
   border-radius: 4px;
   transition: all 0.2s ease;
   text-transform: uppercase;
@@ -281,8 +284,14 @@ input::-webkit-inner-spin-button {
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 
-.fill-control, .preview-control { width: 120px; }
-.raster-control { width: 140px; }
+.fill-control, 
+.preview-control { 
+  width: calc(var(--base-scale) * 7.5); 
+} 
+
+.raster-control { 
+  width: calc(var(--base-scale) * 8.75); 
+} 
 
 /* --- Fill Settings Panel (Accordion) --- */
 .fill-accordion-container {
@@ -298,7 +307,7 @@ input::-webkit-inner-spin-button {
 }
 
 .fill-settings-panel.open {
-  max-height: 250px;
+  max-height: calc(var(--base-scale) * 15.625);
   opacity: 1;
 }
 
@@ -308,7 +317,7 @@ input::-webkit-inner-spin-button {
   flex-direction: column;
 }
 
-/* --- Preview Info Panel (Inside Prepare Modal) --- */
+/* --- Preview Info Panel --- */
 .preview-action-container {
   width: 100%;
   margin-top: 15px;
@@ -338,14 +347,14 @@ input::-webkit-inner-spin-button {
 }
 
 .preview-info-panel.open {
-  max-height: 150px;
+  max-height: calc(var(--base-scale) * 9.375);
   opacity: 1;
   border-color: #2c343b;
   margin-top: 8px;
 }
 
 .preview-info-inner {
-  padding: 16px 20px;
+  padding: calc(var(--base-scale) * 1) calc(var(--base-scale) * 1.25);
   display: flex;
   flex-direction: column;
 }
@@ -362,14 +371,14 @@ input::-webkit-inner-spin-button {
   color: #e0f2e0;
   font-family: 'IBM Plex Sans', sans-serif;
   font-weight: 600;
-  font-size: 14px;
+  font-size: calc(var(--base-scale) * 0.875);
 }
 
 .preview-duration-value {
   color: #e0f2e0;
   font-family: 'IBM Plex Sans', sans-serif;
   font-weight: 700;
-  font-size: 18px;
+  font-size: calc(var(--base-scale) * 1.125);
   letter-spacing: 0.5px;
 }
 
@@ -401,13 +410,13 @@ input::-webkit-inner-spin-button {
 .preview-info-text {
   color: #e0f2e0b6;
   font-family: 'IBM Plex Sans', sans-serif;
-  font-size: 12px;
+  font-size: calc(var(--base-scale) * 0.75);
   line-height: 1.4;
   white-space: normal;
   max-width: 280px;
 }
 
-/* --- Action Buttons Layout (Grid/Flex) --- */
+/* --- Action Buttons Layout --- */
 #bottomButtons {
   display: flex;
   flex-direction: column;
@@ -424,7 +433,7 @@ input::-webkit-inner-spin-button {
 }
 
 #bottomButtons .action-btn {
-  height: 50px;
+  height: calc(var(--base-scale) * 3.125);
   margin: 0;
   flex-shrink: 0;
 }

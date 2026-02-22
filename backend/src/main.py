@@ -167,16 +167,17 @@ async def preview_path(
     manager.desired_state.pathPrepared = True  # Mark as prepared
     manager.desired_state.executeCommand = False  # Not executing yet
 
+    
     print(f"Preview: Broadcasting {len(pixel_list)} pixels for path computation. Fill: {is_fill}")
     await manager.broadcast_to_group(group=manager.robot_connections, state=manager.desired_state)
-
-    # --- REAL MODE (Default): Return empty path, Frontend waits for WS ---
-    return {
-        "status": "pending",
-        "duration": 0,
-        "path": [], 
-        "message": "Computation initiated on Robot"
-    }
+    
+    # --- REAL MODE (Default): Return empty path, Frontend waits for WS (COMMENT FOR MOCKING) ---
+    # return {
+    #     "status": "pending",
+    #     "duration": 0,
+    #     "path": [], 
+    #     "message": "Computation initiated on Robot"
+    # }
 
     # --- FAKE MODE (Uncomment for testing without Robot) ---
     final_path = []
