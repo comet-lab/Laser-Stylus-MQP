@@ -723,6 +723,18 @@ class AppController {
             }
         });
 
+        //DISABLE IPAD DEFAULT GESTURE ZOOM
+        document.addEventListener('gesturestart', (e: Event) => e.preventDefault(), { passive: false });
+        document.addEventListener('gesturechange', (e: Event) => e.preventDefault(), { passive: false });
+        document.addEventListener('gestureend', (e: Event) => e.preventDefault(), { passive: false });
+
+        //DISABLE MULTI-TOUCH SWIPING, ALLOW THE CUSTOM CANVAS ZOOM
+        document.addEventListener('touchmove', (e: TouchEvent) => {
+            if (e.touches.length > 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
         //Calculates clamp boundaries and applies the transform
         const updateTransform = () => {
             if (!this.ui.zoomWrapper) return;

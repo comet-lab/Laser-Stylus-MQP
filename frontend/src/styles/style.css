@@ -70,6 +70,15 @@ select {
   -webkit-user-select: auto;
 }
 
+/* Attempt to prevent zoom issues breaking the iPad UI */
+#top-panel,
+#left-panel,
+#viewport {
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+}
+
 #app {
   max-width: 680px;
 }
@@ -133,6 +142,36 @@ pre {
   flex-grow: 1;
   gap: 12px;
   border: 2px solid #2c343b;
+}
+
+/* === TOP PANEL BUTTONS === */
+#status-panel-left .action-btn {
+  display: flex;
+  flex-direction: row; 
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--base-scale) * 0.6); 
+  padding: 0 calc(var(--base-scale)); 
+  height: 90%; 
+  min-width: fit-content;
+}
+
+#status-panel-left .btn-text {
+  font-size: calc(var(--base-scale) * 0.85); 
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+}
+
+#status-panel-left .btn-icon {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#status-panel-left .action-btn svg {
+  width: calc(var(--base-scale) * 1.2);
+  height: calc(var(--base-scale) * 1.2);
 }
 
 #status-panel-right {
@@ -726,32 +765,3 @@ body.menu-bottom.sidebar-right #viewport {
 #preparePopup,
 #settingsPopup { z-index: 101; }
 
-/* === TOP PANEL BUTTONS === */
-#status-panel-left .action-btn {
-  display: flex;
-  flex-direction: row; 
-  align-items: center;
-  justify-content: center;
-  gap: calc(var(--base-scale) * 0.6); 
-  padding: 0 calc(var(--base-scale)); 
-  height: 90%; 
-  min-width: fit-content;
-}
-
-#status-panel-left .btn-text {
-  font-size: calc(var(--base-scale) * 0.85); 
-  white-space: nowrap;
-  letter-spacing: 0.5px;
-}
-
-#status-panel-left .btn-icon {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-#status-panel-left .action-btn svg {
-  width: calc(var(--base-scale) * 1.2);
-  height: calc(var(--base-scale) * 1.2);
-}
