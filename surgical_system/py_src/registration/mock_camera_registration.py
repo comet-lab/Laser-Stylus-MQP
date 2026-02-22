@@ -9,18 +9,19 @@ class MockCameraRegistration():
         self.rgbd_cam = rgbd_cam
         self.robot_controller = robot_controller
         self.laser_obj = laser_obj
+        self.display_path = False
 
     def pixel_to_world(self, img_points, cam_type, z = 0.0):
         if(isinstance(img_points, np.ndarray) and len(img_points.shape) > 1):
-            return [[0,0,z], [1,1,z]]
+            return [[img_points[0][0],img_points[0][1],z]]
         else:
             return np.array([img_points[0], img_points[1], z])
     
     def get_cam_latest(self, cam_type):
         if(cam_type == "thermal"):
-            return self.therm_cam.get_latest()
+            return self.therm_cam.get_latest()[cam_type]
         else:
-            return self.rgbd_cam.get_latest()
+            return self.rgbd_cam.get_latest()[cam_type]
         
     def moving_average_smooth(self, pixels, window):
         return pixels
@@ -35,8 +36,32 @@ class MockCameraRegistration():
             print(pixels)
             print(type(pixels))
             raise Exception("Unkown pixel type")
-
-
+        
+    def show_path(self, img):
+        return self.rgbd_cam.get_latest() 
+    
+    def hide_path(self):
+        pass 
+    
+    def get_path(self, points):
+        pass 
+    
+    def get_world_m_to_UI(self, cam_type, world_points, warped):
+        return np.zeros((1280, 2))
+    
+    def get_UI_to_world_m(self, cam_type, pixel, warped, z):
+        ret = [[point[0], point[1], z] for point in pixel]
+        return ret
+    
+    def heat_overlay(self, rgb_img, mask = None, roi = None, invert = False, transformed_view: bool = True,
+                                alpha: float = 0.45,
+                                colormap: int = cv2.COLORMAP_JET):
+        raise NotImplementedError("This function should not be called on while mock robot is enabled")
+        return np.zeros((720, 1280, 3)), np.array([]), 0, 0
+    
+    def tracking_display(self, disp, cam_type = 'color', warped = True):
+        raise NotImplementedError("This function should not be called on while mock robot is enabled")
+        return np.zeros((720, 1280 , 3))
 
     def get_transformed_view(self, latest, cam_type):
         H = np.array([[1.2, 0.0, 0],

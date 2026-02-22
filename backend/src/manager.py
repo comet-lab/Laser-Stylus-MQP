@@ -1,3 +1,5 @@
+#backend/src/manager.py
+
 import json
 from robot import RobotSchema
 from fastapi import WebSocket, WebSocketDisconnect
@@ -13,6 +15,11 @@ class ConnectionManager:
         self.robot_connections = ConnectionManager.ConnectionGroup("Robot")
         self.current_state = RobotSchema()
         self.desired_state = RobotSchema()
+        self.desired_state.isLaserOn = False
+        self.desired_state.isRobotOn = False
+        self.desired_state.isTransformedViewOn = True # Default to Transformed
+        self.desired_state.isThermalViewOn = False
+        self.desired_state.speed = 10.0
 
     async def connect(self, websocket: WebSocket, group):
         await websocket.accept()
@@ -60,6 +67,10 @@ class ConnectionManager:
                         pass
                     state.update(message)
                     await self.broadcast_to_group(forwarding_group, state)
+                    if(forwarding_group == self.frontend_connections):
+                        if('path_preview' in message.keys() and message['path_preview'] is not None):
+                            message['path_preview']['time'] = message['path_preview']['time'][0]
+                            print("TIME:",message['path_preview']['time'])
                     
                     # RESET EVENT: 
                     # If we just broadcasted a pathEvent (start/end), reset it to None 

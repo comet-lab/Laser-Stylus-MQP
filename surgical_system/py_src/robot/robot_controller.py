@@ -3,6 +3,7 @@ from scipy.spatial.transform import Rotation
 import threading
 import numpy as np
 import matplotlib.pyplot as plt
+from laser_control.laser_arduino import Laser_Arduino
 
 if __name__=='__main__':    
     from franka_client import FrankaClient
@@ -12,9 +13,10 @@ else:
     from .controllers.trajectory_controller import TrajectoryController
 
 class Robot_Controller():
-    def __init__(self):
+    def __init__(self, laser_obj:Laser_Arduino):
         pathToCWD = os.getcwd()
         self.franka_client = FrankaClient()
+        self.laser_obj = laser_obj
         subprocess.Popen([pathToCWD + "/surgical_system/cpp_src/main"]) 
         time.sleep(3)
         print("Robot Online")
@@ -102,6 +104,8 @@ class Robot_Controller():
     def robot_stop(self):
         velocity = self.franka_client.send_velocity(np.array([0, 0, 0]), np.array([0, 0, 0]))
         time.sleep(1)
+        pose, _ = self.get_current_state()
+        self.go_to_pose(pose)
         return velocity
     
     def align_robot_input(self, new_pose):
@@ -166,7 +170,7 @@ class Robot_Controller():
                     "Radius": -1,
                     "Passes": 1,
                     "MaxVelocity": max_velocity, # [m/s]
-                    "MaxAcceleration": 0.0,#[m/s/s]
+                    "MaxAcceleration": 1.5,#[m/s/s]
                     "Durations":[-1]} #time per step
         return TrajectoryController(path_info, debug=True)
     
@@ -179,18 +183,19 @@ class Robot_Controller():
         path_info['Positions'] = path_info['Positions'] / 100.0 #converts from cm to m
         return TrajectoryController(path_info, debug=True)
     
-    def _run_trajectory_worker(self, traj: TrajectoryController):
+    def _run_trajectory_worker(self, traj: TrajectoryController, laser_on):
         total_time = traj.durations[-1]
         print("Path Duration: ", total_time)
         
         start_pos = traj.start_pos
         start_pose = np.eye(4)
         start_pose[:3, -1] = start_pos
+        print("Heading to starting location")
         current_pose = np.array(self.go_to_pose(start_pose @ self.home_pose))
         
-        time_step = 0.05
-        elapsedTime = 0.0
-        t = time.monotonic()
+        time_step = 0.005
+        t_start = time.monotonic()
+        t_prev  = t_start
 
         target_vel = np.zeros(3)
         
@@ -202,31 +207,46 @@ class Robot_Controller():
         target_pos_list = np.empty((data_num, 3))
         i = 0
         try:
-            while (elapsedTime < total_time) and (not self._stop_traj.is_set()):
+            while (not self._stop_traj.is_set()):
                 now = time.monotonic()
-                if (now - t) >= time_step:
-                    elapsedTime += (now - t)
-                    t = now
+                elapsed = now - t_start
+                dt = now - t_prev
+                if elapsed >= total_time:
+                    break
 
-                    movement = traj.update(elapsedTime)
-                    target_vel = movement['velocity']
-                    target_pos = movement['position']
+                if dt < time_step:
+                    continue
+                t_prev = now
+                
+                self.laser_obj.set_output(laser_on)
+                
+                movement = traj.update(elapsed)
+                target_vel = movement['velocity']
+                target_pos = movement['position']
 
-                    print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel, f" | Target Pos: ", target_pos)
+                # print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel, f" | Target Pos: ", target_pos)
+                
+                target_pose = np.eye(4)
+                target_pose[:3, -1] = target_pos
+                velocity_correction = self.live_control(target_pose, 0.2, KP = 2, KD=3.0) #TODO CHANGE MAX SPEED
+                # print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
+                command_vel = target_vel + velocity_correction
+                state = self.set_velocity(command_vel, [0, 0, 0]) 
+                
+                
+                pos, vel = state[:3], state[7:10]
 
-                    state = self.set_velocity(target_vel, [0, 0, 0])
-                    pos, vel = state[:3], state[7:10]
-
-                    if i < data_num:
-                        actual_vel_list[i, :] = vel[:3] if i != 0 else np.zeros(3)
-                        target_vel_list[i, :] = target_vel
-                        actual_pos_list[i, :] = pos[:3] - self.home_pose[:3, -1]
-                        target_pos_list[i, :] = target_pos
-                        i += 1
+                if i < data_num:
+                    actual_vel_list[i, :] = vel[:3] if i != 0 else np.zeros(3)
+                    target_vel_list[i, :] = command_vel
+                    actual_pos_list[i, :] = pos[:3] - self.home_pose[:3, -1]
+                    target_pos_list[i, :] = target_pos
+                    i += 1
 
             # stop robot on exit (normal or stopped)
+            self.laser_obj.set_output(False)
             self.robot_stop()
-
+    
             # Optional: if you are okay plotting from a thread, keep this.
             # Otherwise, you can return the data instead and plot in main thread.
             # time_range = np.arange(0, total_time, time_step)
@@ -268,8 +288,13 @@ class Robot_Controller():
             self._stop_traj.set()
             self._traj_thread = None
             print("traj done")
+            self.robot_stop()
+        # return [actual_vel_list,
+        #         target_vel_list,
+        #         actual_pos_list,
+        #         target_pos_list]
     
-    def run_trajectory(self, traj: TrajectoryController, blocking: bool = True):
+    def run_trajectory(self, traj: TrajectoryController, blocking: bool = True, laser_on = False):
         """
         Run trajectory either blocking or in a background thread.
         """
@@ -286,10 +311,11 @@ class Robot_Controller():
             self._stop_traj.clear()
             self._traj_thread = threading.Thread(
                 target=self._run_trajectory_worker,
-                args=(traj,),
+                args=(traj,laser_on),
                 daemon=True,
             )
             self._traj_thread.start()
+    
     
     
     def is_trajectory_running(self) -> bool:
@@ -308,12 +334,17 @@ class Robot_Controller():
         if wait and self._traj_thread is not None:
             self._traj_thread.join(timeout=2.0)
             
-    def live_control(self, target_pose_home, max_vel):
+    def current_robot_to_world_position(self):
         current_pose, _ = self.get_current_state()
+        return current_pose[:3, -1] - self.home_pose[:3, -1]
+            
+    def live_control(self, target_pose_home, max_vel, KP = 5.0, KD = 0.05):
+        current_pose, current_velocity = self.get_current_state()
         current_pose = current_pose[:3, -1] - self.home_pose[:3, -1]
         position_error = target_pose_home[:3, -1] - current_pose
-        KP = 5.0
-        target_vel = position_error * KP
+        vel_vector = np.array(current_velocity[:3])
+        # print("[Live Controller] KD Control : ", vel_vector * KD)
+        target_vel = position_error * KP #- vel_vector * KD
         mag = np.linalg.norm(target_vel)
         
         if mag == 0:
