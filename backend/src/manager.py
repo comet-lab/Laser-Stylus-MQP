@@ -70,7 +70,8 @@ class ConnectionManager:
                     if(forwarding_group == self.frontend_connections):
                         if('path_preview' in message.keys() and message['path_preview'] is not None):
                             message['path_preview']['time'] = message['path_preview']['time'][0]
-                            print("TIME:",message['path_preview']['time'])
+                            print("Path Preview TIME:",message['path_preview']['time'])
+                            # print("Path Preview x:",message['path_preview']['x'])
                     
                     # RESET EVENT: 
                     # If we just broadcasted a pathEvent (start/end), reset it to None 

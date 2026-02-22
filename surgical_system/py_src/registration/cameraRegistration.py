@@ -16,16 +16,15 @@ if __name__=='__main__':
             break
     from registration.transformations.system_calibration import System_Calibration
     from registration.transformations.roi_selector import ROISelector
-    from registration.transformations.depth_estimation import DepthEstimation
+    
 else:
     from registration.transformations.system_calibration import System_Calibration
     
 from robot.robot_controller import Robot_Controller
 from cameras.thermal_cam import ThermalCam
 from cameras.RGBD_cam import RGBD_Cam
-from cameras.cam_calibration import CameraCalibration
 from laser_control.laser_arduino import Laser_Arduino
-
+from registration.transformations.depth_estimation import DepthEstimation
 
 # from Utilities_functions import SelectROI, loadAndEditPose, go_to_pose
 
@@ -631,7 +630,7 @@ class Camera_Registration(System_Calibration):
     def exp_depth_scan(self):
         input(f"Press Enter to continue depth estimation creation.")
         gridShape = np.array([15, 15])
-        squareSize = 0.0025
+        squareSize = 0.002
         
         xPoints = (np.arange(gridShape[1]) - (gridShape[1] - 1) / 2) * squareSize
         yPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
@@ -648,7 +647,7 @@ class Camera_Registration(System_Calibration):
         print("Heading to starting location")
         self.robot_controller.go_to_pose(start_pose @ self.home_pose)
         
-        traj = self.robot_controller.create_custom_trajectory(robot_path, 0.025)
+        traj = self.robot_controller.create_custom_trajectory(robot_path, 0.01)
         depth, meta = self.scan_region_for_depth(traj)
         
         save_location = self.directory + self.calibration_folder + "/depth_map.npz"

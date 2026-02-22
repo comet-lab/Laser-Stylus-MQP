@@ -421,7 +421,7 @@ class DepthEstimation():
             "world_to_grid": lambda xw, yw: (int(np.floor((yw - ymin) / cell_size)),
                                             int(np.floor((xw - xmin) / cell_size))),
         }
-        depth_map = DepthEstimation.patch_depth(depth_map)
+        
         nan_ratio = np.isnan(depth_map).mean()
         print("NaN ratio:", nan_ratio)
 
@@ -446,11 +446,11 @@ class DepthEstimation():
         d[mask] = nearest[mask]
         return d
 
-    def patch_depth(depth_map: np.ndarray, smooth_sigma: float = 0.6) -> np.ndarray:
+    def patch_depth(depth_map: np.ndarray, smooth_sigma: float = 0.5) -> np.ndarray:
         d = DepthEstimation.fill_nans_nearest(depth_map)  
 
         # Edge-preserving smoothing (optional; tune)
-        d = cv2.bilateralFilter(d.astype(np.float32), d=5, sigmaColor=0.01, sigmaSpace=3)
+        d = cv2.bilateralFilter(d.astype(np.float32), d=6, sigmaColor=0.01, sigmaSpace=3)
 
         # Optional final light Gaussian
         if smooth_sigma and smooth_sigma > 0:
@@ -518,7 +518,8 @@ def main():
     # print("Predicted Z [mm]: ", z_best * 1000, "| Error: ", err_best, "| Best Prediction: ", uv_best, "| Confidence: ", conf)
     path = "surgical_system/py_src/registration/calibration_info/depth_map.npz"
     depth, meta = DepthEstimation.load_depth_npz(path)
-    DepthEstimation.plot_depth_surface(depth, meta)
+    depth_map = DepthEstimation.patch_depth(depth)
+    DepthEstimation.plot_depth_surface(depth_map, meta)
     
 if __name__ == "__main__":
     main()
