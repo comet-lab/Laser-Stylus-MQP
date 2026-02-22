@@ -85,7 +85,6 @@ class DepthEstimation():
         Notes
         -----
         - This assumes the environment can be approximated by one height z for this point.
-        - For tilt-aware estimation, you'd solve (z0,a,b) over multiple probes instead.
         """
         if len(dense_stack) < min_valid_heights:
             raise ValueError(f"dense_stack must have at least {min_valid_heights} entries.")
@@ -450,7 +449,7 @@ class DepthEstimation():
         d = DepthEstimation.fill_nans_nearest(depth_map)  
 
         # Edge-preserving smoothing (optional; tune)
-        d = cv2.bilateralFilter(d.astype(np.float32), d=6, sigmaColor=0.01, sigmaSpace=3)
+        d = cv2.bilateralFilter(d.astype(np.float32), d=10, sigmaColor=0.003, sigmaSpace=1)
 
         # Optional final light Gaussian
         if smooth_sigma and smooth_sigma > 0:
@@ -500,6 +499,9 @@ class DepthEstimation():
             ax.set_zlim(zmin, zmax)
 
         plt.show()
+
+
+
 
 def main():
     path = "surgical_system/py_src/registration/calibration_info/"

@@ -70,7 +70,11 @@ class Camera_Registration(System_Calibration):
         # Create checkerboard
         # self.robot_controller.load_edit_pose()
         
-        self.create_checkerboard(gridShape = np.array([9, 8]), \
+        # self.create_checkerboard(gridShape = np.array([9, 8]), \
+        #                          saveLocation=self.calibration_folder, debug=debug)
+        
+        self.create_checkerboard(gridShape = np.array([3, 3]), \
+                                squareSize=0.043/2.0,
                                  saveLocation=self.calibration_folder, debug=debug)
         
         self.read_calibration()
@@ -343,7 +347,9 @@ class Camera_Registration(System_Calibration):
         
         for z in heights:
             print("Height [mm]: ", z*1000)
-            H = self.rgb_raster_scan(gridShape = np.array([15, 15]), squareSize = 0.0025)
+            
+            H = self.rgb_raster_scan(gridShape = np.array([3, 3]), \
+                                     squareSize=0.043/2.0)
             homography_stack[z] = H
             
             
@@ -616,7 +622,7 @@ class Camera_Registration(System_Calibration):
             
             point = np.append(curr_position, z_best)
             points = np.vstack((points, point))
-            print("[Camera Reg] Points Scanned: ", point)
+            print("[Camera Reg scan_region] Points Scanned: ", point)
             # print("World Pos: ", world_pos, " Pixel: ", rgb_laser_pixel)
             time.sleep(1/30.0)
             
@@ -627,10 +633,8 @@ class Camera_Registration(System_Calibration):
         
     
 ### TESTING FUNCTIONS ###
-    def exp_depth_scan(self):
+    def exp_depth_scan(self, gridShape = np.array([15, 15]), squareSize = 0.002):
         input(f"Press Enter to continue depth estimation creation.")
-        gridShape = np.array([15, 15])
-        squareSize = 0.002
         
         xPoints = (np.arange(gridShape[1]) - (gridShape[1] - 1) / 2) * squareSize
         yPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
@@ -647,7 +651,7 @@ class Camera_Registration(System_Calibration):
         print("Heading to starting location")
         self.robot_controller.go_to_pose(start_pose @ self.home_pose)
         
-        traj = self.robot_controller.create_custom_trajectory(robot_path, 0.01)
+        traj = self.robot_controller.create_custom_trajectory(robot_path, 0.02)
         depth, meta = self.scan_region_for_depth(traj)
         
         save_location = self.directory + self.calibration_folder + "/depth_map.npz"
@@ -1131,15 +1135,14 @@ if __name__ == '__main__':
     # camera_reg.run()
     
     # base 2.23 
-    # heights = np.array([2.08, 2.65, 3.15, 3.65, 4.11, 4.68, 5.15, 5.62, 6.15, 6.64,
-    #                     7.18, 7.65, 8.18, 8.67, 9.30, 9.79, 10.14]) # mm 
+    heights = np.array([2.08, 2.65, 3.15, 3.65, 4.18, 4.73, 5.15, 5.62, 6.15, 6.64,
+                        7.26, 7.77, 8.11, 8.67, 9.24, 9.77, 10.14]) # mm 
     
-    heights = np.array([2.08, 2.65, 3.15, 3.65, 5.15, 5.62, 6.15, 6.64, 10.14])
 
     
     heights = heights / 1000.0 # mm
     depth_path = "homography_stack.npz"
-    # stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
+    stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
     # stack = 
     # print(stack)
     # rgbd_cam.set_default_setting()
@@ -1148,10 +1151,13 @@ if __name__ == '__main__':
     # camera_reg.transformed_view(cam_type="thermal")
     # camera_reg.live_control_view('color', warped=True, tracking=True, depth_path= depth_path) 
     
-    camera_reg.exp_depth_scan()
+    camera_reg.exp_depth_scan(gridShape = np.array([25, 25]), squareSize = 0.048/24)
     path = "surgical_system/py_src/registration/calibration_info/depth_map.npz"
     depth, meta = DepthEstimation.load_depth_npz(path)
     DepthEstimation.plot_depth_surface(depth, meta)
+    
+    depth_map = DepthEstimation.patch_depth(depth)
+    DepthEstimation.plot_depth_surface(depth_map, meta)
     
     # camera_reg.view_rgbd_therm_heat_overlay()
     # camera_reg.draw_traj()
