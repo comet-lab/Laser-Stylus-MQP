@@ -470,7 +470,7 @@ class DepthEstimation():
         print("NaN ratio:", nan_ratio)
         return depth, meta
     
-    def plot_depth_surface(depth_map: np.ndarray, meta: dict, title="Depth surface"):
+    def plot_depth_surface(depth_map: np.ndarray, meta: dict, title="Surface Mapping"):
         Z = np.asarray(depth_map, dtype=float)
         H, W = Z.shape
         cs = float(meta["cell_size"])
@@ -488,9 +488,9 @@ class DepthEstimation():
         ax.plot_surface(X, Y, Zm, rstride=1, cstride=1, linewidth=0, antialiased=True)
 
         ax.set_title(title)
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
-        ax.set_zlabel("depth / height")
+        ax.set_xlabel("x [m]")
+        ax.set_ylabel("y [m]")
+        ax.set_zlabel("z [m]")
 
         # Make sure the z-range isn't collapsing visually
         zmin = float(np.nanmin(0))
@@ -500,7 +500,100 @@ class DepthEstimation():
 
         plt.show()
 
+    @staticmethod
+    def current_height(
+        depth_map: np.ndarray,
+        current_position: np.ndarray,
+        meta: Optional[Dict] = None,
+        window: int = 2,
+        invalid_value: float = np.nan,
+    ) -> float:
+        """
+        Estimate current height from a depth map at a given position.
 
+        Parameters
+        ----------
+        depth_map : (H,W) array
+            Height/depth value per grid cell. May include NaNs.
+        current_position : array-like
+            If meta is provided: expects (x, y) in world units.
+            If meta is None: expects (i, j) integer grid indices.
+        meta : dict or None
+            Must contain: xmin, ymin, cell_size.
+            If provided, converts world (x,y) -> grid (i,j).
+        window : int
+            Neighborhood half-size (in cells) to search for a valid (non-NaN) depth.
+            window=2 searches a (5x5) patch centered at (i,j).
+        method : str
+            "nearest_valid": return nearest valid cell in the window (by Euclidean distance in grid cells).
+            "bilinear": bilinear interpolation (requires 4 neighbors valid); falls back to nearest_valid.
+        invalid_value : float
+            Value returned if no valid depth found (default NaN).
+
+        Returns
+        -------
+        z : float
+            Estimated height/depth at the current position (same units as depth_map values).
+        """
+        Z = np.asarray(depth_map, dtype=float)
+        if Z.ndim != 2:
+            raise ValueError(f"depth_map must be 2D, got shape {Z.shape}")
+
+        H, W = Z.shape
+        p = np.asarray(current_position).reshape(-1)
+        if p.size < 2:
+            raise ValueError("current_position must have at least 2 elements")
+
+        # --- Convert position to grid indices ---
+        if meta is not None:
+            # world -> grid
+            xmin = float(meta["xmin"])
+            ymin = float(meta["ymin"])
+            cs = float(meta["cell_size"])
+            x, y = float(p[0]), float(p[1])
+
+            j_f = (x - xmin) / cs
+            i_f = (y - ymin) / cs
+        else:
+            # already grid indices
+            i_f = float(p[0])
+            j_f = float(p[1])
+
+
+        # --- Nearest valid in a local window ---
+        i_c = int(np.round(i_f))
+        j_c = int(np.round(j_f))
+
+        # Clamp center inside bounds
+        i_c = max(0, min(H - 1, i_c))
+        j_c = max(0, min(W - 1, j_c))
+
+        # If center is valid
+        if np.isfinite(Z[i_c, j_c]):
+            return float(Z[i_c, j_c])
+
+        # Search neighborhood
+        i_min = max(0, i_c - window)
+        i_max = min(H - 1, i_c + window)
+        j_min = max(0, j_c - window)
+        j_max = min(W - 1, j_c + window)
+
+        patch = Z[i_min:i_max + 1, j_min:j_max + 1]
+        valid = np.isfinite(patch)
+        if not np.any(valid):
+            return float(invalid_value)
+
+        # Find nearest valid cell by grid distance
+        pi, pj = np.where(valid)
+
+        pi_full = pi + i_min
+        pj_full = pj + j_min
+
+        di = pi_full - i_f
+        dj = pj_full - j_f
+        k = int(np.argmin(di * di + dj * dj))
+
+        return float(Z[pi_full[k], pj_full[k]])
 
 
 def main():

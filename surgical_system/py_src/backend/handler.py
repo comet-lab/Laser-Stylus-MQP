@@ -360,7 +360,9 @@ class Handler:
                 
             target_pose = np.eye(4)
             target_pose[:3, -1] = target_world_point
-            target_vel = self.robot_controller.live_control(target_pose, 0.05, KP = 5.0)
+            live_control_speed = self.desired_state.speed / 1000.0 if self.desired_state.speed != None else 0.01
+            print(f"[Handler Live Control] Speed: {self.desired_state.speed}")
+            target_vel = self.robot_controller.live_control(target_pose, live_control_speed, KP = 5.0)
             # TODO Multiply velocity controller in unit component direction * max(min_speed, min(1, (distance / max_distance)))
             
             
