@@ -70,6 +70,43 @@ select {
   -webkit-user-select: auto;
 }
 
+/* ============================================
+   LOADING SCREEN
+   ============================================ */
+#loading-screen {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #0f1419;
+  z-index: 99999; /* Highest possible z-index */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  transition: opacity 0.5s ease, visibility 0.5s;
+}
+
+#loading-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.loading-text {
+  color: #e0f2e0;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 700;
+  font-size: calc(var(--base-scale) * 1.2);
+  letter-spacing: 2px;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+
 /* Attempt to prevent zoom issues breaking the iPad UI */
 #top-panel,
 #left-panel,

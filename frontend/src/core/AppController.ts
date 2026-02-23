@@ -68,6 +68,10 @@ class AppController {
     private lastViewportWidth: number = 0;
     private lastViewportHeight: number = 0;
 
+    private isVideoReady: boolean = false;
+    private isWsReady: boolean = false;
+    private hasBooted: boolean = false;
+
     private zoomLevel: number = 1;
     private panX: number = 0;
     private panY: number = 0;
@@ -138,6 +142,16 @@ class AppController {
         this.settingsManager.handleResize();
 
         this.init();
+
+        //Clean up existing connections on page unload
+        window.addEventListener('beforeunload', () => {
+            if (this.reader) {
+                try { this.reader.destroy(); } catch (e) {}
+            }
+            if (this.wsHandler) {
+                this.wsHandler.disconnect();
+            }
+        });
     }
 
     // ===================================================================
@@ -198,9 +212,25 @@ class AppController {
         //Add function to clean the state when connection starts
         this.wsHandler.onOpen = () => {
             console.log("WS Connected: Initiating Clean Slate Protocol...");
-            this.resetToDefaults();
+            this.isWsReady = true;
+            this.checkAppReady();
         };
         this.wsHandler.connect();
+    }
+
+    private async checkAppReady(): Promise<void> {
+        //Only proceed if both services are ready, and we haven't already booted
+        if (this.isWsReady && this.isVideoReady && !this.hasBooted) {
+            console.log("System Ready: Initiating Clean Slate Protocol...");
+            this.hasBooted = true;
+            
+            await this.resetToDefaults();
+            
+            //Fade out the loading screen
+            setTimeout(() => {
+                this.ui.loadingScreen.classList.add('hidden');
+            }, 500); //Give the user a tiny delay so it doesn't flash too abruptly
+        }
     }
 
     /**
@@ -243,24 +273,16 @@ class AppController {
             await fetch(`http://${window.location.hostname}:443/api/system_reset`, {
                 method: 'POST'
             });
-
-            //Wait for CanvasManager to be ready before trying to upload masks!
-            const uploadBlankMasks = async () => {
-                if (this.canvasManager) {
-                    await this.canvasManager.clearFixturesOnServer();
-                    await this.canvasManager.resetHeatArea();
-                    await this.canvasManager.clearPathAndRasterOnServer();
-
-                    //Clear the local canvas visually once we know it exists
-                    this.canvasManager.clearFixtures();
-                    this.canvasManager.clearDrawing();
-                } else {
-                    //Check again in 250ms if the video stream hasn't loaded yet
-                    setTimeout(uploadBlankMasks, 250);
-                }
-            };
-
-            uploadBlankMasks();
+            
+            //Canvas manager should definitely exist by now
+            if (this.canvasManager) {
+                await this.canvasManager.clearFixturesOnServer();
+                await this.canvasManager.resetHeatArea();
+                await this.canvasManager.clearPathAndRasterOnServer();
+                
+                this.canvasManager.clearFixtures();
+                this.canvasManager.clearDrawing();
+            }
 
         } catch (e) {
             console.warn("Could not reach endpoints to reset masks:", e);
@@ -300,6 +322,9 @@ class AppController {
         this.toolHandler.updateDrawButtonState();
         this.toolHandler.updateFixturesButtonState();
         this.toolHandler.updateThermalButtonState();
+
+        this.isVideoReady = true;
+        this.checkAppReady();
     }
 
     // ===================================================================

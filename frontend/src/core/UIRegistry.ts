@@ -9,6 +9,7 @@
 
 export interface UIRegistry {
     // --- Core Viewport ---
+    loadingScreen: HTMLElement;
     viewport: HTMLElement;
     video: HTMLVideoElement;
     canvas: HTMLCanvasElement;
@@ -126,6 +127,7 @@ export interface UIRegistry {
 export function createUIRegistry(): UIRegistry {
     return {
         // Core Viewport
+        loadingScreen: document.getElementById('loading-screen') as HTMLElement,
         viewport: document.getElementById('viewport') as HTMLElement,
         video: document.getElementById('video') as HTMLVideoElement,
         canvas: document.getElementById('canvas') as HTMLCanvasElement,
