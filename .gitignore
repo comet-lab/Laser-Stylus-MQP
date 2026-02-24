@@ -14,3 +14,7 @@ surgical_system/cpp_src/main
 surgical_system/cpp_src/main.o
 surgical_system/cpp_src/PandaController.o
 
+pixels path.png
+Position_plot.png
+Position(x,y) trajectory.png
+raster path.png
