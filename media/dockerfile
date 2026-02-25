@@ -20,10 +20,9 @@ COPY mediamtx_config.yml .
 CMD sh -c './mediamtx mediamtx_config.yml & sleep 2 && \
     python3 compositor.py | \
     ffmpeg \
-    -f rawvideo -pix_fmt bgr24 -s 1280x720 -framerate 30 \
+    -f rawvideo -pix_fmt bgr24 -s 640x480 -r 30 \
     -i pipe:0 \
     -c:v libx264 -pix_fmt yuv420p \
+    -x264-params "nal-hrd=cbr" -b:v 10M -minrate 10M -bufsize 20M \
     -preset ultrafast -tune zerolatency \
-    -bf 0 -g 0 \
-    -x264-params "sync-lookahead=0:rc-lookahead=0" \
     -f rtsp rtsp://localhost:8554/mystream'

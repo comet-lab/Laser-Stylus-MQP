@@ -9,7 +9,7 @@ print("MEDIA BOOTING", file=sys.stderr, flush=True)
 
 output_pipe = open('/dev/stdout', 'wb')
 
-w, h, c = 1280, 720, 3 # rgb
+w, h, c = 640, 480, 3 # rgb
 # TODO env /docker global video size
 # TODO env /docker global framerate
 cv_shape = (w, h)
@@ -35,11 +35,19 @@ homography_receiver = ReceiverDaemon(
 camera_input = (np.random.rand(h//10,w//10,c) * 255).astype(np.uint8)
 camera_input = cv2.resize(camera_input, (w, h), cv2.INTER_LINEAR)
 
-target_fps = 30
-frame_time = 1.0 / target_fps
+cap = cv2.VideoCapture(2)  # 0 = /dev/video0
 
-def get_camera_input():
-    return camera_input.copy()
+if not cap.isOpened():
+    print("Error: Could not open /dev/video0")
+    exit(0)
+
+def get_camera_input(cap):
+
+    ret, frame = cap.read()
+    if not ret:
+        print("Failed to grab frame")
+    else:
+        return frame
 
 def blend(base: np.ndarray, overlay: np.ndarray):
     mask = overlay.sum(axis=2) != 0
@@ -55,12 +63,12 @@ homography_receiver.start(
 )
 
 while True:
-    t = time.time()
-    frame = blend(get_camera_input(), overlay_receiver.read())
+    # t = time.time()
+    frame = blend(get_camera_input(cap), overlay_receiver.read())
     warped = cv2.warpPerspective(frame, homography_receiver.read(), (w, h))
     output_pipe.write(warped.tobytes())
     output_pipe.flush()
-    elapsed = time.time() - t
-    sleep_time = frame_time - elapsed
-    if sleep_time > 0:
-        time.sleep(sleep_time)
+    # elapsed = time.time() - t
+    # sleep_time = frame_time - elapsed
+    # if sleep_time > 0:
+    #     time.sleep(sleep_time)
