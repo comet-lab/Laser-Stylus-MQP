@@ -26,7 +26,7 @@ manager = ConnectionManager()
 
 @app.get("/media/{stream_name}")
 def read_item(stream_name: str):
-    return {"stream_url": "http://localhost:8889/mystream"}
+    return {"stream_url": "http://169.254.0.3:8889/mystream"}
 
 @app.get("/health")
 def health():

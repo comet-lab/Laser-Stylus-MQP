@@ -18,7 +18,7 @@ class Broadcast:
             '-i', '-',
             '-c:v', 'rawvideo',
             '-f', 'rawvideo',
-            'tcp://media:5000'
+            'tcp://169.254.0.3:5000'
         ]
 
         # ffmpeg -re -f lavfi -i testsrc=size=640x360:rate=30 -c:v libx264 -preset ultrafast -tune zerolatency -movflags +global_header -rtsp_transport tcp -f rtsp rtsp://localhost:8554/mystream
