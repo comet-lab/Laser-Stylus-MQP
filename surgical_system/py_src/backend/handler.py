@@ -251,9 +251,10 @@ class Handler:
             ax.plot(xs, ys_plot, linewidth=1)  # default color
         ax.set_axis_off()
         fig.savefig("pixels path.png")
+        plt.close()
         
         warped_view = self.desired_state.isTransformedViewOn
-        print("Warped Path: ", warped_view)
+        # print("Warped Path: ", warped_view)
         robot_path = self.cam_reg.get_UI_to_world_m(
                 self.cam_type, 
                 pixels, 
@@ -301,7 +302,8 @@ class Handler:
         x, y = list(pixels[:, 0].astype(np.float64)), list(pixels[:, 1].astype(np.float64))
         # print(pixels)
         time = [total_time]
-        print(f"Total Time: {total_time}")
+        # print(f"Total Time: {total_time}")
+        # print("[package_path Handler] pixels:", pixels)
         self.desired_state.path_preview = {
             "x" : x,
             "y" : y,
@@ -326,7 +328,7 @@ class Handler:
                 
             target_pose = np.eye(4)
             target_pose[:3, -1] = target_world_point
-            target_vel = self.robot_controller.live_control(target_pose, 0.05, KP = 5.0, KD=0.5)
+            target_vel = self.robot_controller.live_control(target_pose, 0.05, KP = 0.5)
             self.robot_controller.set_velocity(target_vel, np.zeros(3))
         else:
             # print("holding")
@@ -363,7 +365,9 @@ class Handler:
                 
             target_pose = np.eye(4)
             target_pose[:3, -1] = target_world_point
-            target_vel = self.robot_controller.live_control(target_pose, 0.05, KP = 5.0, KD=0.5)
+            live_control_speed = self.desired_state.speed / 1000.0 if self.desired_state.speed != None else 0.01
+            print(f"[Handler Live Control] Speed: {self.desired_state.speed}")
+            target_vel = self.robot_controller.live_control(target_pose, live_control_speed, KP = 5.0)
             # TODO Multiply velocity controller in unit component direction * max(min_speed, min(1, (distance / max_distance)))
             
             
