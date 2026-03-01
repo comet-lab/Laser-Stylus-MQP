@@ -2,17 +2,17 @@ from robot.robot import RobotSchema
 from robot.mock_robot_controller import MockRobotController
 from registration.mock_camera_registration import MockCameraRegistration
 from laser_control.mock_laser import MockLaser
-import numpy as np
-from backend.listener import BackendConnection
-import time, math
-import json
-import cv2
-from dataclasses import asdict
-import asyncio
-import base64
 from motion_planning.motion_planning import Motion_Planner
-import matplotlib.pyplot as plt
+from backend.listener import BackendConnection
 from robot.controllers.trajectory_controller import TrajectoryController
+from dataclasses import asdict
+from typing import Dict, Any, Tuple
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+import time, math, json, cv2, asyncio, base64
+
 
 class Handler:
     def __init__(self, desired_state: RobotSchema, robot_controller: MockRobotController, cam_reg: MockCameraRegistration, laser_obj: MockLaser, start_pose, mock_robot):
@@ -34,6 +34,11 @@ class Handler:
 
         self.path_display_pixels = None
         self.new_path_flag = False
+        
+        # Recording Data
+        self._start_recording_time = 0
+        self._current_recording_time = 0; 
+        self.recording_data = False # TODO TEMP var
         
         
         self.virtual_fixture, self.dx, self.dy, self.distance_field = self.generate_virtual_fixture()
@@ -364,7 +369,22 @@ class Handler:
             
             self.robot_controller.set_velocity(target_vel, np.zeros(3))
 
+###------------------------ Data Collection ------------------####
+
+    def _store_camera_feed(self, 
+                           rgb_img: np.ndarray = np.array([]), 
+                           therm_img: np.ndarray = np.array([])):
+        pass
     
+    def _store_robot_state(self,  
+                           q: np.ndarray, # (7,)
+                           dq: np.ndarray): # (7,))
+        pass
+    
+    def _store_user_input(self,
+                          mode: str,                     # "draw", "live_control"
+                          payload: Dict[str, Any]):       # markers, path, etc.)
+        pass 
 
     async def main_loop(self):
         # Yield to other threads (video stream, websocket comms)
