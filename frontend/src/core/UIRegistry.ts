@@ -50,6 +50,10 @@ export interface UIRegistry {
     // --- View & Mode Toggles ---
     processingModeSwitch: HTMLInputElement;
     transformedModeSwitch: HTMLInputElement;
+    autoHeightSwitch: HTMLInputElement;
+    recordDataSwitch: HTMLInputElement;
+    modeBatchBtn: HTMLButtonElement;
+    modeRealtimeBtn: HTMLButtonElement;
     saveView: HTMLInputElement;
     layoutTopBtn: HTMLButtonElement;
     layoutBottomBtn: HTMLButtonElement;
@@ -165,6 +169,10 @@ export function createUIRegistry(): UIRegistry {
         // View & Mode Toggles
         processingModeSwitch: document.getElementById('processing-mode') as HTMLInputElement,
         transformedModeSwitch: document.getElementById('transformed-view-mode') as HTMLInputElement,
+        autoHeightSwitch: document.getElementById('height-adjust-mode') as HTMLInputElement,
+        recordDataSwitch: document.getElementById('record-data-mode') as HTMLInputElement,
+        modeBatchBtn: document.getElementById('mode-batch') as HTMLButtonElement,
+        modeRealtimeBtn: document.getElementById('mode-realtime') as HTMLButtonElement,
         saveView: document.getElementById('save-view') as HTMLInputElement,
         layoutTopBtn: document.getElementById('layout-top') as HTMLButtonElement,
         layoutBottomBtn: document.getElementById('layout-bottom') as HTMLButtonElement,

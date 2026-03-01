@@ -152,43 +152,25 @@
       </div>
       <div class="settings-body">
         <div class="settings-sidebar">
-          <button class="sidebar-btn active" data-target="general-settings">General</button>
-          <button class="sidebar-btn" data-target="camera-settings">Camera</button>
+          <button class="sidebar-btn active" data-target="system-settings">System & Hardware</button>
+          <button class="sidebar-btn" data-target="ui-settings">UI & Layout</button>
         </div>
         <div class="settings-main">
-          <div id="general-settings" class="settings-panel active">
-            <h3>General Settings</h3>
-            <div class="setting-item">
-              <span class="setting-label">Processing Mode</span>
-              <div class="switch-container">
-                <span class="switch-label">Batch</span>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="processing-mode">
-                  <span class="slider round"></span>
-                </label>
-                <span class="switch-label">Real-Time</span>
-              </div>
-            </div>
-            <div class="setting-item">
-              <span class="setting-label">Menu Position</span>
-              <div class="segment-control" style="width: 150px;">
-                <button id="layout-top" class="segment-btn active">Top</button>
-                <button id="layout-bottom" class="segment-btn">Bottom</button>
+          
+          <input type="checkbox" id="processing-mode" style="display:none;">
+          <div id="system-settings" class="settings-panel active">
+            <h3>Workflow</h3>
+            <div class="setting-item" style="background: rgba(250, 133, 0, 0.1); border: 1px solid #fa8500; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+              <span class="setting-label" style="color: #fa8500; font-weight: bold;">Processing Mode</span>
+              <div class="segment-control" style="width: 180px; border-color: #fa8500;">
+                <button id="mode-batch" class="segment-btn active">Batch</button>
+                <button id="mode-realtime" class="segment-btn" style="color: #fa8500;">Real-Time</button>
               </div>
             </div>
 
+            <h3>Hardware & Vision</h3>
             <div class="setting-item">
-              <span class="setting-label">Sidebar Position</span>
-              <div class="segment-control" style="width: 150px;">
-                <button id="layout-left" class="segment-btn active">Left</button>
-                <button id="layout-right" class="segment-btn">Right</button>
-              </div>
-            </div>
-          </div>
-          <div id="camera-settings" class="settings-panel">
-            <h3>Camera Settings</h3>
-            <div class="setting-item">
-              <span class="setting-label">Transformed</span>
+              <span class="setting-label">Transformed View</span>
               <div class="switch-container">
                 <span class="switch-label">Off</span>
                 <label class="toggle-switch">
@@ -196,6 +178,46 @@
                   <span class="slider round"></span>
                 </label>
                 <span class="switch-label">On</span>
+              </div>
+            </div>
+            <div class="setting-item">
+              <span class="setting-label">Auto-Height Adjustment</span>
+              <div class="switch-container">
+                <span class="switch-label">Off</span>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="height-adjust-mode">
+                  <span class="slider round"></span>
+                </label>
+                <span class="switch-label">On</span>
+              </div>
+            </div>
+            <div class="setting-item">
+              <span class="setting-label">Record Data</span>
+              <div class="switch-container">
+                <span class="switch-label">Off</span>
+                <label class="toggle-switch recording-switch">
+                  <input type="checkbox" id="record-data-mode">
+                  <span class="slider round"></span>
+                </label>
+                <span class="switch-label">On</span>
+              </div>
+            </div>
+          </div>
+
+          <div id="ui-settings" class="settings-panel">
+            <h3>Layout Preferences</h3>
+            <div class="setting-item">
+              <span class="setting-label">Menu Position</span>
+              <div class="segment-control" style="width: 150px;">
+                <button id="layout-top" class="segment-btn active">Top</button>
+                <button id="layout-bottom" class="segment-btn">Bottom</button>
+              </div>
+            </div>
+            <div class="setting-item">
+              <span class="setting-label">Sidebar Position</span>
+              <div class="segment-control" style="width: 150px;">
+                <button id="layout-left" class="segment-btn active">Left</button>
+                <button id="layout-right" class="segment-btn">Right</button>
               </div>
             </div>
           </div>

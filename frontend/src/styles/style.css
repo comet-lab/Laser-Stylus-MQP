@@ -371,7 +371,7 @@ pre {
 }
 
 #zoom-indicator.hidden {
-  display: flex !important; /* Override your global .hidden */
+  display: flex !important;
   opacity: 0;
   transform: translateY(-10px);
 }

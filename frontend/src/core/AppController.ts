@@ -720,6 +720,30 @@ class AppController {
             }
         });
 
+        this.ui.autoHeightSwitch.addEventListener('change', () => {
+            this.wsHandler.updateState({ isAutoHeightAdjustOn: this.ui.autoHeightSwitch.checked });
+        });
+
+        // --- Data Recording ---
+        this.ui.recordDataSwitch.addEventListener('change', () => {
+            this.wsHandler.updateState({ isRecordingOn: this.ui.recordDataSwitch.checked });
+        });
+
+        // --- Processing Mode Segment Wrapper ---
+        // (This triggers the existing hidden checkbox so you don't have to refactor the rest of your app)
+        this.ui.modeBatchBtn.addEventListener('click', () => {
+            this.ui.modeBatchBtn.classList.add('active');
+            this.ui.modeRealtimeBtn.classList.remove('active');
+            this.ui.processingModeSwitch.checked = false;
+            this.ui.processingModeSwitch.dispatchEvent(new Event('change'));
+        });
+        
+        this.ui.modeRealtimeBtn.addEventListener('click', () => {
+            this.ui.modeRealtimeBtn.classList.add('active');
+            this.ui.modeBatchBtn.classList.remove('active');
+            this.ui.processingModeSwitch.checked = true;
+            this.ui.processingModeSwitch.dispatchEvent(new Event('change'));
+        });
 
         // --- Layout position controls ---
         this.ui.layoutTopBtn.addEventListener('click', () => this.settingsManager.setMenuPosition('top'));
@@ -986,6 +1010,14 @@ class AppController {
         }
         if (state.isRobotOn !== undefined) {
             this.hardware.applyServerRobotState(!!state.isRobotOn);
+        }
+
+        if (state.isRecordingOn !== undefined) {
+            this.ui.recordDataSwitch.checked = state.isRecordingOn;
+        }
+
+        if (state.isAutoHeightAdjustOn !== undefined) {
+            this.ui.autoHeightSwitch.checked = state.isAutoHeightAdjustOn;
         }
     }
 

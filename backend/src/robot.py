@@ -28,6 +28,8 @@ class RobotSchema:
     isLaserOn: Optional[bool] = None
     isRobotOn: Optional[bool] = None
     isLaserFiring: Optional[bool] = None
+    isAutoHeightAdjustOn: Optional[bool] = None
+    isRecordingOn: Optional[bool] = None
     isTransformedViewOn: Optional[bool] = None
     isThermalViewOn: Optional[bool] = None
     request_sync: Optional[bool] = None

@@ -22,6 +22,8 @@ export interface WebSocketMessage {
     isLaserOn?: boolean;
     isRobotOn?: boolean;
     isLaserFiring?: boolean;
+    isAutoHeightAdjustOn?: boolean;
+    isRecordingOn?: boolean;
     isTransformedViewOn?: boolean;
     isThermalViewOn?: boolean;
     request_sync?: boolean;
@@ -48,7 +50,7 @@ export interface WebSocketMessage {
     path_preview?: {
         x: number[];
         y: number[];
-        time?: number[] | number; // Added to catch the nested duration
+        time?: number[] | number;
     };
     preview_duration?: number;
 }
