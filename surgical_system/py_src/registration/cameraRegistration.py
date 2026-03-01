@@ -68,7 +68,7 @@ class Camera_Registration(System_Calibration):
         # pathToCWD = os.getcwd()        
         
         # Create checkerboard
-        # self.robot_controller.load_edit_pose()
+        self.robot_controller.load_edit_pose()
         
         # self.create_checkerboard(gridShape = np.array([9, 8]), \
         #                          saveLocation=self.calibration_folder, debug=debug)
@@ -88,14 +88,14 @@ class Camera_Registration(System_Calibration):
         self.reprojection_test('thermal', self.cam_M['thermal'], gridShape = np.array([2, 2]), laserDuration = .15, \
                         debug=debug, height=0)
         
-        # self.laser_alignment()
+        self.laser_alignment()
         # self.therm_cam.deinitialize_cam()
         # pass
     
     
     def laser_alignment(self):
         # Create a copy of the original home pose which we will edit in future functions   
-        new_home_pose = self.home_pose.copy()
+        new_home_pose = self.robot_controller.home_pose.copy()
         
         new_home_pose = self.xy_orientation_Correction()
     
@@ -103,7 +103,7 @@ class Camera_Registration(System_Calibration):
         
         new_home_pose = self.robot_controller.align_robot_input(new_home_pose)
         self.robot_controller.home_pose = new_home_pose
-        self.home_pose = new_home_pose
+        self.robot_controller.home_pose = new_home_pose
 
         self.repeat_reprojection_test()
         if input("Enter to save new home pose") == "":
@@ -119,7 +119,7 @@ class Camera_Registration(System_Calibration):
     def xy_orientation_Correction(self):
         # send to initial pose to allow people to swap object
         targetPose = np.array([[1.0, 0, 0, 0],[0,1.0,0,0],[0,0,1,0.1],[0,0,0,1]])
-        self.robot_controller.go_to_pose(targetPose@self.home_pose)
+        self.robot_controller.go_to_pose(targetPose@self.robot_controller.home_pose)
         height = float(input("\nLaser-Robot Alignment: Enter max height [m]... "))
         imgCount = int(input("\nLaser-Robot Alignment: Enter num pulses... "))
 
@@ -128,7 +128,7 @@ class Camera_Registration(System_Calibration):
         # initialize error
         xOrientationOffset, yOrientationOffset = 10, 10
         # make copy of homePose for edits
-        _homePose = self.home_pose.copy()
+        _homePose = self.robot_controller.home_pose.copy()
         
         while input("Press enter to perform an alignment (quit q): ") != "q":
             laserWorldPoints = np.empty((0, 3))
@@ -273,7 +273,7 @@ class Camera_Registration(System_Calibration):
                                 start=0):
             targetPose[0:3,3] = [x, y, 0]
             print(f"\nMoving to position: {targetPose[0:3,3]}")
-            self.robot_controller.go_to_pose(targetPose@self.home_pose)
+            self.robot_controller.go_to_pose(targetPose@self.robot_controller.home_pose)
             print("Firing...")
             self.laser_controller.set_output(True)
             time.sleep(laserDuration)
@@ -388,7 +388,7 @@ class Camera_Registration(System_Calibration):
         start_pose = np.eye(4)
         start_pose[:3, -1] = start_pos
         print("Heading to starting location")
-        self.robot_controller.go_to_pose(start_pose @ self.home_pose)
+        self.robot_controller.go_to_pose(start_pose @ self.robot_controller.home_pose)
         
         traj = self.robot_controller.create_custom_trajectory(robot_path, 0.025)
         self.robot_controller.run_trajectory(traj, blocking=False)
@@ -649,7 +649,7 @@ class Camera_Registration(System_Calibration):
         start_pose = np.eye(4)
         start_pose[:3, -1] = start_pos
         print("Heading to starting location")
-        self.robot_controller.go_to_pose(start_pose @ self.home_pose)
+        self.robot_controller.go_to_pose(start_pose @ self.robot_controller.home_pose)
         
         traj = self.robot_controller.create_custom_trajectory(robot_path, 0.02)
         depth, meta = self.scan_region_for_depth(traj)
@@ -697,7 +697,7 @@ class Camera_Registration(System_Calibration):
         Show a live view from cam_obj and allow the user to click to get pixel locations.
         """
         input("Press Enter to continue to live control")
-        self.robot_controller.go_to_pose(self.home_pose)
+        self.robot_controller.go_to_pose(self.robot_controller.home_pose)
         last_point = None   # np.array([x, y]) of the current/last selection
         dragging = False    # True while left mouse button is held
 
@@ -1142,7 +1142,7 @@ if __name__ == '__main__':
     
     heights = heights / 1000.0 # mm
     depth_path = "homography_stack.npz"
-    stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
+    # stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
     # stack = 
     # print(stack)
     # rgbd_cam.set_default_setting()
