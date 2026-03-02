@@ -24,13 +24,15 @@
   <div id="loading-screen">
     <svg class="loading-spinner" width="60" height="60" viewBox="0 0 50 50">
       <circle cx="25" cy="25" r="20" fill="none" stroke="#2c343b" stroke-width="5"></circle>
-      <circle cx="25" cy="25" r="20" fill="none" stroke="#70ff57" stroke-width="5" stroke-dasharray="31.4 125.6" stroke-linecap="round">
-        <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s" repeatCount="indefinite" />
+      <circle cx="25" cy="25" r="20" fill="none" stroke="#70ff57" stroke-width="5" stroke-dasharray="31.4 125.6"
+        stroke-linecap="round">
+        <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s"
+          repeatCount="indefinite" />
       </circle>
     </svg>
     <div class="loading-text">INITIALIZING SYSTEM...</div>
   </div>
-  
+
   <div id="app-scaler">
     <div id="overlay"></div>
     <div id="preparePopup">
@@ -90,8 +92,10 @@
 
           <div class="preview-action-container">
             <div class="setting-row-wrapper preview-wrapper">
-              <span class="row-label">Preview Path</span>
-              <span class="row-label-2">(Enable to Execute)</span>
+              <div class="row-label-stack">
+                <span class="row-label">Preview Path</span>
+                <span class="row-label-2" style="color: #fa8500; opacity: 0.8;">(Required Before Execution)</span>
+              </div>
               <div class="segment-control preview-control">
                 <button id="previewOff" class="segment-btn active">OFF</button>
                 <button id="previewOn" class="segment-btn">ON</button>
@@ -156,11 +160,12 @@
           <button class="sidebar-btn" data-target="ui-settings">UI & Layout</button>
         </div>
         <div class="settings-main">
-          
+
           <input type="checkbox" id="processing-mode" style="display:none;">
           <div id="system-settings" class="settings-panel active">
             <h3>Workflow</h3>
-            <div class="setting-item" style="background: rgba(250, 133, 0, 0.1); border: 1px solid #fa8500; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+            <div class="setting-item"
+              style="background: rgba(250, 133, 0, 0.1); border: 1px solid #fa8500; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
               <span class="setting-label" style="color: #fa8500; font-weight: bold;">Processing Mode</span>
               <div class="segment-control" style="width: 180px; border-color: #fa8500;">
                 <button id="mode-batch" class="segment-btn active">Batch</button>
@@ -356,7 +361,8 @@
         <span id="robot-on-text">ON</span>
         <div class="lock-overlay">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/>
+            <path
+              d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z" />
           </svg>
         </div>
       </div>
@@ -496,7 +502,8 @@
     </div>
     <div id="viewport">
       <div id="zoom-indicator" class="hidden">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+          stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8"></circle>
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           <line x1="11" y1="8" x2="11" y2="14"></line>
@@ -505,7 +512,8 @@
         <span id="zoom-text">100%</span>
       </div>
       <div id="max-heat-indicator">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fa8500" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fa8500" stroke-width="2.5"
+          stroke-linecap="round" stroke-linejoin="round">
           <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path>
         </svg>
         <span>MAX: <span id="max-heat-display">N/A</span></span>

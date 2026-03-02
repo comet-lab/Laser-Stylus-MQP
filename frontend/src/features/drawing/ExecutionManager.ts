@@ -55,7 +55,7 @@ export class ExecutionManager {
 
         const previewMgr = this.getPreviewManager();
         if (!previewMgr.hasPreviewedCurrent()) {
-            ToastManager.show('Please preview the path first', { type: 'warning' });
+            ToastManager.show('SAFETY WARNING: Preview the path before attempting to execute', { type: 'warning' });
             return;
         }
 
@@ -205,18 +205,10 @@ export class ExecutionManager {
             this.ui.executeBtn.style.display = '';
         }
 
-        const btnText = this.ui.executeBtn.querySelector('.btn-text');
-
         if (hasPreview) {
-            this.ui.executeBtn.disabled = false;
-            this.ui.executeBtn.style.pointerEvents = 'auto';
-            this.ui.executeBtn.style.opacity = '1';
-            if (btnText) btnText.textContent = 'EXECUTE';
+            this.ui.executeBtn.classList.remove('locked');
         } else {
-            this.ui.executeBtn.disabled = true;
-            this.ui.executeBtn.style.pointerEvents = 'none';
-            this.ui.executeBtn.style.opacity = '0.3';
-            if (btnText) btnText.textContent = 'NEEDS PREVIEW';
+            this.ui.executeBtn.classList.add('locked');
         }
     }
 }

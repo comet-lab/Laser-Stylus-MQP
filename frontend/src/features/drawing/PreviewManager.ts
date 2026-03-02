@@ -64,14 +64,9 @@ export class PreviewManager {
     if (!btn) return;
 
     if (isEnabled) {
-      btn.disabled = false;
-      // MUST override the inline styles set by ExecutionManager
-      btn.style.pointerEvents = 'auto';
-      btn.style.opacity = '1';
+      btn.classList.remove('locked');
     } else {
-      btn.disabled = true;
-      btn.style.pointerEvents = 'none';
-      btn.style.opacity = '0.3';
+      btn.classList.add('locked');
     }
   }
 
@@ -434,9 +429,6 @@ export class PreviewManager {
   }
 
   public resetPreviewState(): void {
-    const btnText = this.ui.executeBtn.querySelector('.btn-text');
-
-    if (btnText) btnText.textContent = 'NEEDS PREVIEW';
     this.hasPreviewedCurrentDrawing = false;
     this.ignoreWebsocketPaths = false;
     this.pathData = [];

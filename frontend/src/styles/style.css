@@ -349,8 +349,8 @@ pre {
 /* === ZOOM INDICATOR === */
 #zoom-indicator {
   position: absolute;
-  bottom: 16px;
-  right: 16px;
+  bottom: 3px;
+  right: 3px;
   background-color: rgba(21, 27, 33, 0.85);
   border: 2px solid #2c343b;
   color: #e0f2e0;
@@ -732,8 +732,8 @@ body.menu-bottom.sidebar-right #viewport {
 /* === MAX HEAT INDICATOR === */
 #max-heat-indicator {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 3px;
+  right: 3px;
   background-color: rgba(21, 27, 33, 0.85);
   border: 2px solid #2c343b;
   color: #e0f2e0;

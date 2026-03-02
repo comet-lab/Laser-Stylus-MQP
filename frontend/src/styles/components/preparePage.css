@@ -132,6 +132,12 @@ body.sidebar-right #preparePopup {
 }
 
 /* --- Labels & Inputs --- */
+.row-label-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+}
 .row-label {
   font-family: 'IBM Plex Sans', sans-serif;
   font-weight: 600;
@@ -144,7 +150,7 @@ body.sidebar-right #preparePopup {
 .row-label-2 {
   font-family: 'IBM Plex Sans', sans-serif;
   font-weight: 500;
-  font-size: calc(var(--base-scale) * 0.6);
+  font-size: calc(var(--base-scale) * 0.8);
   color: #a0b0b8;
   margin: 0;
   white-space: nowrap;
@@ -154,7 +160,7 @@ body.sidebar-right #preparePopup {
 .row-label-speed {
   font-family: 'IBM Plex Sans', sans-serif;
   font-weight: 500;
-  font-size: calc(var(--base-scale) * 0.6);
+  font-size: calc(var(--base-scale) * 0.8);
   color: #a0b0b8;
   margin: 0;
   white-space: nowrap;
@@ -329,6 +335,8 @@ input::-webkit-inner-spin-button {
 
 .preview-wrapper {
   background-color: #1c2128;
+  padding-top: 2rem;
+  padding-bottom: 2rem;
 }
 
 .preview-wrapper:hover {
@@ -445,4 +453,10 @@ input::-webkit-inner-spin-button {
 #bottomButtons .action-btn-execute,
 #bottomButtons .action-btn-cancel {
   width: auto;
+}
+
+.action-btn-execute.locked {
+  opacity: 0.3;
+  cursor: not-allowed;
+  filter: grayscale(100%);
 }
