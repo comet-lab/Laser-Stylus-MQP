@@ -61,6 +61,7 @@ class System_Calibration():
             )
 
         self.home_pose = robot_controller.get_home_pose()
+        
     
     # --- Transformation Views --- #
     def get_transformed_view(self, img, cam_type = "color"):

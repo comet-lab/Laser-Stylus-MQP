@@ -36,7 +36,7 @@ class SystemDataStore:
       - Latest user command
       - Transform tree / calibration artifacts
     """
-    def __init__(self, home_pose, homography):
+    def __init__(self, home_pose: np.ndarray, homography: Dict[str, np.ndarray]):
         self.camera_history: Dict[str, Any] = {
                                     "rgb": [],
                                     "depth": [],
@@ -54,6 +54,8 @@ class SystemDataStore:
         self.homography_stack: Dict[str, Any] = {"rgb_w_stack": homography["rgb_w_stack"],
                                            "therm_w_stack": homography["therm_w_stack"],
                                            "rgb_therm_stack": homography["rgb_therm_stack"]}
+        
+
 
     # --- Camera ---
     def put_camera(self, sensor: str, t: float, img: np.ndarray, frame_id: str):

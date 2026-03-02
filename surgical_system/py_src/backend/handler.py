@@ -5,6 +5,7 @@ from laser_control.mock_laser import MockLaser
 from motion_planning.motion_planning import Motion_Planner
 from backend.listener import BackendConnection
 from robot.controllers.trajectory_controller import TrajectoryController
+from backend.datastorage import SystemDataStore, CameraFrame, RobotState, UserCommand
 from dataclasses import asdict
 from typing import Dict, Any, Tuple
 
@@ -15,7 +16,13 @@ import time, math, json, cv2, asyncio, base64
 
 
 class Handler:
-    def __init__(self, desired_state: RobotSchema, robot_controller: MockRobotController, cam_reg: MockCameraRegistration, laser_obj: MockLaser, start_pose, mock_robot):
+    def __init__(self, desired_state: RobotSchema, 
+                 robot_controller: MockRobotController, 
+                 cam_reg: MockCameraRegistration, 
+                 laser_obj: MockLaser, 
+                 start_pose, 
+                 mock_robot,
+                 data_storage: SystemDataStore):
         self.desired_state = desired_state
         self.robot_controller = robot_controller
         self.last_update_time = time.time()

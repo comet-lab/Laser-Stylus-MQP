@@ -30,6 +30,7 @@ else:
 from cameras.broadcast import Broadcast
 from backend.listener import BackendConnection
 from backend.handler import Handler
+from backend.datastorage import SystemDataStore
 
 
 async def main():
@@ -119,6 +120,27 @@ async def main():
     print("Cameras are ready")
     
     ##################################################################################
+    #------------------------------ Data Stroage ------------------------------------#
+    ##################################################################################
+    homography = {}
+    if mock_robot:
+        homography["rgb_w"] = np.eye(3)
+        homography["therm_w"] = np.eye(3)
+        homography["rgb_therm"] = np.eye(3)
+        homography["rgb_w_stack"] = np.eye(3)
+        homography["therm_w_stack"] = np.eye(3)
+        homography["rgb_therm_stack"] = np.eye(3)
+    else:
+        homography["rgb_w"] = camera_reg.cam_M["color"].H
+        homography["therm_w"] = camera_reg.cam_M["thermal"].H
+        homography["rgb_therm"] = camera_reg.cam_M["thermal"].H
+        homography["rgb_w_stack"] = camera_reg.homography_stack
+        homography["therm_w_stack"] = np.eye(3)
+        homography["rgb_therm_stack"] = np.eye(3)
+        
+    data_storage = SystemDataStore(home_pose=robot_controller.home_pose, homography=homography)
+    
+    ##################################################################################
     #----------------------------- Backend Connection -------------------------------#
     ##################################################################################
 
@@ -128,7 +150,8 @@ async def main():
         cam_reg=camera_reg,
         laser_obj=laser_obj,
         start_pose=start_pose,
-        mock_robot=mock_robot
+        mock_robot=mock_robot,
+        data_storage=data_storage
     )
     
     ##################################################################################
@@ -137,7 +160,7 @@ async def main():
     
     
     if camera_calibration:
-        pass
+        camera_reg.run()
 
     start_pose[2,3] = 0.0
     robot_controller.go_to_pose(start_pose@home_pose,1) # Send robot to start position
