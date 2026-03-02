@@ -42,10 +42,10 @@ class Camera_Registration(System_Calibration):
         self.display_path = False
         self.depth_path = "/homography_stack.npz"
         self.stack_path = self.directory + self.calibration_folder + self.depth_path
-        print("[Depth Estimation] Loading file: ", self.stack_path)
+        print("\n[Depth Estimation] Loading file: ", self.stack_path)
         self.homography_stack = DepthEstimation.load_homography_stack_npz(self.stack_path)
         self.dense_stack = DepthEstimation.create_dense_stack(self.homography_stack, dz=0.00025)
-
+        
         
     @staticmethod
     def circle_perimeter_pixels(center, r, num_pts=360):
@@ -74,9 +74,19 @@ class Camera_Registration(System_Calibration):
         # self.create_checkerboard(gridShape = np.array([9, 8]), \
         #                          saveLocation=self.calibration_folder, debug=debug)
         
-        self.create_checkerboard(gridShape = np.array([3, 3]), \
-                                squareSize=0.043/2.0,
+        grid_shape = np.array([3, 3])
+        square_size = 0.043/2.0
+        
+        _, boundary_pts = self.create_checkerboard(gridShape = grid_shape, 
+                                squareSize=square_size,
                                  saveLocation=self.calibration_folder, debug=debug)
+        
+        meta_data = {"grid shape": grid_shape,
+                     "square size": square_size,
+                     "boundary": boundary_pts}
+        
+        
+        np.savez_compressed(self.meta_base_homography_path, meta = meta_data)
         
         self.read_calibration()
         
@@ -96,7 +106,7 @@ class Camera_Registration(System_Calibration):
     
         heights = heights / 1000.0 # mm
         depth_path = "homography_stack.npz"
-        camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
+        self.rgb_multi_layer_scan(heights, file_name= depth_path)
         
         self.homography_stack = DepthEstimation.load_homography_stack_npz(self.stack_path)
         self.dense_stack = DepthEstimation.create_dense_stack(self.homography_stack, dz=0.00025)
@@ -261,6 +271,18 @@ class Camera_Registration(System_Calibration):
         yPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
         xValues, yValues = np.meshgrid(xPoints, yPoints)
         
+        xmin = xPoints.min() 
+        xmax = xPoints.max() 
+        ymin = yPoints.min() 
+        ymax = yPoints.max() 
+        
+        boundary_pts = np.array([
+            [xmin, ymin],  # bottom-left
+            [xmax, ymin],  # bottom-right
+            [xmax, ymax],  # top-right
+            [xmin, ymax],  # top-left
+        ])
+        
         therm_start_img = self.therm_cam.get_latest()['thermal']
         rgb_start_img = self.rgbd_cam.get_latest()['color']
         
@@ -351,7 +373,7 @@ class Camera_Registration(System_Calibration):
         np.savetxt(rgb_saveLocation / "laser_spots.csv",        rgb_img_points.T, delimiter=",")
         np.savetxt(rgb_saveLocation / "laser_world_points.csv", obj_Points,          delimiter=",")
         # np.save    (save_dir / "laser_spots.npy",       therm_image_set)
-        return combinedImg, therm_img_points, rgb_img_points, obj_Points
+        return [combinedImg, therm_img_points, rgb_img_points, obj_Points], boundary_pts
     
     def rgb_multi_layer_scan(self, heights, file_name = "homography_stack.npz"):
         homography_stack = {}

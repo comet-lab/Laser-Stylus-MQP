@@ -50,6 +50,20 @@ class Handler:
         self.data_storage = data_storage
         self.recording_data_flag = False # TODO TEMP var
         
+        boundary = self.cam_reg.meta_base_homography_data["boundary"] 
+        square_size = self.cam_reg.meta_base_homography_data["square size"] 
+        if boundary is not None:
+            print("[Handler] Loading Robot Fixtures")
+        else:
+            # Default 
+            print("[Handler] Defaulting Robot Fixtures")
+            boundary = [[-0.0215, -0.0215],
+                        [ 0.0215, -0.0215],
+                        [ 0.0215,  0.0215],
+                        [-0.0215,  0.0215]] 
+            
+        self.robot_fixtures = RobotFixtures(boundary, include_boundary=False)
+        
         
         self.virtual_fixture, self.dx, self.dy, self.distance_field = self.generate_virtual_fixture()
         self.vf_valid_flag = None
@@ -360,13 +374,20 @@ class Handler:
         # print(height_change)
         # print(f"[INPUT DOWN TIME] {self._input_downtime()}")
         # print(f"[Height Diff] {np.abs(height_diff)}")
+        
+        
+                    
         if(self._input_downtime() > .12 and np.abs(height_diff) < 0.001): # 1mm
             # print("[Live Control] Holding Position")
             self._do_hold_pose()
         else:
-            if self.desired_state.x is not None and  self.desired_state.y is not None:
+            if self.desired_state.x is not None and self.desired_state.y is not None:
                 if (self.desired_state.x < 0 and self.desired_state.y < 0):
                     return
+                
+                world_position = self.robot_controller.current_robot_to_world_position()
+                valid_robot_position = self.robot_fixtures.is_valid(world_position[:2])
+                
                 pixel = np.array([[self.desired_state.x, self.desired_state.y]])
                 
                 payload = {"pixel": pixel}
@@ -380,10 +401,25 @@ class Handler:
                     pixel, 
                     warped_view, 
                     z = self.working_height)[0]
+                
+                valid_input_position = self.robot_fixtures.is_valid(target_world_point[:2])
+                
+                print("[Hander] Robot Fixtures: Valid Input: ", valid_input_position, " | Valid Robot", valid_robot_position)
+                if(not valid_input_position and not valid_robot_position):
+                    print("[Hander] Robot Fixtures: Stopping target", target_world_point[:2])
+                    print("[Hander] Robot Fixtures: Stopping current", world_position[:2])
+                    self._do_hold_pose()
+                    return
+                    
+                    
                 self.laser_obj.set_output(self.desired_state.isLaserOn)
             else:
+                # Holding but change height
                 target_world_point = self.robot_controller.current_robot_to_world_position()
                 target_world_point[-1] = self.working_height
+            
+            
+            
                 
             target_pose = np.eye(4)
             target_pose[:3, -1] = target_world_point

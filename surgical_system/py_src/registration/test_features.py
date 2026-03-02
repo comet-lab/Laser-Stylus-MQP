@@ -537,15 +537,45 @@ if __name__ == '__main__':
     # robot_controller.load_edit_pose()
     # camera_reg.view_rgbd_therm_registration()
     # camera_reg.transformed_view(cam_type="thermal")
-    live_control_view(camera_reg, 'color', warped=True, tracking=True, depth_path= depth_path) 
     
-    # camera_reg.exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.035/24)
-    path = "surgical_system/py_src/registration/calibration_info/depth_map.npz"
-    depth, meta = DepthEstimation.load_depth_npz(path)
-    DepthEstimation.plot_depth_surface(depth, meta)
+    grid_shape = np.array([3, 3])
+    square_size = 0.043/2.0
     
-    depth_map = DepthEstimation.patch_depth(depth)
-    DepthEstimation.plot_depth_surface(depth_map, meta)
+    
+        
+    xPoints = (np.arange(grid_shape[1]) - (grid_shape[1] - 1) / 2) * square_size
+    yPoints = (np.arange(grid_shape[0]) - (grid_shape[0] - 1) / 2) * square_size
+    xValues, yValues = np.meshgrid(xPoints, yPoints)
+    
+    xmin = xPoints.min() 
+    xmax = xPoints.max() 
+
+    ymin = yPoints.min() 
+    ymax = yPoints.max() 
+    
+    boundary_pts = np.array([
+        [xmin, ymin],  # bottom-left
+        [xmax, ymin],  # bottom-right
+        [xmax, ymax],  # top-right
+        [xmin, ymax],  # top-left
+    ])
+    
+    meta_data = {"grid shape": grid_shape,
+                    "square size": square_size,
+                    "boundary": boundary_pts}
+    
+    
+    np.savez_compressed(camera_reg.meta_base_homography_path, meta = meta_data)
+        
+    # live_control_view(camera_reg, 'color', warped=True, tracking=True, depth_path= depth_path) 
+    
+    # # camera_reg.exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.035/24)
+    # path = "surgical_system/py_src/registration/calibration_info/depth_map.npz"
+    # depth, meta = DepthEstimation.load_depth_npz(path)
+    # DepthEstimation.plot_depth_surface(depth, meta)
+    
+    # depth_map = DepthEstimation.patch_depth(depth)
+    # DepthEstimation.plot_depth_surface(depth_map, meta)
     
     # camera_reg.view_rgbd_therm_heat_overlay()
     # camera_reg.draw_traj()

@@ -131,9 +131,9 @@ async def main():
         homography["therm_w_stack"] = np.eye(3)
         homography["rgb_therm_stack"] = np.eye(3)
     else:
-        homography["rgb_w"] = camera_reg.cam_M["color"].H
-        homography["therm_w"] = camera_reg.cam_M["thermal"].H
-        homography["rgb_therm"] = camera_reg.cam_M["thermal"].H
+        homography["rgb_w"] = camera_reg.cam_M["color"]
+        homography["therm_w"] = camera_reg.cam_M["thermal"]
+        homography["rgb_therm"] = camera_reg.cam_M["thermal"]
         homography["rgb_w_stack"] = camera_reg.homography_stack
         homography["therm_w_stack"] = np.eye(3)
         homography["rgb_therm_stack"] = np.eye(3)

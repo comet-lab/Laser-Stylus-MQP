@@ -17,6 +17,7 @@ class RobotFixtures:
                         boundary: Dict[str, Any] = None):
         
         if boundary is None:
+            print("[Robot Fixtures] Generating mapping")
             boundary = polygon_to_grid_map(pts_xy = pts_xy,
                                            square_size = square_size,
                                            padding=padding,
@@ -34,7 +35,7 @@ class RobotFixtures:
     
      # ---------- world <-> grid helpers ----------
     def _world_to_grid(self, x: float, y: float) -> Tuple[int, int]:
-        ox, oy = self.boundary.origin_xy
+        ox, oy = self.boundary.origin
         s = self.boundary.grid_size
 
         col = int(np.floor((x - ox) / s))

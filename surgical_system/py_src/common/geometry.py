@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Tuple, Dict, Any
+from typing import Dict, Any
 
 def polygon_to_grid_map(
     pts_xy: np.ndarray,
@@ -35,7 +35,6 @@ def polygon_to_grid_map(
     if square_size <= 0:
         raise ValueError("square_size must be > 0")
 
-    # --- Use matplotlib's robust point-in-polygon test (no shapely dependency) ---
     from matplotlib.path import Path
 
     poly_path = Path(pts_xy, closed=True)
