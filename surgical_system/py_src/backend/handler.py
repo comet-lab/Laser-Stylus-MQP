@@ -51,7 +51,6 @@ class Handler:
         self.recording_data_flag = False # TODO TEMP var
         
         boundary = self.cam_reg.meta_base_homography_data["boundary"] 
-        square_size = self.cam_reg.meta_base_homography_data["square size"] 
         if boundary is not None:
             print("[Handler] Loading Robot Fixtures")
         else:
@@ -63,6 +62,7 @@ class Handler:
                         [-0.0215,  0.0215]] 
             
         self.robot_fixtures = RobotFixtures(boundary, include_boundary=False)
+        self.robot_fixtures.plot_valid_region() # Debug
         
         
         self.virtual_fixture, self.dx, self.dy, self.distance_field = self.generate_virtual_fixture()
@@ -404,10 +404,10 @@ class Handler:
                 
                 valid_input_position = self.robot_fixtures.is_valid(target_world_point[:2])
                 
-                print("[Hander] Robot Fixtures: Valid Input: ", valid_input_position, " | Valid Robot", valid_robot_position)
+                # print("[Hander] Robot Fixtures: Valid Input: ", valid_input_position, " | Valid Robot", valid_robot_position)
                 if(not valid_input_position and not valid_robot_position):
-                    print("[Hander] Robot Fixtures: Stopping target", target_world_point[:2])
-                    print("[Hander] Robot Fixtures: Stopping current", world_position[:2])
+                    # print("[Hander] Robot Fixtures: Stopping target", target_world_point[:2])
+                    # print("[Hander] Robot Fixtures: Stopping current", world_position[:2])
                     self._do_hold_pose()
                     return
                     
@@ -424,7 +424,7 @@ class Handler:
             target_pose = np.eye(4)
             target_pose[:3, -1] = target_world_point
             live_control_speed = self.desired_state.speed / 1000.0 if self.desired_state.speed != None else 0.01
-            print(f"[Handler Live Control] Speed: {self.desired_state.speed}")
+            # print(f"[Handler Live Control] Speed: {self.desired_state.speed}")
             target_vel = self.robot_controller.live_control(target_pose, live_control_speed, KP = 5.0)
             # TODO Multiply velocity controller in unit component direction * max(min_speed, min(1, (distance / max_distance)))
             

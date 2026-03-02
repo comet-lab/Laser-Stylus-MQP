@@ -519,7 +519,9 @@ if __name__ == '__main__':
    
     
     camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_controller)
-    # camera_reg.run()
+    
+    ### -------------------- Run calibration ---------------- ####
+    camera_reg.run() 
     
     # base 2.23 
     # heights = np.array([2.08, 2.65, 3.15, 3.65, 4.18, 4.73, 5.15, 5.62, 6.15, 6.64,
@@ -530,7 +532,7 @@ if __name__ == '__main__':
     
     heights = heights / 1000.0 # mm
     depth_path = "homography_stack.npz"
-    # stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
+    stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
     # stack = 
     # print(stack)
     # rgbd_cam.set_default_setting()
@@ -538,44 +540,16 @@ if __name__ == '__main__':
     # camera_reg.view_rgbd_therm_registration()
     # camera_reg.transformed_view(cam_type="thermal")
     
-    grid_shape = np.array([3, 3])
-    square_size = 0.043/2.0
-    
-    
-        
-    xPoints = (np.arange(grid_shape[1]) - (grid_shape[1] - 1) / 2) * square_size
-    yPoints = (np.arange(grid_shape[0]) - (grid_shape[0] - 1) / 2) * square_size
-    xValues, yValues = np.meshgrid(xPoints, yPoints)
-    
-    xmin = xPoints.min() 
-    xmax = xPoints.max() 
-
-    ymin = yPoints.min() 
-    ymax = yPoints.max() 
-    
-    boundary_pts = np.array([
-        [xmin, ymin],  # bottom-left
-        [xmax, ymin],  # bottom-right
-        [xmax, ymax],  # top-right
-        [xmin, ymax],  # top-left
-    ])
-    
-    meta_data = {"grid shape": grid_shape,
-                    "square size": square_size,
-                    "boundary": boundary_pts}
-    
-    
-    np.savez_compressed(camera_reg.meta_base_homography_path, meta = meta_data)
         
     # live_control_view(camera_reg, 'color', warped=True, tracking=True, depth_path= depth_path) 
     
-    # # camera_reg.exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.035/24)
-    # path = "surgical_system/py_src/registration/calibration_info/depth_map.npz"
-    # depth, meta = DepthEstimation.load_depth_npz(path)
-    # DepthEstimation.plot_depth_surface(depth, meta)
+    camera_reg.exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.035/24)
+    path = "surgical_system/py_src/registration/calibration_info/depth_map.npz"
+    depth, meta = DepthEstimation.load_depth_npz(path)
+    DepthEstimation.plot_depth_surface(depth, meta)
     
-    # depth_map = DepthEstimation.patch_depth(depth)
-    # DepthEstimation.plot_depth_surface(depth_map, meta)
+    depth_map = DepthEstimation.patch_depth(depth)
+    DepthEstimation.plot_depth_surface(depth_map, meta)
     
     # camera_reg.view_rgbd_therm_heat_overlay()
     # camera_reg.draw_traj()

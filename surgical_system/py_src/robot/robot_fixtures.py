@@ -1,8 +1,15 @@
 import numpy as np 
 from typing import Dict, Any, Tuple
 from dataclasses import dataclass
+import sys, pathlib
+HERE = pathlib.Path(__file__).resolve().parent
+for candidate in (HERE, HERE.parent, HERE.parent.parent):
+    if (candidate / "robot").is_dir() and (candidate / "cameras").is_dir() and (candidate / "laser_control").is_dir():
+        sys.path.insert(0, str(candidate))
+        break
 from common.geometry import polygon_to_grid_map
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 
 @dataclass(frozen=True)
 class GridBoundary:
@@ -23,6 +30,8 @@ class RobotFixtures:
                                            square_size = square_size,
                                            padding=padding,
                                            include_boundary=include_boundary)
+            
+            
             
         valid_map = np.asarray(boundary["map"])
         if valid_map.ndim != 2:
@@ -57,7 +66,7 @@ class RobotFixtures:
             return False
         return bool(self.boundary.valid_map[row, col])
     
-    def plot_valid_region(self, ax=None, show_centers=False):
+    def plot_valid_region(self, ax=None):
         """
         Visualize valid fixture region in WORLD coordinates.
         """
@@ -85,19 +94,24 @@ class RobotFixtures:
             interpolation="nearest",
             alpha=0.7,
         )
+        
+        invalid_patch = mpatches.Patch(color=plt.cm.viridis(1.0),
+                                label="Valid (robot allowed)")
+        
+        valid_patch = mpatches.Patch(color=plt.cm.viridis(0.0),
+                                label="Invalid (blocked)")
 
-        # ---- optional: draw cell centers ----
-        if show_centers:
-            xs = ox + (np.arange(W) + 0.5) * s
-            ys = oy + (np.arange(H) + 0.5) * s
-            XX, YY = np.meshgrid(xs, ys)
-            ax.scatter(XX[valid], YY[valid], s=2)
+        ax.legend(handles=[valid_patch, invalid_patch], loc="upper left")
+    
 
         ax.set_aspect("equal")
         ax.set_xlabel("X [m]")
         ax.set_ylabel("Y [m]")
         ax.set_title("Robot Virtual Fixture (Valid Region)")
         ax.grid(True, alpha=0.3)
+        # plt.show()
+        fig.savefig("robot fixtures.png")
+        plt.close()
 
         return ax
     
@@ -105,5 +119,11 @@ class RobotFixtures:
     
     
 if __name__ == "__main__":
-    
-    pass 
+    boundary = [[-0.0215, -0.0215],
+                        [ 0.0215, -0.0215],
+                        [ 0.0215,  0.0215],
+                        [-0.0215,  0.0215]] 
+            
+    robot_fixtures = RobotFixtures(boundary, include_boundary=False)
+    print(robot_fixtures.is_valid(np.array([0, 0])))
+    robot_fixtures.plot_valid_region() # Debug 

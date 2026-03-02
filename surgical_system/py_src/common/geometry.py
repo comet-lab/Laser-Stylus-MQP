@@ -37,7 +37,9 @@ def polygon_to_grid_map(
 
     from matplotlib.path import Path
 
-    poly_path = Path(pts_xy, closed=True)
+    pts = np.asarray(pts_xy, dtype=float)
+    pts_closed = np.vstack([pts, pts[0]])     # 5th point is dummy for CLOSEPOLY
+    poly_path = Path(pts_closed, closed=True)
 
     minx, miny = pts_xy.min(axis=0) - padding
     maxx, maxy = pts_xy.max(axis=0) + padding

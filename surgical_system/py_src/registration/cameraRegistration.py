@@ -101,15 +101,15 @@ class Camera_Registration(System_Calibration):
         
         self.laser_alignment()
         
-        heights = np.array([2.08, 2.65, 3.15, 3.65, 4.18, 4.73, 5.15, 5.62, 6.15, 6.64,
-                        7.26, 7.77, 8.11, 8.67, 9.24, 9.77, 10.14]) # mm 
+        # heights = np.array([2.08, 2.65, 3.15, 3.65, 4.18, 4.73, 5.15, 5.62, 6.15, 6.64,
+        #                 7.26, 7.77, 8.11, 8.67, 9.24, 9.77, 10.14]) # mm 
     
-        heights = heights / 1000.0 # mm
-        depth_path = "homography_stack.npz"
-        self.rgb_multi_layer_scan(heights, file_name= depth_path)
+        # heights = heights / 1000.0 # mm
+        # depth_path = "homography_stack.npz"
+        # self.rgb_multi_layer_scan(heights, file_name= depth_path)
         
-        self.homography_stack = DepthEstimation.load_homography_stack_npz(self.stack_path)
-        self.dense_stack = DepthEstimation.create_dense_stack(self.homography_stack, dz=0.00025)
+        # self.homography_stack = DepthEstimation.load_homography_stack_npz(self.stack_path)
+        # self.dense_stack = DepthEstimation.create_dense_stack(self.homography_stack, dz=0.00025)
     
         # self.therm_cam.deinitialize_cam()
         # pass
