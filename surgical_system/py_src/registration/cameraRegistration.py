@@ -32,9 +32,9 @@ class Camera_Registration(System_Calibration):
         super().__init__(therm_cam, rgbd_cam, robot_controller, laser_controller)
         
         self.therm_cam.start_stream()
-        self.rgbd_cam.start_stream()
+        # self.rgbd_cam.start_stream()
         
-        while not self.therm_cam.get_latest() or not self.rgbd_cam.get_latest():
+        while not self.therm_cam.get_latest():
             print("Waiting for camera response...")
             time.sleep(0.5)
             

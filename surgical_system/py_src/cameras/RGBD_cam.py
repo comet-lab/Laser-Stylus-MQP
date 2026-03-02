@@ -1,4 +1,3 @@
-import pyrealsense2 as rs
 import numpy as np
 import cv2, threading, time
 import matplotlib.pyplot as plt
@@ -11,53 +10,54 @@ else:
 
 class RGBD_Cam(Camera):
     def __init__(self, width = 1280, height = 720, frame_rate = 30, pix_Per_M = 7000):
+        # return
         #Threading 
         super().__init__("RGBD Camera", width, height, pix_Per_M)
         try:
             # Configure depth and color streams
-            self.pipeline = rs.pipeline()
-            self.config = rs.config()
+            # self.pipeline = rs.pipeline()
+            # self.config = rs.config()
             self.dmin = 0.06
             self.dmax = 0.1
 
             # Get device product line for setting a supporting resolution
-            self.pipeline_wrapper = rs.pipeline_wrapper(self.pipeline)
-            self.pipeline_profile = self.config.resolve(self.pipeline_wrapper)
-            self.device = self.pipeline_profile.get_device()
-            self.device_name = str(self.device.get_info(rs.camera_info.product_line))
-            self.sensor = self.device.sensors[0]
+            # self.pipeline_wrapper = rs.pipeline_wrapper(self.pipeline)
+            # self.pipeline_profile = self.config.resolve(self.pipeline_wrapper)
+            # self.device = self.pipeline_profile.get_device()
+            # self.device_name = str(self.device.get_info(rs.camera_info.product_line))
+            # self.sensor = self.device.sensors[0]
             print(self.device_name, " Connected")
             self.set_color_manual(exposure_us=2000, gain=16, white_balance_k=4500)
 
-            self.config.enable_stream(rs.stream.depth, width, height, rs.format.z16, frame_rate)
-            self.config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, frame_rate)
-            self.profile = self.pipeline.start(self.config)
+            # self.config.enable_stream(rs.stream.depth, width, height, rs.format.z16, frame_rate)
+            # self.config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, frame_rate)
+            # self.profile = self.pipeline.start(self.config)
             
-            self.depth_sensor = self.profile.get_device().first_depth_sensor()
-            self.depth_scale = self.depth_sensor.get_depth_scale()
+            # self.depth_sensor = self.profile.get_device().first_depth_sensor()
+            # self.depth_scale = self.depth_sensor.get_depth_scale()
 
             # self.tune_depth()
             # self.recommended_filters = self.depth_sensor.get_recommended_filters()
-            self.thresh = rs.threshold_filter()
+            # self.thresh = rs.threshold_filter()
             # distances are in meters
-            self.thresh.set_option(rs.option.min_distance, self.dmin)   # 6 cm
-            self.thresh.set_option(rs.option.max_distance, self.dmax) 
+            # self.thresh.set_option(rs.option.min_distance, self.dmin)   # 6 cm
+            # self.thresh.set_option(rs.option.max_distance, self.dmax) 
             
             
-            self.depth_to_disparity = rs.disparity_transform(True)
-            self.disparity_to_depth = rs.disparity_transform(False)
+            # self.depth_to_disparity = rs.disparity_transform(True)
+            # self.disparity_to_depth = rs.disparity_transform(False)
 
-            self.decimation = rs.decimation_filter()
-            self.decimation.set_option(rs.option.filter_magnitude, 2)
+            # self.decimation = rs.decimation_filter()
+            # self.decimation.set_option(rs.option.filter_magnitude, 2)
             
-            self.spatial = rs.spatial_filter()
-            self.spatial.set_option(rs.option.filter_smooth_alpha, 0.4)
-            self.spatial.set_option(rs.option.filter_smooth_delta, 20)
-            self.spatial.set_option(rs.option.filter_magnitude, 2)
+            # self.spatial = rs.spatial_filter()
+            # self.spatial.set_option(rs.option.filter_smooth_alpha, 0.4)
+            # self.spatial.set_option(rs.option.filter_smooth_delta, 20)
+            # self.spatial.set_option(rs.option.filter_magnitude, 2)
             
-            self.temporal = rs.temporal_filter()
-            self.temporal.set_option(rs.option.filter_smooth_alpha, 0.2)
-            self.temporal.set_option(rs.option.filter_smooth_delta, 10)
+            # self.temporal = rs.temporal_filter()
+            # self.temporal.set_option(rs.option.filter_smooth_alpha, 0.2)
+            # self.temporal.set_option(rs.option.filter_smooth_delta, 10)
             
             PERSISTENCY_MODES = {
                 "disabled": 0,
@@ -71,10 +71,10 @@ class RGBD_Cam(Camera):
                 "persist_indefinitely": 8,
             }
 
-            self.temporal.set_option(rs.option.holes_fill, PERSISTENCY_MODES["valid_1_of_8"])
+            # self.temporal.set_option(rs.option.holes_fill, PERSISTENCY_MODES["valid_1_of_8"])
 
-            self.hole_filling = rs.hole_filling_filter()
-            self.hole_filling = rs.hole_filling_filter(2)
+            # self.hole_filling = rs.hole_filling_filter()
+            # self.hole_filling = rs.hole_filling_filter(2)
             
             self.thread = threading.Thread(target=self._run, daemon=True)
             print(f"Starting {self.device_name} Thread...")
@@ -85,48 +85,50 @@ class RGBD_Cam(Camera):
             print("RGBD failed to connect or Init")
     
     def _run(self):
-        try:
-            if not self._ready:
-                return 
-            while True:
-                self.thread_ready.wait()
-                frames = self.pipeline.poll_for_frames()
-                if frames:
+        while(True):
+            time.sleep(100)
+        # try:
+        #     if not self._ready:
+        #         return 
+        #     while True:
+        #         self.thread_ready.wait()
+        #         frames = self.pipeline.poll_for_frames()
+        #         if frames:
                     
-                    depth = frames.get_depth_frame()
-                    color = frames.get_color_frame()
-                    raw = np.asanyarray(depth.get_data())
-                    # print(
-                    #     "scale:", self.depth_scale,
-                    #     "raw mean:", raw.mean(),
-                    #     "meters mean:", raw.mean() * self.depth_scale
-                    # )
+        #             depth = frames.get_depth_frame()
+        #             color = frames.get_color_frame()
+        #             raw = np.asanyarray(depth.get_data())
+        #             # print(
+        #             #     "scale:", self.depth_scale,
+        #             #     "raw mean:", raw.mean(),
+        #             #     "meters mean:", raw.mean() * self.depth_scale
+        #             # )
 
-                    # for f in self.recommended_filters:
-                    #     depth = f.process(depth)
-                    if not depth or not color:
-                        continue
+        #             # for f in self.recommended_filters:
+        #             #     depth = f.process(depth)
+        #             if not depth or not color:
+        #                 continue
                     
-                    # depth = self.thresh.process(depth)
-                    # depth = self.depth_to_disparity.process(depth)
-                    # depth = self.decimation.process(depth)
-                    # depth = self.spatial.process(depth)
-                    # depth = self.temporal.process(depth)
-                    # depth = self.hole_filling.process(depth)
-                    # depth = self.disparity_to_depth.process(depth)
-                    depth_np = np.asanyarray(depth.get_data()) * self.depth_scale
+        #             # depth = self.thresh.process(depth)
+        #             # depth = self.depth_to_disparity.process(depth)
+        #             # depth = self.decimation.process(depth)
+        #             # depth = self.spatial.process(depth)
+        #             # depth = self.temporal.process(depth)
+        #             # depth = self.hole_filling.process(depth)
+        #             # depth = self.disparity_to_depth.process(depth)
+        #             depth_np = np.asanyarray(depth.get_data()) * self.depth_scale
                     
-                    color_np = np.asanyarray(color.get_data())
-                    ts = frames.get_timestamp()  # milliseconds
-                    item = {"color": color_np, "depth": depth_np, "ts": ts}
+        #             color_np = np.asanyarray(color.get_data())
+        #             ts = frames.get_timestamp()  # milliseconds
+        #             item = {"color": color_np, "depth": depth_np, "ts": ts}
 
-                    self._lock.acquire()
-                    self._latest = item
-                    self._lock.release()
-                else:
-                    time.sleep(0.0005)
-        finally:
-            self.pipeline.stop()
+        #             self._lock.acquire()
+        #             self._latest = item
+        #             self._lock.release()
+        #         else:
+        #             time.sleep(0.0005)
+        # finally:
+        #     self.pipeline.stop()
             
     def tune_depth(self, min_distance=0.07, max_distance = 0.2):
         def safe_set(opt, val):

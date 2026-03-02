@@ -169,7 +169,7 @@ class AppController {
 
     private setupVideoCanvas(): void {
         this.reader = new window.MediaMTXWebRTCReader({
-            url: new URL(`http://${window.location.hostname}:8889/mystream/whep`),
+            url: new URL(`http://169.254.0.3:8889/mystream/whep`),
             onError: (err: string) => this.setMessage(err),
             onTrack: (evt: RTCTrackEvent) => {
                 if (evt.track.kind === 'video') {

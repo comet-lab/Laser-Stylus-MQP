@@ -75,11 +75,12 @@ async def main():
     # free beam laser spot.
     therm_cam = None
     rgbd_cam = None
+      
     
     if(not mock_robot):
         therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frame_rate="Rate50Hz",focal_distance=0.2)
         rgbd_cam = RGBD_Cam() #Runs a thread internally
-        rgbd_cam.set_default_setting() # Auto-exposure
+        # rgbd_cam.set_default_setting() # Auto-exposure
     else:
         therm_cam = MockCamera(cam_type="thermal")
         rgbd_cam = MockCamera(cam_type="color")
@@ -91,9 +92,16 @@ async def main():
         camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_obj)
     else:
         camera_reg = MockCameraRegistration(therm_cam, rgbd_cam, robot_controller, laser_obj)
+    print(camera_reg.cam_M['color'])
     print("Starting Streams ")
+    
+    
     b = Broadcast(mocking=mock_robot)
-    homography_socket = Sender("media", int(os.getenv("HOMOGRAPHY_PORT", 5001)))
+    homography_socket = None 
+    if(mock_robot):
+        homography_socket = Sender("media", int(os.getenv("HOMOGRAPHY_PORT", 5001)))
+    else:
+        homography_socket = Sender("169.254.0.3", int(os.getenv("HOMOGRAPHY_PORT", 5001)))
     print(f"Broadcast connection status: {b.connect()}")
     
     # def camera_broadcast_fn():
@@ -143,11 +151,17 @@ async def main():
 
     start_pose[2,3] = 0.0
     robot_controller.go_to_pose(start_pose@home_pose,1) # Send robot to start position
+    
+    S = np.array([
+        [640/1280, 0, 0],
+        [0, 480/720, 0],
+        [0, 0, 1]
+    ])
 
     while (True):
         await control_flow_handler.main_loop() 
 
-        overlay = np.zeros([720,1280,3]).astype(np.uint8)
+        overlay = np.zeros([480,640,3]).astype(np.uint8)
         overlay = cv2.circle(overlay, (300,300), 100, (0,0,255), -1)
         latest = overlay           
             
@@ -159,7 +173,8 @@ async def main():
 
         H = np.eye(3)
         if control_flow_handler.desired_state.isTransformedViewOn:
-            H = camera_reg.get_transform_matrix()
+            H = camera_reg.cam_M['color']
+            H = S @ np.linalg.inv(H) @ np.linalg.inv(S)
                 
         H = H.astype(np.dtype(os.getenv("HOMOGRAPHY_DTYPE", "float32"))).reshape((9,))
             
@@ -172,8 +187,8 @@ async def main():
         if(type(latest) == type(None)):
             continue
 
-        if latest.shape != (1280, 720):
-            latest = cv2.resize(latest, (1280, 720), interpolation=cv2.INTER_NEAREST)
+        if latest.shape != (480, 640):
+            latest = cv2.resize(latest, (640, 480), interpolation=cv2.INTER_NEAREST)
             
         # if control_flow_handler.desired_state.heat_mask is not None and not mock_robot:
         #     latest = control_flow_handler.get_heat_overlay(latest)
