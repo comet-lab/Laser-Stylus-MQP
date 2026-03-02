@@ -26,7 +26,6 @@ from cameras.RGBD_cam import RGBD_Cam
 from laser_control.laser_arduino import Laser_Arduino
 from registration.transformations.depth_estimation import DepthEstimation
 
-# from Utilities_functions import SelectROI, loadAndEditPose, go_to_pose
 
 class Camera_Registration(System_Calibration):
     def __init__(self, therm_cam: ThermalCam, rgbd_cam: RGBD_Cam, robot_controller: Robot_Controller, laser_controller:Laser_Arduino):
@@ -46,7 +45,8 @@ class Camera_Registration(System_Calibration):
         print("[Depth Estimation] Loading file: ", self.stack_path)
         self.homography_stack = DepthEstimation.load_homography_stack_npz(self.stack_path)
         self.dense_stack = DepthEstimation.create_dense_stack(self.homography_stack, dz=0.00025)
-    
+
+        
     @staticmethod
     def circle_perimeter_pixels(center, r, num_pts=360):
             cx, cy = center
@@ -353,7 +353,6 @@ class Camera_Registration(System_Calibration):
         # np.save    (save_dir / "laser_spots.npy",       therm_image_set)
         return combinedImg, therm_img_points, rgb_img_points, obj_Points
     
-    
     def rgb_multi_layer_scan(self, heights, file_name = "homography_stack.npz"):
         homography_stack = {}
         
@@ -427,7 +426,6 @@ class Camera_Registration(System_Calibration):
         print("World reprojection error [mm]:", np.mean(world_error) * 1000)
         
         return H
-
 
     def get_path(self, points):
         self.traj_points = points

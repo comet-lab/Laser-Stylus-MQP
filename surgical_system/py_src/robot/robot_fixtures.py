@@ -1,6 +1,7 @@
 import numpy as np 
 from typing import Dict, Any, Tuple
 from dataclasses import dataclass
+from common.geometry import polygon_to_grid_map
 
 @dataclass(frozen=True)
 class GridBoundary:
@@ -9,7 +10,18 @@ class GridBoundary:
     origin: Tuple[float, float]  # world coord of cell (0,0) corner
     
 class RobotFixtures:
-    def __init__(self, boundary: Dict[str, Any]):
+    def __init__(self, pts_xy: np.ndarray = np.zeros((4,2)),
+                        square_size: float = 0.0005,
+                        padding: float = 0.0,
+                        include_boundary: bool = True,
+                        boundary: Dict[str, Any] = None):
+        
+        if boundary is None:
+            boundary = polygon_to_grid_map(pts_xy = pts_xy,
+                                           square_size = square_size,
+                                           padding=padding,
+                                           include_boundary=include_boundary)
+            
         valid_map = np.asarray(boundary["map"])
         if valid_map.ndim != 2:
             raise ValueError("boundary['map'] must be a 2D array (H,W).")
@@ -42,6 +54,8 @@ class RobotFixtures:
         if not self._in_grid(row, col):
             return False
         return bool(self.boundary.valid_map[row, col])
+    
+        
     
     
     
