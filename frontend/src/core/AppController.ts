@@ -194,16 +194,41 @@ class AppController {
     // ===================================================================
 
     private setupVideoCanvas(): void {
+        //Clean up any broken previous connection attempts
+        if (this.reader) {
+            try { this.reader.destroy(); } catch (e) {}
+            this.reader = null;
+        }
+
         this.reader = new window.MediaMTXWebRTCReader({
             url: new URL(`http://${window.location.hostname}:8889/mystream/whep`),
-            onError: (err: string) => this.setMessage(err),
+            onError: (err: string) => {
+                console.warn("Video stream not ready yet. Retrying in 2s...", err);
+                
+                //Update the loading screen text so you aren't left wondering
+                const textEl = this.ui.loadingScreen.querySelector('.loading-text');
+                if (textEl) textEl.textContent = "WAITING FOR CAMERA FEED...";
+
+                //Try again in 2 seconds (should fix double refresh)
+                setTimeout(() => this.setupVideoCanvas(), 2000);
+            },
             onTrack: (evt: RTCTrackEvent) => {
                 if (evt.track.kind === 'video') {
                     this.ui.video.srcObject = evt.streams[0];
-                    // Start the per-frame render loop
-                    this.ui.video.requestVideoFrameCallback(this.updateCanvasLoop.bind(this));
-                    // CanvasManager can now be constructed (video dimensions are known)
-                    this.initCanvasManager();
+                    
+                    //Wait until the browser actually decodes the first frame 
+                    //and knows the real width/height of the camera feed
+                    this.ui.video.onloadedmetadata = () => {
+                        //Change text back just in case it was stuck on the error text
+                        const textEl = this.ui.loadingScreen.querySelector('.loading-text');
+                        if (textEl) textEl.textContent = "INITIALIZING SYSTEM...";
+
+                        //Start the per-frame render loop
+                        this.ui.video.requestVideoFrameCallback(this.updateCanvasLoop.bind(this));
+                        
+                        //Now build the canvasManager
+                        this.initCanvasManager();
+                    };
                 }
             },
         });
