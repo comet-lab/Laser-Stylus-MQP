@@ -161,7 +161,7 @@ async def main():
     while (True):
         await control_flow_handler.main_loop() 
 
-        overlay = np.zeros([480,640,3]).astype(np.uint8)
+        overlay = np.zeros([720,1280,3]).astype(np.uint8)
         overlay = cv2.circle(overlay, (300,300), 100, (0,0,255), -1)
         latest = overlay           
             
