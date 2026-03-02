@@ -65,8 +65,8 @@ export class CanvasManager {
         cornerStrokeColor: '#ffffff',
         borderColor: 'rgba(0, 122, 255, 0.7)',
         cornerStyle: 'circle' as const,
-        cornerSize: 12,
-        touchCornerSize: 24,
+        cornerSize: 16,
+        touchCornerSize: 44,
         transparentCorners: false,
         padding: 10,
         originX: 'left' as const,
@@ -365,6 +365,7 @@ export class CanvasManager {
     }
 
     private onFixturesPointerDown(e: PointerEvent): void {
+        if (e.pointerType === 'touch') return; //Ensure no fingers draw fixtures
         if (!this.currentBrushType || !this.fixturesCanvas || !this.fixturesCtx) return;
         
         const { x, y } = this.getCanvasCoordinates(e, this.fixturesCanvas);
@@ -387,6 +388,7 @@ export class CanvasManager {
     }
 
     private onFixturesPointerMove(e: PointerEvent): void {
+        if (e.pointerType === 'touch') return; //Ensure no fingers draw fixtures
         if (!this.isFixturesDrawing || !this.fixturesCanvas) return;
         const { x, y } = this.getCanvasCoordinates(e, this.fixturesCanvas);
         this.drawFixturesBrush(x, y);
@@ -394,6 +396,7 @@ export class CanvasManager {
     }
 
     private onFixturesPointerUp(e: PointerEvent): void {
+        if (e.pointerType === 'touch') return; //Ensure no fingers draw fixtures
         if (!this.fixturesCanvas) return;
         this.isFixturesDrawing = false;
         this.lastFixturesPoint = null;

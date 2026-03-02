@@ -78,12 +78,15 @@ export class PreviewManager {
   public togglePreview(enable: boolean): void {
     this.isPreviewActive = enable;
 
+    const btnText = this.ui.executeBtn.querySelector('.btn-text');
+
     if (enable) {
       this.ui.previewToggleOn.classList.add('active');
       this.ui.previewToggleOff.classList.remove('active');
       this.ui.previewInfoPanel.classList.add('open');
       this.updateOverlaySize();
       this.refreshPreview();
+      if (btnText) btnText.textContent = 'EXECUTE';
     } else {
       this.ui.previewToggleOn.classList.remove('active');
       this.ui.previewToggleOff.classList.add('active');
@@ -208,7 +211,7 @@ export class PreviewManager {
 
     const finalDuration = serverDuration || (this.durationSeconds > 0 ? this.durationSeconds : 10);
 
-    ToastManager.clearAll();
+    //ToastManager.clearAll();
     const cm = this.getCanvasManager();
 
     if (cm && cm.checkIfPathEscapes(path)) {
@@ -431,6 +434,9 @@ export class PreviewManager {
   }
 
   public resetPreviewState(): void {
+    const btnText = this.ui.executeBtn.querySelector('.btn-text');
+
+    if (btnText) btnText.textContent = 'NEEDS PREVIEW';
     this.hasPreviewedCurrentDrawing = false;
     this.ignoreWebsocketPaths = false;
     this.pathData = [];

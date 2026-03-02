@@ -198,21 +198,25 @@ export class ExecutionManager {
         const previewMgr = this.getPreviewManager();
         const hasPreview = previewMgr.hasPreviewedCurrent();
 
-        // Also clean up the warning if the execute button state is forcibly updated 
+        //Also clean up the warning if the execute button state is forcibly updated 
         const warningDiv = document.getElementById('inline-robot-warning');
         if (warningDiv) {
             warningDiv.remove();
             this.ui.executeBtn.style.display = '';
         }
 
+        const btnText = this.ui.executeBtn.querySelector('.btn-text');
+
         if (hasPreview) {
             this.ui.executeBtn.disabled = false;
             this.ui.executeBtn.style.pointerEvents = 'auto';
             this.ui.executeBtn.style.opacity = '1';
+            if (btnText) btnText.textContent = 'EXECUTE';
         } else {
             this.ui.executeBtn.disabled = true;
             this.ui.executeBtn.style.pointerEvents = 'none';
             this.ui.executeBtn.style.opacity = '0.3';
+            if (btnText) btnText.textContent = 'NEEDS PREVIEW';
         }
     }
 }

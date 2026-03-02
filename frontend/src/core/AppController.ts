@@ -83,6 +83,7 @@ class AppController {
     // ---------------------------------------------------------------
     private canvasManager: CanvasManager | null = null;
     private reader: any = null;   // MediaMTXWebRTCReader instance
+    private wakeLock: any = null; //Keeps screen awake
 
     // ---------------------------------------------------------------
     // Constructor
@@ -163,6 +164,7 @@ class AppController {
         this.setupWebSocket();
         this.bindEvents();
         this.setupInitialState();
+        this.setupWakeLock();
     }
 
     private setupInitialState(): void {
@@ -287,6 +289,40 @@ class AppController {
         } catch (e) {
             console.warn("Could not reach endpoints to reset masks:", e);
         }
+    }
+
+    /**
+     * Methods to handle keeping the screen awake while the app is open
+     */
+    private async requestWakeLock(): Promise<void> {
+        try {
+            if ('wakeLock' in navigator) {
+                this.wakeLock = await (navigator as any).wakeLock.request('screen');
+                console.log('Screen Wake Lock acquired');
+                
+                this.wakeLock.addEventListener('release', () => {
+                    console.log('Screen Wake Lock released');
+                });
+            }
+        } catch (err: any) {
+            console.warn(`Wake Lock error: ${err.name}, ${err.message}`);
+        }
+    }
+    private setupWakeLock(): void {
+        //Browsers require a user gesture to grant a wake lock
+        const initWakeLock = () => {
+            this.requestWakeLock();
+            //Once acquired, we don't need this listener anymore
+            document.removeEventListener('pointerdown', initWakeLock);
+        };
+        document.addEventListener('pointerdown', initWakeLock);
+        //If the user minimizes the browser or switches tabs, the OS releases the lock.
+        //We must re-request it when they come back to the app.
+        document.addEventListener('visibilitychange', () => {
+            if (this.wakeLock !== null && document.visibilityState === 'visible') {
+                this.requestWakeLock();
+            }
+        });
     }
 
     /**
@@ -898,16 +934,19 @@ class AppController {
             };
         };
 
+        //Raw touchevents handled for zoom, not send to canvas
         this.ui.viewport.addEventListener('touchstart', (e: TouchEvent) => {
+            e.stopPropagation(); //Block from reaching canvas
             if (e.touches.length === 2) {
                 e.preventDefault();
                 initialDistance = getDistance(e.touches);
                 startZoom = this.zoomLevel;
                 lastCenter = getCenter(e.touches);
             }
-        }, { passive: false });
+        }, { capture: true, passive: false });
 
         this.ui.viewport.addEventListener('touchmove', (e: TouchEvent) => {
+            e.stopPropagation(); //Block from reaching canvas
             if (e.touches.length === 2 && this.ui.zoomWrapper) {
                 e.preventDefault();
 
@@ -926,7 +965,27 @@ class AppController {
                 // Zoom exactly towards the center point of the two fingers
                 applyZoomAt(currentCenter.x, currentCenter.y, newZoom);
             }
-        }, { passive: false });
+        }, { capture: true, passive: false });
+
+        this.ui.viewport.addEventListener('touchend', (e: TouchEvent) => {
+            e.stopPropagation(); //Block from reaching canvas
+        }, { capture: true, passive: false });
+
+        this.ui.viewport.addEventListener('touchcancel', (e: TouchEvent) => {
+            e.stopPropagation(); //Block from reaching canvas
+        }, { capture: true, passive: false });
+
+        //Block finger touches at the viewport level, but allow pen/mouse
+        const blockTouchPointers = (e: PointerEvent) => {
+            if (e.pointerType === 'touch') {
+                e.stopPropagation();
+            }
+        };
+
+        this.ui.viewport.addEventListener('pointerdown', blockTouchPointers, { capture: true });
+        this.ui.viewport.addEventListener('pointermove', blockTouchPointers, { capture: true });
+        this.ui.viewport.addEventListener('pointerup', blockTouchPointers, { capture: true });
+        this.ui.viewport.addEventListener('pointercancel', blockTouchPointers, { capture: true });
     }
 
     // ===================================================================
@@ -964,7 +1023,10 @@ class AppController {
             this.ui.heightTrigger.disabled = false;
 
             if (!this.isChangingHeight) {
-                const heightCm = state.current_height * 100;
+                let heightCm = state.current_height * 100;
+                if (Math.abs(heightCm) < 0.05) {
+                    heightCm = 0;
+                }
                 const displayVal = heightCm.toFixed(1);
                 //Update the physical slider position
                 this.ui.heightSlider.value = displayVal;
