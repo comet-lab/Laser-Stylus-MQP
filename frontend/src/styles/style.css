@@ -803,10 +803,11 @@ body.menu-bottom.sidebar-right #viewport {
    2. Drawing / Fabric Canvas (10)
    3. Preview Path Overlay (20)
    4. Fixtures Canvas (30)
-   5. Heat Markers / Robot Markers (50)
-   6. UI Panels (Sidebars/Top) (60)
-   7. Overlay Dimmer (100)
-   8. Popups (Settings/Prepare) (101)
+   5. Heat Markers Canvas (40)
+   6. Live Robot/Preview Markers (50)
+   7. UI Panels (Sidebars/Top) (60)
+   8. Overlay Dimmer (100)
+   9. Popups (Settings/Prepare) (101)
 */
 
 #video { z-index: 0; }
@@ -817,6 +818,7 @@ body.menu-bottom.sidebar-right #viewport {
 
 #previewOverlay { z-index: 20 !important; }
 #fixturesCanvas { z-index: 30 !important; }
+#markerCanvas { z-index: 40 !important; pointer-events: none; }
 
 #robot-marker,
 #preview-marker { z-index: 50 !important; }
@@ -828,4 +830,3 @@ body.menu-bottom.sidebar-right #viewport {
 
 #preparePopup,
 #settingsPopup { z-index: 101; }
-
