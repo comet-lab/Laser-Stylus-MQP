@@ -5,6 +5,7 @@ from laser_control.mock_laser import MockLaser
 from motion_planning.motion_planning import Motion_Planner
 from backend.listener import BackendConnection
 from robot.controllers.trajectory_controller import TrajectoryController
+from robot.robot_fixtures import RobotFixtures, GridBoundary
 from backend.datastorage import SystemDataStore, CameraFrame, RobotState, UserCommand
 from dataclasses import asdict
 from typing import Dict, Any, Tuple
