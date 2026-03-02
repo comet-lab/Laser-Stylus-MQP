@@ -48,7 +48,7 @@ class Broadcast:
         #     frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
         # elif frame.shape[2] == 1:
         #     frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
-        # frame = cv2.resize(frame, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+        frame = cv2.resize(frame, (640,480), interpolation=cv2.INTER_AREA)
         frame = np.ascontiguousarray(frame)
         # if not self.connected or self.process == None:
         #     print("not connected... Initializing ffmpeg process")
