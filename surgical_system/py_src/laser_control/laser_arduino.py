@@ -16,6 +16,7 @@ class Laser_Arduino:
         self.START_BYTE = b'A'
         self.port.port = port
         self.vf_valid_flag = False
+        self.laser_on = False
         self.FWHM = np.sqrt(2*np.log(2))
         self.laserInfo = {
             "wavelength": 10.6e-6,     # meters
@@ -49,9 +50,13 @@ class Laser_Arduino:
             raise Exception
 
     def set_output(self, laser_on): 
+        self.laser_on = laser_on
         on = laser_on and self.vf_valid_flag
         # print("[Laser State]: ", on)
         self._write(1, on)
+        
+    def is_firing(self):
+        return self.laser_on and self.vf_valid_flag
     
     def get_beam_width(self, laser_height): # m
         w0 = self.laserInfo['w0']

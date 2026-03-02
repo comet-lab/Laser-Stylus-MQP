@@ -45,7 +45,9 @@ class Handler:
         # Recording Data
         self._start_recording_time = 0
         self._current_recording_time = 0; 
-        self.recording_data = False # TODO TEMP var
+        self.recording_data = False 
+        self.data_storage = data_storage
+        self.recording_data_flag = False # TODO TEMP var
         
         
         self.virtual_fixture, self.dx, self.dy, self.distance_field = self.generate_virtual_fixture()
@@ -186,12 +188,19 @@ class Handler:
 ###------------------------ Robot Tracking -------------------####                
     def _do_current_position(self):
         now = time.time()
+        curr_position = self.robot_controller.current_robot_to_world_position()
+        
+        if self.recording_data:
+            self.data_storage.put_robot(curr_position, 
+                                        np.zeros(3),
+                                        t=self._current_recording_time - self._start_recording_time,
+                                        laser_on=self.laser_obj.is_firing())
+            
         if now - self._last_pose_ui < 1/75.0:  # 75 Hz
             return
         self._last_pose_ui = now
     
         warped = self.desired_state.isTransformedViewOn
-        curr_position = self.robot_controller.current_robot_to_world_position()
         current_pixel_location = self.cam_reg.get_world_m_to_UI(self.cam_type, curr_position, warped)[0].astype(np.int16)
         
         self._track_virtual_fixtures(current_pixel_location)
@@ -359,6 +368,11 @@ class Handler:
                     return
                 pixel = np.array([[self.desired_state.x, self.desired_state.y]])
                 
+                payload = {"pixel": pixel}
+                self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
+                                        mode = "live control",
+                                        payload=payload)
+                
                 warped_view = self.desired_state.isTransformedViewOn
                 target_world_point = self.cam_reg.get_UI_to_world_m(
                     self.cam_type, 
@@ -382,20 +396,6 @@ class Handler:
 
 ###------------------------ Data Collection ------------------####
 
-    def _store_camera_feed(self, 
-                           rgb_img: np.ndarray = np.array([]), 
-                           therm_img: np.ndarray = np.array([])):
-        pass
-    
-    def _store_robot_state(self,  
-                           q: np.ndarray, # (7,)
-                           dq: np.ndarray): # (7,))
-        pass
-    
-    def _store_user_input(self,
-                          mode: str,                     # "draw", "live_control"
-                          payload: Dict[str, Any]):       # markers, path, etc.)
-        pass 
 
     async def main_loop(self):
         # Yield to other threads (video stream, websocket comms)
@@ -408,22 +408,39 @@ class Handler:
         # print(self.desired_state.heat_markers)
         self._do_current_position()
         
+        if self.recording_data_flag and not self.recording_data:
+            self.recording_data = True
+            self._start_recording_time = time.time()
+        else:
+            self.recording_data = False
+        
+        if self.recording_data:
+            self._current_recording_time = time.time() 
         
         if(self.desired_state.raster_mask is not None
                and not self.robot_controller.is_trajectory_running()):
-                self.desired_state.x = None
-                self.desired_state.y = None
-                self.laser_obj.set_output(False)
-                print("Raster Trigger")
-                raster = self._read_raster()
-                if len(raster) < 1:
-                    print("[Warning] : Raster path is empty")
-                    self._package_path(np.empty((1, 2), dtype=float), -1)
-                else: 
-                    self.current_traj = self._do_create_path(raster)
-                    
-                self.desired_state.raster_mask = None
-                self.desired_state.path = None
+            self.desired_state.x = None
+            self.desired_state.y = None
+            self.laser_obj.set_output(False)
+            print("Raster Trigger")
+            raster = self._read_raster()
+            
+            if len(raster) < 1:
+                print("[Warning] : Raster path is empty")
+                self._package_path(np.empty((1, 2), dtype=float), -1)
+            else: 
+                self.current_traj = self._do_create_path(raster)
+                
+            payload = {"pixel points": raster,
+                        "img": self.desired_state.raster_mask,
+                        "traj":  self.current_traj}
+            
+            self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
+                                        mode = "raster",
+                                        payload=payload)
+            
+            self.desired_state.raster_mask = None
+            self.desired_state.path = None
                 
         elif(self.desired_state.path is not None and len(self.desired_state.path) > 1
                 and not self.robot_controller.is_trajectory_running()):
@@ -432,6 +449,12 @@ class Handler:
             path = self._read_path()
             
             self.current_traj = self._do_create_path(path)
+            
+            payload = {"pixel points": self.desired_state.path}
+                
+            self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
+                                        mode = "outline",
+                                        payload=payload)
             
             self.desired_state.x = None
             self.desired_state.y = None
@@ -465,6 +488,10 @@ class Handler:
             if(self.current_traj is not None and self.desired_state.executeCommand
                    and not self.robot_controller.is_trajectory_running()):
                 print("Executing Path")
+                payload = {"traj":  self.current_traj}
+                self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
+                                        mode = "execute",
+                                        payload=payload)
                 self._do_path(self.current_traj)
                 self.desired_state.executeCommand = None
                 self.current_traj = None
