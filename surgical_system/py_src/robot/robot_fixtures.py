@@ -2,6 +2,7 @@ import numpy as np
 from typing import Dict, Any, Tuple
 from dataclasses import dataclass
 from common.geometry import polygon_to_grid_map
+import matplotlib.pyplot as plt
 
 @dataclass(frozen=True)
 class GridBoundary:
@@ -56,7 +57,53 @@ class RobotFixtures:
             return False
         return bool(self.boundary.valid_map[row, col])
     
+    def plot_valid_region(self, ax=None, show_centers=False):
+        """
+        Visualize valid fixture region in WORLD coordinates.
+        """
+
+        if ax is None:
+            fig, ax = plt.subplots()
+
+        valid = self.boundary.valid_map
+        s = self.boundary.grid_size
+        ox, oy = self.boundary.origin
+
+        H, W = valid.shape
+
+        # ---- compute world extents ----
+        xmin = ox
+        xmax = ox + W * s
+        ymin = oy
+        ymax = oy + H * s
+
+        # imshow expects [xmin,xmax,ymin,ymax]
+        ax.imshow(
+            valid,
+            origin="lower",          # IMPORTANT (robot frame)
+            extent=[xmin, xmax, ymin, ymax],
+            interpolation="nearest",
+            alpha=0.7,
+        )
+
+        # ---- optional: draw cell centers ----
+        if show_centers:
+            xs = ox + (np.arange(W) + 0.5) * s
+            ys = oy + (np.arange(H) + 0.5) * s
+            XX, YY = np.meshgrid(xs, ys)
+            ax.scatter(XX[valid], YY[valid], s=2)
+
+        ax.set_aspect("equal")
+        ax.set_xlabel("X [m]")
+        ax.set_ylabel("Y [m]")
+        ax.set_title("Robot Virtual Fixture (Valid Region)")
+        ax.grid(True, alpha=0.3)
+
+        return ax
+    
         
     
     
+if __name__ == "__main__":
     
+    pass 
