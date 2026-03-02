@@ -174,7 +174,7 @@ async def main():
         H = np.eye(3)
         if control_flow_handler.desired_state.isTransformedViewOn:
             H = camera_reg.cam_M['color']
-            H = S @ np.linalg.inv(H) @ np.linalg.inv(S)
+            H = np.linalg.inv(H @ S)
                 
         H = H.astype(np.dtype(os.getenv("HOMOGRAPHY_DTYPE", "float32"))).reshape((9,))
             
@@ -187,8 +187,8 @@ async def main():
         if(type(latest) == type(None)):
             continue
 
-        if latest.shape != (480, 640):
-            latest = cv2.resize(latest, (640, 480), interpolation=cv2.INTER_NEAREST)
+        if latest.shape != (720, 1280):
+            latest = cv2.resize(latest, (1280, 720), interpolation=cv2.INTER_NEAREST)
             
         # if control_flow_handler.desired_state.heat_mask is not None and not mock_robot:
         #     latest = control_flow_handler.get_heat_overlay(latest)
