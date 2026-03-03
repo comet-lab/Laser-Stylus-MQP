@@ -6,6 +6,7 @@ import * as Utils from '../utils/math_utils';
 
 export class CanvasManager {
     private fCanvas: fabric.Canvas;
+    private fMarkerCanvas: fabric.StaticCanvas;
     private video: HTMLVideoElement;
     private apiBaseUrl: string;
     private onShapeComplete: () => void;
@@ -56,7 +57,7 @@ export class CanvasManager {
     private readonly SHAPE_DEFAULTS = {
         fill: 'transparent',
         stroke: 'rgba(0, 122, 255, 0.7)',
-        strokeWidth: 6,
+        strokeWidth: 4,
         strokeUniform: true,
         strokeLineCap: 'round' as const,
         strokeLineJoin: 'round' as const,
@@ -65,8 +66,8 @@ export class CanvasManager {
         cornerStrokeColor: '#ffffff',
         borderColor: 'rgba(0, 122, 255, 0.7)',
         cornerStyle: 'circle' as const,
-        cornerSize: 12,
-        touchCornerSize: 24,
+        cornerSize: 16,
+        touchCornerSize: 44,
         transparentCorners: false,
         padding: 10,
         originX: 'left' as const,
@@ -77,7 +78,7 @@ export class CanvasManager {
     // --- CONFIG: Other Constants ---
     private readonly BORDER_THICKNESS = 4;
 
-    public onShapeModified: () => void = () => {};
+    public onShapeModified: () => void = () => { };
 
     constructor(
         canvas: HTMLCanvasElement,
@@ -118,7 +119,7 @@ export class CanvasManager {
         };
 
         const brush = new fabric.PencilBrush(this.fCanvas);
-        brush.width = 6;
+        brush.width = 4;
         brush.color = 'rgba(0, 122, 255, 0.7)';
 
         this.fCanvas.freeDrawingBrush = brush;
@@ -141,6 +142,14 @@ export class CanvasManager {
             }
         });
         this.fCanvas.on('path:created', (e: any) => {
+            //Strict one-shape enforcement for freehand strokes
+            const shapes = this.fCanvas.getObjects().filter(o => !(o as any)._isMarker);
+            if (shapes.length > 1) {
+                this.fCanvas.remove(e.path);
+                this.fCanvas.isDrawingMode = false;
+                return; //Abort processing this duplicate
+            }
+
             if (e.path) {
                 e.path.set({
                     ...this.SHAPE_DEFAULTS,
@@ -155,6 +164,21 @@ export class CanvasManager {
             this.onShapeComplete();
         });
 
+        const markerCanvasEl = document.createElement('canvas');
+        markerCanvasEl.id = 'markerCanvas';
+        markerCanvasEl.width = canvas.width;
+        markerCanvasEl.height = canvas.height;
+        markerCanvasEl.style.position = 'absolute';
+        markerCanvasEl.style.top = '0';
+        markerCanvasEl.style.left = '0';
+        //We set pointer-events to none so clicks fall through to the drawing/fixture canvas below it
+        markerCanvasEl.style.pointerEvents = 'none';
+        document.getElementById('zoom-wrapper')?.appendChild(markerCanvasEl);
+
+        this.fMarkerCanvas = new fabric.StaticCanvas(markerCanvasEl, {
+            preserveObjectStacking: true
+        });
+
         this.createFixturesCanvas(canvas);
     }
 
@@ -163,9 +187,12 @@ export class CanvasManager {
         this.fixturesCanvas.id = 'fixturesCanvas';
         this.fixturesCanvas.width = mainCanvas.width;
         this.fixturesCanvas.height = mainCanvas.height;
+        this.fixturesCanvas.style.position = 'absolute';
+        this.fixturesCanvas.style.top = '0';
+        this.fixturesCanvas.style.left = '0';
         this.fixturesCanvas.style.opacity = '0.6';
         this.fixturesCtx = this.fixturesCanvas.getContext('2d', { willReadFrequently: true });
-        mainCanvas.parentElement?.prepend(this.fixturesCanvas);
+        document.getElementById('zoom-wrapper')?.appendChild(this.fixturesCanvas);
     }
 
     // =========================================================================
@@ -175,6 +202,10 @@ export class CanvasManager {
     public dispose(): void {
         if (this.fCanvas) {
             this.fCanvas.dispose();
+        }
+        if (this.fMarkerCanvas) {
+            this.fMarkerCanvas.dispose();
+            document.getElementById('markerCanvas')?.remove();
         }
         if (this.fixturesCanvas) {
             this.fixturesCanvas.remove();
@@ -204,6 +235,7 @@ export class CanvasManager {
             //Draw the Fabric canvas on top (foreground)
             //We use the raw canvas element from Fabric
             ctx.drawImage(this.fCanvas.toCanvasElement(), 0, 0, tempCanvas.width, tempCanvas.height);
+            ctx.drawImage(this.fMarkerCanvas.toCanvasElement(), 0, 0, tempCanvas.width, tempCanvas.height);
         }
 
         return tempCanvas.toDataURL('image/jpeg', 0.8); // JPEG is faster/smaller for video frames
@@ -365,8 +397,9 @@ export class CanvasManager {
     }
 
     private onFixturesPointerDown(e: PointerEvent): void {
+        if (e.pointerType === 'touch') return; //Ensure no fingers draw fixtures
         if (!this.currentBrushType || !this.fixturesCanvas || !this.fixturesCtx) return;
-        
+
         const { x, y } = this.getCanvasCoordinates(e, this.fixturesCanvas);
 
         // --- GLOBAL MARKER DELETION ---
@@ -377,7 +410,7 @@ export class CanvasManager {
         if (this.fixturesApplied) {
             this.restoreDrawingState();
         }
-        
+
         this.isFixturesDrawing = true;
         this.fixturesCanvas.setPointerCapture(e.pointerId);
         this.lastFixturesPoint = { x, y };
@@ -387,6 +420,7 @@ export class CanvasManager {
     }
 
     private onFixturesPointerMove(e: PointerEvent): void {
+        if (e.pointerType === 'touch') return; //Ensure no fingers draw fixtures
         if (!this.isFixturesDrawing || !this.fixturesCanvas) return;
         const { x, y } = this.getCanvasCoordinates(e, this.fixturesCanvas);
         this.drawFixturesBrush(x, y);
@@ -394,6 +428,7 @@ export class CanvasManager {
     }
 
     private onFixturesPointerUp(e: PointerEvent): void {
+        if (e.pointerType === 'touch') return; //Ensure no fingers draw fixtures
         if (!this.fixturesCanvas) return;
         this.isFixturesDrawing = false;
         this.lastFixturesPoint = null;
@@ -761,7 +796,15 @@ export class CanvasManager {
         }
 
         // --- DRAWING MODE (Shapes) ---
-        if (this.hasPlacedShape) return;
+        //Hard lock against multiple shapes
+        const existingShapes = this.fCanvas.getObjects().filter(o => !(o as any)._isMarker);
+        if (existingShapes.length > 0) {
+            this.hasPlacedShape = true;
+            this.fCanvas.isDrawingMode = false;
+            return;
+        }
+
+        if (this.hasPlacedShape || this.isCreatingShape) return;
         if (!this.currentShapeType || this.currentShapeType === 'freehand') return;
         if (opt.target) return;
 
@@ -860,11 +903,11 @@ export class CanvasManager {
                 Math.pow(clickRelY - (closeBoxObj.top || 0), 2)
             );
 
-            if (distToX < 15) {
+            if (distToX < 24) {
                 this.removeMarker(group);
                 // Fire and forget network call
                 this.submitHeatMarkers(this.getHeatMarkersInVideoSpace()).catch(console.error);
-                return true; 
+                return true;
             }
         }
         return false;
@@ -945,33 +988,36 @@ export class CanvasManager {
         this.fCanvas.setDimensions({ width, height });
 
         this.fCanvas.getObjects().forEach(obj => {
-            //Scale Position
-            const newLeft = obj.left * scaleX;
-            const newTop = obj.top * scaleY;
+            this.fMarkerCanvas.setDimensions({ width, height });
 
-            //Scale Dimensions
-            //We multiply the existing scale factor by the new resize ratio
-            const newScaleX = obj.scaleX * scaleX;
-            const newScaleY = obj.scaleY * scaleY;
+            const scaleObjects = (obj: any) => {
+                const newLeft = obj.left * scaleX;
+                const newTop = obj.top * scaleY;
+                const newScaleX = obj.scaleX * scaleX;
+                const newScaleY = obj.scaleY * scaleY;
 
-            obj.set({
-                left: newLeft,
-                top: newTop,
-                scaleX: newScaleX,
-                scaleY: newScaleY
-            });
+                obj.set({
+                    left: newLeft,
+                    top: newTop,
+                    scaleX: newScaleX,
+                    scaleY: newScaleY
+                });
 
-            //Marker Handling
-            if ((obj as any)._isMarker) {
-                (obj as any)._tipX = (obj as any)._tipX * scaleX;
-                (obj as any)._tipY = (obj as any)._tipY * scaleY;
-            }
+                if (obj._isMarker) {
+                    obj._tipX = obj._tipX * scaleX;
+                    obj._tipY = obj._tipY * scaleY;
+                }
+                obj.setCoords();
+            };
 
-            obj.setCoords();
+            this.fCanvas.getObjects().forEach(scaleObjects);
+            this.fMarkerCanvas.getObjects().forEach(scaleObjects);
+
+            this.fMarkerCanvas.requestRenderAll();
         });
 
-        // 4. Handle Fixtures (Raster) Canvas Scaling
-        // We scale the bitmap image to fit the new size
+        //Handle Fixtures (Raster) Canvas Scaling
+        //We scale the bitmap image to fit the new size
         if (this.fixturesCanvas && this.fixturesCtx) {
             // Create a temporary copy of the current fixtures
             const tempCanvas = document.createElement('canvas');
@@ -1005,28 +1051,28 @@ export class CanvasManager {
     public backupDrawing(): void {
         // Grab all objects that aren't thermal markers
         const objects = this.fCanvas.getObjects().filter(o => !(o as any)._isMarker);
-        
+
         // Serialize them to JSON objects (ignoring custom marker properties)
         this.backupDrawingState = objects.map(o => o.toObject(['_isMarker']));
     }
 
     public async restoreDrawing(): Promise<void> {
         if (this.backupDrawingState.length === 0) return;
-        
+
         this.clearDrawing();
-        
+
         try {
             const enlivened = await fabric.util.enlivenObjects(this.backupDrawingState);
-            
+
             enlivened.forEach((obj: any) => {
                 obj.set({ selectable: true, evented: true });
                 this.fCanvas.add(obj);
             });
-            
+
             this.fCanvas.requestRenderAll();
             this.hasPlacedShape = true;
             this.onShapeComplete();
-            
+
         } catch (error) {
             console.error("Failed to restore drawing backup:", error);
         }
@@ -1041,21 +1087,11 @@ export class CanvasManager {
         this.disableDrawing();
         this.isMarkerMode = true;
         this.fCanvas.defaultCursor = 'crosshair';
-
-        this.markerObjects.forEach(m => {
-            m.selectable = true;
-            m.evented = true;
-            m.hoverCursor = 'pointer';
-        });
     }
 
     public disableMarkerMode(): void {
         this.isMarkerMode = false;
         this.fCanvas.defaultCursor = 'default';
-        this.markerObjects.forEach(m => {
-            m.selectable = false;
-            m.evented = false;
-        });
     }
 
     private ensureMarkersOnTop(): void {
@@ -1166,19 +1202,18 @@ export class CanvasManager {
         (group as any)._tipX = x;
         (group as any)._tipY = y;
 
-        this.fCanvas.add(group);
+        this.fMarkerCanvas.add(group);
         this.markerObjects.push(group);
-        this.fCanvas.requestRenderAll();
-        this.ensureMarkersOnTop();
+        this.fMarkerCanvas.requestRenderAll();
 
         // Notify UI
         this.onMarkersChange();
     }
 
     private removeMarker(markerGroup: fabric.Group): void {
-        this.fCanvas.remove(markerGroup);
+        this.fMarkerCanvas.remove(markerGroup);
         this.markerObjects = this.markerObjects.filter(m => m !== markerGroup);
-        this.fCanvas.requestRenderAll();
+        this.fMarkerCanvas.requestRenderAll();
         // Notify UI
         this.onMarkersChange();
     }
@@ -1292,16 +1327,16 @@ export class CanvasManager {
         if (this.hasFixtures() && this.fixturesCtx) {
             // Grab the raw pixel data from the fixtures canvas
             const imgData = this.fixturesCtx.getImageData(0, 0, width, height).data;
-            
+
             for (const p of pixels) {
                 const px = Math.floor(p.x);
                 const py = Math.floor(p.y);
-                
+
                 // Ensure we don't check outside the array bounds
                 if (px >= 0 && px < width && py >= 0 && py < height) {
                     // Calculate the index for the Alpha channel of this specific (x,y) pixel
                     const alphaIndex = (py * width + px) * 4 + 3;
-                    
+
                     // If the alpha channel is greater than 0, the user drew a fixture here
                     if (imgData[alphaIndex] > 0) {
                         hasFixtureOverlap = true;
@@ -1570,10 +1605,10 @@ export class CanvasManager {
         formData.append('speed', '10');
         formData.append('density', '0');
         formData.append('pixels', '[]');
-        
+
         //Force the backend to process the file by faking that fill is enabled
-        formData.append('is_fill', 'true'); 
-        
+        formData.append('is_fill', 'true');
+
         try {
             //Borrow fixture blob generator to make a clean white image
             const blob = await this.generateBlankFixtureBlob();
