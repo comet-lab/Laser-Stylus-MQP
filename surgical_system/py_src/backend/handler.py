@@ -186,6 +186,7 @@ class Handler:
             ax.plot(xs, ys_plot, linewidth=1)  # default color
         ax.set_axis_off()
         fig.savefig("plots/raster path.png")
+        plt.close(fig)
         return path
     
 ###------------------------ Virtual Fixtures -------------------####    
@@ -232,7 +233,6 @@ class Handler:
         if self.desired_state.heat_markers != None:
             if(len(self.desired_state.heat_markers) == 0 ):
                 return
-            temps = np.zeros(len(self.desired_state.heat_markers))
             markers = np.array([[pixel['x'], pixel['y']] for pixel in self.desired_state.heat_markers])
             # print("[Temperature Markers] Marker Locations: ", markers)
             warped_view = self.desired_state.isTransformedViewOn
@@ -252,7 +252,7 @@ class Handler:
             
             for i, marker in enumerate(self.desired_state.heat_markers):
                 if valid[i]:
-                    self.desired_state.heat_markers[i]["temp"] = float(therm_img[ys[i], xs[i]])
+                    self.desired_state.heat_markers[i]["temp"] = float(temps[i])
                 else:
                     marker["temp"] = None
                     
@@ -286,7 +286,7 @@ class Handler:
             ax.plot(xs, ys_plot, linewidth=1)  # default color
         ax.set_axis_off()
         fig.savefig("plots/pixels path.png")
-        plt.close()
+        plt.close(fig)
         
         warped_view = self.desired_state.isTransformedViewOn
         # print("Warped Path: ", warped_view)
@@ -312,7 +312,7 @@ class Handler:
     
     def _do_show_path(self, traj: TrajectoryController):
         target_positions = traj.get_path_position()
-        fig, ax = plt.subplots(figsize=(8,4))
+        # fig, ax = plt.subplots(figsize=(8,4))
         # ax.imshow(img, cmap='gray')
         # if len(target_positions) > 1:
         #     xs = [p[0] for p in target_positions]
@@ -510,7 +510,9 @@ class Handler:
             self.desired_state.y = None
             self.desired_state.path = None
             
-        self.desired_state.current_height = self.robot_controller.current_robot_to_world_position()[-1]
+        world_pos = self.robot_controller.current_robot_to_world_position()
+        world_z = world_pos[-1]
+        self.desired_state.current_height = world_z
 
         if(self.desired_state.isRobotOn):          
             self.working_height = self.desired_state.height / 100.0 if self.desired_state.height else  0 # cm to m
@@ -521,7 +523,7 @@ class Handler:
             # "path?", self.desired_state.path is not None,
             # "Path event?", self.desired_state.pathEvent,
             # "traj_running?", self.robot_controller.is_trajectory_running())
-            height_diff = self.working_height - self.robot_controller.current_robot_to_world_position()[-1]
+            height_diff = self.working_height - world_z
             height_change = np.abs(height_diff) > 0.0001 #0.1 mm
             # print(f"[Robot Height] Height Change: {height_change}")
             if(self.robot_controller.is_trajectory_running() and self.path_display_pixels is not None):

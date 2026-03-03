@@ -111,7 +111,7 @@ class RobotFixtures:
         ax.grid(True, alpha=0.3)
         # plt.show()
         fig.savefig("plots/robot fixtures.png")
-        plt.close()
+        plt.close(fig)
 
         return ax
     
