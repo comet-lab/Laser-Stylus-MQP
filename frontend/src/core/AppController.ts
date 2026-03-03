@@ -494,10 +494,31 @@ class AppController {
 
         // --- Real-time drawing pointer events ---
         this.ui.realTimePen.addEventListener('click', () => this.toolHandler.handleRealTimeToolSelection(this.ui.realTimePen, 'pen'));
-        this.ui.viewport.addEventListener('pointerdown', (e) => this.realTime.handleStart(e));
-        this.ui.viewport.addEventListener('pointermove', (e) => this.realTime.handleMove(e));
-        this.ui.viewport.addEventListener('pointerup', (e) => this.realTime.handleEnd(e));
-        this.ui.viewport.addEventListener('pointercancel', (e) => this.realTime.handleEnd(e));
+        
+        //Gate the real-time routing so it only takes the pointer if we are actively on the path tab
+        this.ui.viewport.addEventListener('pointerdown', (e) => {
+            if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
+                this.realTime.handleStart(e);
+            }
+        });
+        
+        this.ui.viewport.addEventListener('pointermove', (e) => {
+            if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
+                this.realTime.handleMove(e);
+            }
+        });
+        
+        this.ui.viewport.addEventListener('pointerup', (e) => {
+            if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
+                this.realTime.handleEnd(e);
+            }
+        });
+        
+        this.ui.viewport.addEventListener('pointercancel', (e) => {
+            if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
+                this.realTime.handleEnd(e);
+            }
+        });
 
         // --- Processing mode toggle ---
         this.ui.processingModeSwitch.addEventListener('change', () => this.modeManager.toggleMode());
