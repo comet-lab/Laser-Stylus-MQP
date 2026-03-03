@@ -1096,9 +1096,9 @@ export class CanvasManager {
 
     private ensureMarkersOnTop(): void {
         this.markerObjects.forEach(markerGroup => {
-            this.fCanvas.bringObjectToFront(markerGroup);
+            this.fMarkerCanvas.bringObjectToFront(markerGroup);
         });
-        this.fCanvas.requestRenderAll();
+        this.fMarkerCanvas.requestRenderAll();
     }
 
     public showMarkers(): void {
@@ -1219,7 +1219,7 @@ export class CanvasManager {
     }
 
     public clearMarkers(): void {
-        this.markerObjects.forEach(m => this.fCanvas.remove(m));
+        this.markerObjects.forEach(m => this.fMarkerCanvas.remove(m));
         this.markerObjects = [];
         this.fMarkerCanvas.requestRenderAll();
         // Notify UI
