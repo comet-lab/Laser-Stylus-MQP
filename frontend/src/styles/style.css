@@ -42,6 +42,18 @@ body {
   touch-action: none;
 }
 
+button,
+.action-btn,
+.icon-btn,
+.mode-btn,
+.popout-trigger,
+#top-panel,
+#left-panel,
+.prepare-header,
+.settings-header {
+  touch-action: none !important;
+}
+
 body {
   font-weight: 400;
   background-color: #000000;

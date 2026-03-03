@@ -7,6 +7,8 @@ import * as Utils from '../utils/math_utils';
 export class CanvasManager {
     private fCanvas: fabric.Canvas;
     private fMarkerCanvas: fabric.StaticCanvas;
+    private offscreenCanvas: HTMLCanvasElement;
+    private offscreenCtx: CanvasRenderingContext2D;
     private video: HTMLVideoElement;
     private apiBaseUrl: string;
     private onShapeComplete: () => void;
@@ -101,6 +103,9 @@ export class CanvasManager {
             el.__canvas.dispose();
             el.__canvas = undefined;
         }
+
+        this.offscreenCanvas = document.createElement('canvas');
+        this.offscreenCtx = this.offscreenCanvas.getContext('2d', { willReadFrequently: true })!;
 
         this.fCanvas = new fabric.Canvas(canvas, {
             selection: false,
@@ -223,22 +228,25 @@ export class CanvasManager {
 
     public getVideoSnapshotDataURL(): string {
         //Create a temp canvas at the exact video resolution
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = this.video.videoWidth;
-        tempCanvas.height = this.video.videoHeight;
-        const ctx = tempCanvas.getContext('2d');
+        const width = this.fCanvas.getWidth();
+        const height = this.fCanvas.getHeight();
+        this.offscreenCanvas.width = width;
+        this.offscreenCanvas.height = height;
+        
+        this.offscreenCtx.fillStyle = "#ffffff";
+        this.offscreenCtx.fillRect(0, 0, width, height);
 
-        if (ctx) {
+        if (this.offscreenCtx) {
             //Draw the video frame first (background)
-            ctx.drawImage(this.video, 0, 0, tempCanvas.width, tempCanvas.height);
+            this.offscreenCtx.drawImage(this.video, 0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
 
             //Draw the Fabric canvas on top (foreground)
             //We use the raw canvas element from Fabric
-            ctx.drawImage(this.fCanvas.toCanvasElement(), 0, 0, tempCanvas.width, tempCanvas.height);
-            ctx.drawImage(this.fMarkerCanvas.toCanvasElement(), 0, 0, tempCanvas.width, tempCanvas.height);
+            this.offscreenCtx.drawImage(this.fCanvas.toCanvasElement(), 0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
+            this.offscreenCtx.drawImage(this.fMarkerCanvas.toCanvasElement(), 0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
         }
 
-        return tempCanvas.toDataURL('image/jpeg', 0.8); // JPEG is faster/smaller for video frames
+        return this.offscreenCanvas.toDataURL('image/jpeg', 0.8); // JPEG is faster/smaller for video frames
     }
 
     public async getPreviewPath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<{ duration: number, path: Position[] }> {
@@ -276,14 +284,12 @@ export class CanvasManager {
     private async generateRasterBlob(): Promise<Blob> {
         const width = this.fCanvas.getWidth();
         const height = this.fCanvas.getHeight();
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = width;
-        tempCanvas.height = height;
-        const ctx = tempCanvas.getContext('2d', { willReadFrequently: true, alpha: false });
-        if (!ctx) throw new Error("Ctx error");
 
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, width, height);
+        this.offscreenCanvas.width = width;
+        this.offscreenCanvas.height = height;
+        
+        this.offscreenCtx.fillStyle = "#ffffff";
+        this.offscreenCtx.fillRect(0, 0, width, height);
 
         this.fCanvas.getObjects().forEach(obj => {
             if ((obj as any)._isMarker) return;
@@ -299,12 +305,12 @@ export class CanvasManager {
                 obj.fill = '#000000';
                 obj.stroke = 'transparent';
             }
-            obj.render(ctx);
+            obj.render(this.offscreenCtx);
             obj.fill = originalFill;
             obj.stroke = originalStroke;
         });
 
-        const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+        const blob = await new Promise<Blob | null>(resolve => this.offscreenCanvas.toBlob(resolve, 'image/png'));
         if (!blob) throw new Error("Blob error");
         return blob;
     }
@@ -747,26 +753,22 @@ export class CanvasManager {
         const width = this.fCanvas.getWidth();
         const height = this.fCanvas.getHeight();
 
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = width;
-        tempCanvas.height = height;
-        const ctx = tempCanvas.getContext('2d');
-        if (!ctx) return;
+        this.offscreenCanvas.width = width;
+        this.offscreenCanvas.height = height;
+        
+        this.offscreenCtx.fillStyle = "#ffffff";
+        this.offscreenCtx.fillRect(0, 0, width, height);
 
-        // Background: Black (No Heat)
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, width, height);
-
-        // Foreground: White (Heat Active) - Only if a rect is provided
+        //Foreground: White (Heat Active) - Only if a rect is provided
         if (rect) {
-            ctx.fillStyle = '#000000';
-            // We must account for scale if Fabric applied any, though we created it raw
+            this.offscreenCtx.fillStyle = '#000000';
+            //We must account for scale if Fabric applied any, though we created it raw
             const w = rect.width * (rect.scaleX || 1);
             const h = rect.height * (rect.scaleY || 1);
-            ctx.fillRect(rect.left, rect.top, w, h);
+            this.offscreenCtx.fillRect(rect.left, rect.top, w, h);
         }
 
-        const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+        const blob = await new Promise<Blob | null>(resolve => this.offscreenCanvas.toBlob(resolve, 'image/png'));
         if (!blob) return;
 
         await this.uploadHeatMask(blob);
