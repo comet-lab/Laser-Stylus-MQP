@@ -1105,14 +1105,14 @@ export class CanvasManager {
         this.markerObjects.forEach(m => {
             m.visible = true;
         });
-        this.fCanvas.requestRenderAll();
+        this.fMarkerCanvas.requestRenderAll();
     }
 
     public hideMarkers(): void {
         this.markerObjects.forEach(m => {
             m.visible = false;
         });
-        this.fCanvas.requestRenderAll();
+        this.fMarkerCanvas.requestRenderAll();
     }
 
     public hasMarkers(): boolean {
@@ -1221,7 +1221,7 @@ export class CanvasManager {
     public clearMarkers(): void {
         this.markerObjects.forEach(m => this.fCanvas.remove(m));
         this.markerObjects = [];
-        this.fCanvas.requestRenderAll();
+        this.fMarkerCanvas.requestRenderAll();
         // Notify UI
         this.onMarkersChange();
     }
@@ -1282,7 +1282,7 @@ export class CanvasManager {
             }
         });
 
-        this.fCanvas.requestRenderAll();
+        this.fMarkerCanvas.requestRenderAll();
     }
 
     public async submitHeatMarkers(markers: Position[]): Promise<any> {
