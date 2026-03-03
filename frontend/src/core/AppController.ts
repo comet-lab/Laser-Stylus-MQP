@@ -168,9 +168,13 @@ class AppController {
     }
 
     private setupInitialState(): void {
-        // Mute is required for autoplay in most browsers
+        //Mute and PlaysInline are strictly required for autoplay on iOS Safari
         this.ui.video.muted = true;
         this.ui.video.autoplay = true;
+        this.ui.video.setAttribute('playsinline', 'true');
+        this.ui.video.setAttribute('webkit-playsinline', 'true');
+        //Force iOS to start the media engine, catch any background auto-play blocks
+        this.ui.video.play().catch(e => console.warn("iOS Autoplay wait:", e));
 
         // Match canvas to container size
         this.ui.canvas.width = this.ui.viewport.offsetWidth;
@@ -223,8 +227,7 @@ class AppController {
                         const textEl = this.ui.loadingScreen.querySelector('.loading-text');
                         if (textEl) textEl.textContent = "INITIALIZING SYSTEM...";
 
-                        //Start the per-frame render loop
-                        this.ui.video.requestVideoFrameCallback(this.updateCanvasLoop.bind(this));
+                        this.ui.video.play().catch(e => console.warn("Video play blocked:", e));
                         
                         //Now build the canvasManager
                         this.initCanvasManager();
