@@ -13,7 +13,7 @@ from typing import Dict, Any, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 
-import time, math, json, cv2, asyncio, base64
+import time, math, json, cv2, asyncio, base64, os
 
 
 class Handler:
@@ -24,6 +24,10 @@ class Handler:
                  start_pose, 
                  mock_robot,
                  data_storage: SystemDataStore):
+        self.pathToCWD = os.getcwd()
+        self.directory = self.pathToCWD 
+        os.makedirs(os.path.join(self.pathToCWD, "plots"), exist_ok=True)
+        
         self.desired_state = desired_state
         self.robot_controller = robot_controller
         self.last_update_time = time.time()
@@ -48,7 +52,7 @@ class Handler:
         self._current_recording_time = 0; 
         self.recording_data = False 
         self.data_storage = data_storage
-        self.recording_data_flag = False # TODO TEMP var
+        self.desired_state.isRecordingOn = None
         
         boundary = self.cam_reg.meta_base_homography_data["boundary"] 
         if boundary is not None:
@@ -181,7 +185,7 @@ class Handler:
             ys_plot = [p[1] for p in path]
             ax.plot(xs, ys_plot, linewidth=1)  # default color
         ax.set_axis_off()
-        fig.savefig("raster path.png")
+        fig.savefig("plots/raster path.png")
         return path
     
 ###------------------------ Virtual Fixtures -------------------####    
@@ -205,7 +209,7 @@ class Handler:
         now = time.time()
         curr_position = self.robot_controller.current_robot_to_world_position()
         
-        if self.recording_data:
+        if self.recording_data and self.prev_robot_on:
             self.data_storage.put_robot(curr_position, 
                                         np.zeros(3),
                                         t=self._current_recording_time - self._start_recording_time,
@@ -281,7 +285,7 @@ class Handler:
             ys_plot = [p[1] for p in pixels]
             ax.plot(xs, ys_plot, linewidth=1)  # default color
         ax.set_axis_off()
-        fig.savefig("pixels path.png")
+        fig.savefig("plots/pixels path.png")
         plt.close()
         
         warped_view = self.desired_state.isTransformedViewOn
@@ -390,10 +394,12 @@ class Handler:
                 
                 pixel = np.array([[self.desired_state.x, self.desired_state.y]])
                 
-                payload = {"pixel": pixel}
-                self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
-                                        mode = "live control",
-                                        payload=payload)
+                if self.recording_data:
+                    payload = {"pixel": pixel}
+                    self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
+                                            mode = "live control",
+                                            payload=payload)
+                    print("[Handler Recorded Input] Live Control ", payload)
                 
                 warped_view = self.desired_state.isTransformedViewOn
                 target_world_point = self.cam_reg.get_UI_to_world_m(
@@ -445,11 +451,16 @@ class Handler:
         # print(self.desired_state.heat_markers)
         self._do_current_position()
         
-        if self.recording_data_flag and not self.recording_data:
+        if self.desired_state.isRecordingOn and not self.recording_data:
             self.recording_data = True
             self._start_recording_time = time.time()
-        else:
+            print("[Hander] Start Recording ")
+            self.desired_state.isRecordingOn = None
+        elif self.desired_state.isRecordingOn is not None and \
+            not self.desired_state.isRecordingOn and self.recording_data:
             self.recording_data = False
+            print("[Hander] Ending Recording ", self.desired_state.isRecordingOn)
+            self.data_storage.save_data_storage(os.path.join(self.directory, "data_collection"))
         
         if self.recording_data:
             self._current_recording_time = time.time() 
@@ -468,13 +479,14 @@ class Handler:
             else: 
                 self.current_traj = self._do_create_path(raster)
                 
-            payload = {"pixel points": raster,
-                        "img": self.desired_state.raster_mask,
-                        "traj":  self.current_traj}
-            
-            self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
-                                        mode = "raster",
-                                        payload=payload)
+            if self.recording_data:
+                payload = {"pixel points": raster,
+                            "img": self.desired_state.raster_mask}
+                
+                self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
+                                            mode = "raster",
+                                            payload=payload)
+                print("[Handler Recorded Input] Raster Control ", raster)
             
             self.desired_state.raster_mask = None
             self.desired_state.path = None
@@ -487,11 +499,12 @@ class Handler:
             
             self.current_traj = self._do_create_path(path)
             
-            payload = {"pixel points": self.desired_state.path}
-                
-            self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
-                                        mode = "outline",
-                                        payload=payload)
+            if self.recording_data:
+                payload = {"pixel points": self.desired_state.path}
+                    
+                self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
+                                            mode = "outline",
+                                            payload=payload)
             
             self.desired_state.x = None
             self.desired_state.y = None
@@ -525,10 +538,12 @@ class Handler:
             if(self.current_traj is not None and self.desired_state.executeCommand
                    and not self.robot_controller.is_trajectory_running()):
                 print("Executing Path")
-                payload = {"traj":  self.current_traj}
-                self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
-                                        mode = "execute",
-                                        payload=payload)
+                if self.recording_data:
+                    payload = {"traj":  self.current_traj}
+                    self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
+                                            mode = "execute",
+                                            payload=payload)
+                    
                 self._do_path(self.current_traj)
                 self.desired_state.executeCommand = None
                 self.current_traj = None

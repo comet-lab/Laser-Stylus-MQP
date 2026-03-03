@@ -167,7 +167,7 @@ class TrajectoryController():
         plt.grid(True)
         plt.legend()
         plt.tight_layout()
-        plt.savefig("Position(x,y) trajectory.png")
+        plt.savefig("plots/Position(x,y) trajectory.png")
         plt.close()
         
         plt.figure(figsize=(6,4))
@@ -205,7 +205,7 @@ class TrajectoryController():
         plt.grid(True)
         plt.legend()
         plt.tight_layout()
-        plt.savefig("Position_plot.png", dpi=600)
+        plt.savefig("plots/position_plot.png", dpi=600)
         plt.close()
         
         self.target_position_list = target_position_list 

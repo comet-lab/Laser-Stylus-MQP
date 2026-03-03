@@ -20,3 +20,5 @@ Position(x,y) trajectory.png
 raster path.png
 Position_plot.png
 Position(x,y) trajectory.png
+data_collection/
+plots/
