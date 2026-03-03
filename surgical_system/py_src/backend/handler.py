@@ -15,6 +15,8 @@ import matplotlib.pyplot as plt
 
 import time, math, json, cv2, asyncio, base64, os
 
+from registration.transformations.depth_estimation import DepthEstimation
+
 
 class Handler:
     def __init__(self, desired_state: RobotSchema, 
@@ -437,8 +439,15 @@ class Handler:
             
             self.robot_controller.set_velocity(target_vel, np.zeros(3))
 
-###------------------------ Data Collection ------------------####
+###------------------------ Auto Laser Focus ------------------####
 
+    def _do_auto_focus(self, world_pos):
+        if self.cam_reg.depth_map is not None:
+            current_height = DepthEstimation.current_height(depth_map = self.cam_reg.depth_map, 
+                                                            current_position = world_pos[:2], 
+                                                            meta = self.cam_reg.depth_meta)
+            print(f"[Handler Depth Estimation] Current Height [mm]: {current_height*1000:0.2f}")
+            # print("[Handler Depth Estimation] Current position [m]: ", world_pos[:2])
 
     async def main_loop(self):
         # Yield to other threads (video stream, websocket comms)
@@ -516,6 +525,7 @@ class Handler:
 
         if(self.desired_state.isRobotOn):          
             self.working_height = self.desired_state.height / 100.0 if self.desired_state.height else  0 # cm to m
+            self._do_auto_focus(world_pos)
             # print(f"[Robot Height] {self.working_height} m")
                 
             # print("loop",

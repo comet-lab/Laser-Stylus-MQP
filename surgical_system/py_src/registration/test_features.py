@@ -40,7 +40,7 @@ def exp_depth_scan(cam_reg, gridShape = np.array([15, 15]), squareSize = 0.002):
     print("Heading to starting location")
     cam_reg.robot_controller.go_to_pose(start_pose @ cam_reg.robot_controller.home_pose)
     
-    traj = cam_reg.robot_controller.create_custom_trajectory(robot_path, 0.02)
+    traj = cam_reg.robot_controller.create_custom_trajectory(robot_path, 0.01)
     depth, meta = cam_reg.scan_region_for_depth(traj)
     
     save_location = cam_reg.directory + cam_reg.calibration_folder + "/depth_map.npz"
@@ -521,7 +521,7 @@ if __name__ == '__main__':
     camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_controller)
     
     ### -------------------- Run calibration ---------------- ####
-    camera_reg.run() 
+    # camera_reg.run() 
     
     # base 2.23 
     # heights = np.array([2.08, 2.65, 3.15, 3.65, 4.18, 4.73, 5.15, 5.62, 6.15, 6.64,
@@ -532,7 +532,7 @@ if __name__ == '__main__':
     
     heights = heights / 1000.0 # mm
     depth_path = "homography_stack.npz"
-    stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
+    # stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
     # stack = 
     # print(stack)
     # rgbd_cam.set_default_setting()
@@ -543,12 +543,12 @@ if __name__ == '__main__':
         
     # live_control_view(camera_reg, 'color', warped=True, tracking=True, depth_path= depth_path) 
     
-    camera_reg.exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.035/24)
+    # exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.035/24)
     path = "surgical_system/py_src/registration/calibration_info/depth_map.npz"
-    depth, meta = DepthEstimation.load_depth_npz(path)
-    DepthEstimation.plot_depth_surface(depth, meta)
-    
+    path_filter = "surgical_system/py_src/registration/calibration_info/depth_map_filter.npz"
+    depth, meta = DepthEstimation.load_depth_npz(path)    
     depth_map = DepthEstimation.patch_depth(depth)
+    DepthEstimation.save_depth_npz(path_filter, depth_map=depth_map, meta=meta)
     DepthEstimation.plot_depth_surface(depth_map, meta)
     
     # camera_reg.view_rgbd_therm_heat_overlay()

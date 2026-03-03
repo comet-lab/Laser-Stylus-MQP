@@ -46,6 +46,12 @@ class Camera_Registration(System_Calibration):
         self.homography_stack = DepthEstimation.load_homography_stack_npz(self.stack_path)
         self.dense_stack = DepthEstimation.create_dense_stack(self.homography_stack, dz=0.00025)
         
+        self.depth_map, self.depth_meta = None, None
+        path = "surgical_system/py_src/registration/calibration_info/depth_map_filter.npz"
+        if os.path.exists(path):
+            print("\n[Depth Estimation] Loading Depth map: ", path)
+            self.depth_map, self.depth_meta = DepthEstimation.load_depth_npz(path)
+        
         
     @staticmethod
     def circle_perimeter_pixels(center, r, num_pts=360):
@@ -654,9 +660,9 @@ class Camera_Registration(System_Calibration):
             
             point = np.append(curr_position, z_best)
             points = np.vstack((points, point))
-            print("[Camera Reg scan_region] Points Scanned: ", point)
+            # print("[Camera Reg scan_region] Points Scanned: ", point)
             # print("World Pos: ", world_pos, " Pixel: ", rgb_laser_pixel)
-            time.sleep(1/30.0)
+            # time.sleep(1/30.0)
             
         depth, meta = DepthEstimation.generate_depth_mapping(points, cell_size=0.001)
         
