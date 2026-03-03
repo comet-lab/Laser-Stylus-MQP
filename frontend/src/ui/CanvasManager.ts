@@ -57,7 +57,7 @@ export class CanvasManager {
     private readonly SHAPE_DEFAULTS = {
         fill: 'transparent',
         stroke: 'rgba(0, 122, 255, 0.7)',
-        strokeWidth: 6,
+        strokeWidth: 4,
         strokeUniform: true,
         strokeLineCap: 'round' as const,
         strokeLineJoin: 'round' as const,
@@ -119,7 +119,7 @@ export class CanvasManager {
         };
 
         const brush = new fabric.PencilBrush(this.fCanvas);
-        brush.width = 6;
+        brush.width = 4;
         brush.color = 'rgba(0, 122, 255, 0.7)';
 
         this.fCanvas.freeDrawingBrush = brush;

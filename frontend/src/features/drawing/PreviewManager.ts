@@ -25,12 +25,15 @@ export class PreviewManager {
   private animationFrameId: number | null = null;
 
   // Visual styling
-  private readonly PATH_COLOR = '#002B4C'; // Neon Yellow
-  private readonly PATH_ARROW_COLOR = '#002B4C';
-  private readonly PATH_WIDTH = 4;
-  private readonly DASH_PATTERN = [12, 6];
-  private readonly GLOW_COLOR = 'rgba(255, 255, 0, 0.4)';
-  private readonly GLOW_WIDTH = 10;
+  private readonly PATH_GLOW_COLOR = 'rgba(255, 215, 0, 0.4)';
+  private readonly PATH_GLOW_WIDTH = 8;
+  private readonly PATH_OUTLINE_COLOR = '#00000080';
+  private readonly PATH_OUTLINE_WIDTH = 5;
+  private readonly PATH_COLOR = '#FFFF00';
+  private readonly PATH_WIDTH = 2;         
+  private readonly DASH_PATTERN = [10, 10];
+  
+  private dashOffset: number = 0;
 
   constructor(
     private readonly ui: UIRegistry,
@@ -43,7 +46,7 @@ export class PreviewManager {
 
     this.updateOverlaySize();
 
-    // Disable execute button immediately when clicked
+    //Disable execute button immediately when clicked
     const executeBtn = this.getExecuteBtn();
     if (executeBtn) {
       executeBtn.addEventListener('click', () => {
@@ -106,7 +109,7 @@ export class PreviewManager {
 
     this.ui.previewDuration.textContent = 'Computing...';
 
-    // Disable execute while computing new path
+    //Disable execute while computing new path
     this.setExecuteButtonState(false);
     this.stopAnimation();
     ToastManager.clearAll();
@@ -145,7 +148,7 @@ export class PreviewManager {
         ToastManager.show(
           "PRECISION WARNING: The generated path extends outside your originally drawn boundaries. Please confirm to allow execution.",
           {
-            type: 'warning', // Uses your high-vis Amber styling
+            type: 'warning',
             requireAck: true,
             ackText: 'CONFIRM',
             onAcknowledge: () => {
@@ -153,7 +156,7 @@ export class PreviewManager {
             }
           }
         );
-        // Draw the path to show them the mistake, but keep the button locked
+        //Draw the path to show the mistake, but keep the button locked
         if (hasValidPath) this.handlePathData(response.path, response.duration, false);
       }
       //Handle Safe Paths
@@ -221,7 +224,7 @@ export class PreviewManager {
           }
         }
       );
-      // Pass false to keep the execute button locked until confirmed
+      //Pass false to keep the execute button locked until confirmed
       this.handlePathData(path, finalDuration, false);
     } else {
       this.handlePathData(path, finalDuration, true);
@@ -232,7 +235,7 @@ export class PreviewManager {
     //Catch empty or single-point paths before they break the renderer
     if (videoPath.length < 2) {
       this.clearOverlay();
-      this.setExecuteButtonState(false); // Force lock the execute button
+      this.setExecuteButtonState(false); //Force lock the execute button
       this.ui.previewDuration.textContent = '--';
       return;
     }
@@ -245,7 +248,7 @@ export class PreviewManager {
 
     this.ui.previewDuration.textContent = `${duration.toFixed(1)}s`;
 
-    // Explicitly apply the boolean state to lock/unlock the button
+    //Explicitly apply the boolean state to lock/unlock the button
     this.setExecuteButtonState(enableExecute);
 
     this.drawPath();
@@ -283,23 +286,25 @@ export class PreviewManager {
     const ctx = this.ctx;
     ctx.save();
 
-    // Draw glow
-    ctx.strokeStyle = this.GLOW_COLOR;
-    ctx.lineWidth = this.GLOW_WIDTH;
+    //Draw glow
+    ctx.strokeStyle = this.PATH_GLOW_COLOR;
+    ctx.lineWidth = this.PATH_GLOW_WIDTH;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.setLineDash([]);
     this.drawPathLine(ctx);
 
-    // Draw main path
-    ctx.strokeStyle = this.PATH_COLOR;
-    ctx.lineWidth = this.PATH_WIDTH;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.setLineDash(this.DASH_PATTERN);
+    //Draw translucent background line
+    ctx.strokeStyle = this.PATH_OUTLINE_COLOR;
+    ctx.lineWidth = this.PATH_OUTLINE_WIDTH;
     this.drawPathLine(ctx);
 
-    this.drawDirectionArrows(ctx);
+    //Draw dashed bright foreground line
+    ctx.strokeStyle = this.PATH_COLOR;
+    ctx.lineWidth = this.PATH_WIDTH;
+    ctx.setLineDash(this.DASH_PATTERN);
+    ctx.lineDashOffset = this.dashOffset;
+    this.drawPathLine(ctx);
 
     ctx.restore();
   }
@@ -311,45 +316,6 @@ export class PreviewManager {
       ctx.lineTo(this.pathData[i].x, this.pathData[i].y);
     }
     ctx.stroke();
-  }
-
-  private drawDirectionArrows(ctx: CanvasRenderingContext2D): void {
-    const arrowSpacing = 200;
-    let accumulatedDist = 0;
-
-    ctx.fillStyle = this.PATH_ARROW_COLOR;
-    ctx.setLineDash([]);
-
-    for (let i = 1; i < this.pathData.length; i++) {
-      const p1 = this.pathData[i - 1];
-      const p2 = this.pathData[i];
-
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      accumulatedDist += dist;
-
-      if (accumulatedDist >= arrowSpacing) {
-        accumulatedDist = 0;
-
-        const angle = Math.atan2(dy, dx);
-        const arrowSize = 10;
-
-        ctx.save();
-        ctx.translate(p2.x, p2.y);
-        ctx.rotate(angle);
-
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(-arrowSize, -arrowSize / 2);
-        ctx.lineTo(-arrowSize, arrowSize / 2);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.restore();
-      }
-    }
   }
 
   private startAnimation(): void {
@@ -389,12 +355,15 @@ export class PreviewManager {
       totalPoints - 1
     );
 
-    // Grab the current point (already in correct local viewport coordinates)
+    //Update the DOM marker
     const point = this.pathData[index];
-
-    // Apply directly. The browser's #app-scaler will handle the zoom automatically!
     this.ui.previewMarker.style.left = `${point.x}px`;
     this.ui.previewMarker.style.top = `${point.y}px`;
+
+    //Change offset to modify speed
+    this.dashOffset -= 0.1; 
+    this.drawPath(); 
+    // ------------------------------------
 
     this.animationFrameId = requestAnimationFrame(() => this.animationLoop());
   }

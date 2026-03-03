@@ -429,8 +429,8 @@ pre {
 #robot-marker,
 #preview-marker {
   position: absolute;
-  width: 24px;
-  height: 24px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background-color: transparent;
   pointer-events: none;
