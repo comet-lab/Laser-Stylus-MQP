@@ -67,6 +67,7 @@ class AppController {
     private isChangingHeight: boolean = false;
     private lastViewportWidth: number = 0;
     private lastViewportHeight: number = 0;
+    private isConnectingVideo: boolean = false;
 
     private isVideoReady: boolean = false;
     private isWsReady: boolean = false;
@@ -147,7 +148,7 @@ class AppController {
         //Clean up existing connections on page unload
         window.addEventListener('beforeunload', () => {
             if (this.reader) {
-                try { this.reader.destroy(); } catch (e) {}
+                try { this.reader.destroy(); } catch (e) { }
             }
             if (this.wsHandler) {
                 this.wsHandler.disconnect();
@@ -198,9 +199,14 @@ class AppController {
     // ===================================================================
 
     private setupVideoCanvas(): void {
+        if (this.isConnectingVideo) {
+            console.log("Video connection already in progress, skipping...");
+            return;
+        }
+        this.isConnectingVideo = true;
         //Clean up any broken previous connection attempts
         if (this.reader) {
-            try { this.reader.destroy(); } catch (e) {}
+            try { this.reader.destroy(); } catch (e) { }
             this.reader = null;
         }
 
@@ -208,30 +214,25 @@ class AppController {
             url: new URL(`http://${window.location.hostname}:8889/mystream/whep`),
             onError: (err: string) => {
                 console.warn("Video stream not ready yet. Retrying in 2s...", err);
-                
-                //Update the loading screen text so you aren't left wondering
-                const textEl = this.ui.loadingScreen.querySelector('.loading-text');
-                if (textEl) textEl.textContent = "WAITING FOR CAMERA FEED...";
-
-                //Try again in 2 seconds (should fix double refresh)
+                this.isConnectingVideo = false; // Reset flag before retry
                 setTimeout(() => this.setupVideoCanvas(), 2000);
             },
             onTrack: (evt: RTCTrackEvent) => {
+                this.isConnectingVideo = false;
                 if (evt.track.kind === 'video') {
                     this.ui.video.srcObject = evt.streams[0];
-                    
-                    //Wait until the browser actually decodes the first frame 
-                    //and knows the real width/height of the camera feed
+
                     this.ui.video.onloadedmetadata = () => {
-                        //Change text back just in case it was stuck on the error text
                         const textEl = this.ui.loadingScreen.querySelector('.loading-text');
                         if (textEl) textEl.textContent = "INITIALIZING SYSTEM...";
-
-                        this.ui.video.play().catch(e => console.warn("Video play blocked:", e));
-                        
-                        //Now build the canvasManager
                         this.initCanvasManager();
                     };
+
+                    //Add this check immediately after setting the handler:
+                    if (this.ui.video.readyState >= 1) {
+                        //Metadata already loaded, manually trigger
+                        this.ui.video.onloadedmetadata(new Event('loadedmetadata'));
+                    }
                 }
             },
         });
@@ -249,17 +250,24 @@ class AppController {
     }
 
     private async checkAppReady(): Promise<void> {
-        //Only proceed if both services are ready, and we haven't already booted
         if (this.isWsReady && this.isVideoReady && !this.hasBooted) {
             console.log("System Ready: Initiating Clean Slate Protocol...");
             this.hasBooted = true;
-            
-            await this.resetToDefaults();
-            
-            //Fade out the loading screen
+
+            //Don't block UI on reset - do it in background with timeout
+            Promise.race([
+                this.resetToDefaults(),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Reset timeout')), 5000)
+                )
+            ]).catch(err => {
+                console.warn("Reset failed or timed out, continuing anyway:", err);
+            });
+
+            //Show UI immediately
             setTimeout(() => {
                 this.ui.loadingScreen.classList.add('hidden');
-            }, 500); //Give the user a tiny delay so it doesn't flash too abruptly
+            }, 500);
         }
     }
 
@@ -303,13 +311,13 @@ class AppController {
             await fetch(`http://${window.location.hostname}:443/api/system_reset`, {
                 method: 'POST'
             });
-            
+
             //Canvas manager should definitely exist by now
             if (this.canvasManager) {
                 await this.canvasManager.clearFixturesOnServer();
                 await this.canvasManager.resetHeatArea();
                 await this.canvasManager.clearPathAndRasterOnServer();
-                
+
                 this.canvasManager.clearFixtures();
                 this.canvasManager.clearDrawing();
             }
@@ -327,7 +335,7 @@ class AppController {
             if ('wakeLock' in navigator) {
                 this.wakeLock = await (navigator as any).wakeLock.request('screen');
                 console.log('Screen Wake Lock acquired');
-                
+
                 this.wakeLock.addEventListener('release', () => {
                     console.log('Screen Wake Lock released');
                 });
@@ -497,26 +505,26 @@ class AppController {
 
         // --- Real-time drawing pointer events ---
         this.ui.realTimePen.addEventListener('click', () => this.toolHandler.handleRealTimeToolSelection(this.ui.realTimePen, 'pen'));
-        
+
         //Gate the real-time routing so it only takes the pointer if we are actively on the path tab
         this.ui.viewport.addEventListener('pointerdown', (e) => {
             if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
                 this.realTime.handleStart(e);
             }
         });
-        
+
         this.ui.viewport.addEventListener('pointermove', (e) => {
             if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
                 this.realTime.handleMove(e);
             }
         });
-        
+
         this.ui.viewport.addEventListener('pointerup', (e) => {
             if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
                 this.realTime.handleEnd(e);
             }
         });
-        
+
         this.ui.viewport.addEventListener('pointercancel', (e) => {
             if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
                 this.realTime.handleEnd(e);
@@ -822,7 +830,7 @@ class AppController {
             this.ui.processingModeSwitch.checked = false;
             this.ui.processingModeSwitch.dispatchEvent(new Event('change'));
         });
-        
+
         this.ui.modeRealtimeBtn.addEventListener('click', () => {
             this.ui.modeRealtimeBtn.classList.add('active');
             this.ui.modeBatchBtn.classList.remove('active');
@@ -872,7 +880,7 @@ class AppController {
         //Calculates clamp boundaries and applies the transform
         const updateTransform = () => {
             if (!this.ui.zoomWrapper) return;
-            
+
             //Clamp Pan to prevent dragging the canvas entirely off-screen
             const rect = this.ui.viewport.getBoundingClientRect();
             const maxPanX = 0;
