@@ -1,16 +1,13 @@
-import os, time, sys, warnings
-import json
+import os, time
 import cv2
-import base64
 import numpy as np
 import asyncio
-import websockets
 import time
 from datetime import datetime as dt
 from scipy.spatial.transform import Rotation
 from robot.robot import RobotSchema
 from dataclasses import dataclass, asdict
-import matplotlib.pyplot as plt
+
 
 # Classes
 mock_robot = os.getenv("MOCK_ROBOT", "0") == "1"
