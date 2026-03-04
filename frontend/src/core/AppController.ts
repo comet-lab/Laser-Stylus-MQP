@@ -67,6 +67,11 @@ class AppController {
     private isChangingHeight: boolean = false;
     private lastViewportWidth: number = 0;
     private lastViewportHeight: number = 0;
+    private isConnectingVideo: boolean = false;
+
+    private isVideoReady: boolean = false;
+    private isWsReady: boolean = false;
+    private hasBooted: boolean = false;
 
     private zoomLevel: number = 1;
     private panX: number = 0;
@@ -79,6 +84,7 @@ class AppController {
     // ---------------------------------------------------------------
     private canvasManager: CanvasManager | null = null;
     private reader: any = null;   // MediaMTXWebRTCReader instance
+    private wakeLock: any = null; //Keeps screen awake
 
     // ---------------------------------------------------------------
     // Constructor
@@ -138,6 +144,16 @@ class AppController {
         this.settingsManager.handleResize();
 
         this.init();
+
+        //Clean up existing connections on page unload
+        window.addEventListener('beforeunload', () => {
+            if (this.reader) {
+                try { this.reader.destroy(); } catch (e) { }
+            }
+            if (this.wsHandler) {
+                this.wsHandler.disconnect();
+            }
+        });
     }
 
     // ===================================================================
@@ -149,12 +165,17 @@ class AppController {
         this.setupWebSocket();
         this.bindEvents();
         this.setupInitialState();
+        this.setupWakeLock();
     }
 
     private setupInitialState(): void {
-        // Mute is required for autoplay in most browsers
+        //Mute and PlaysInline are strictly required for autoplay on iOS Safari
         this.ui.video.muted = true;
         this.ui.video.autoplay = true;
+        this.ui.video.setAttribute('playsinline', 'true');
+        this.ui.video.setAttribute('webkit-playsinline', 'true');
+        //Force iOS to start the media engine, catch any background auto-play blocks
+        this.ui.video.play().catch(e => console.warn("iOS Autoplay wait:", e));
 
         // Match canvas to container size
         this.ui.canvas.width = this.ui.viewport.offsetWidth;
@@ -178,16 +199,40 @@ class AppController {
     // ===================================================================
 
     private setupVideoCanvas(): void {
+        if (this.isConnectingVideo) {
+            console.log("Video connection already in progress, skipping...");
+            return;
+        }
+        this.isConnectingVideo = true;
+        //Clean up any broken previous connection attempts
+        if (this.reader) {
+            try { this.reader.destroy(); } catch (e) { }
+            this.reader = null;
+        }
+
         this.reader = new window.MediaMTXWebRTCReader({
             url: new URL(`http://${window.location.hostname}:8889/mystream/whep`),
-            onError: (err: string) => this.setMessage(err),
+            onError: (err: string) => {
+                console.warn("Video stream not ready yet. Retrying in 2s...", err);
+                this.isConnectingVideo = false; // Reset flag before retry
+                setTimeout(() => this.setupVideoCanvas(), 2000);
+            },
             onTrack: (evt: RTCTrackEvent) => {
+                this.isConnectingVideo = false;
                 if (evt.track.kind === 'video') {
                     this.ui.video.srcObject = evt.streams[0];
-                    // Start the per-frame render loop
-                    this.ui.video.requestVideoFrameCallback(this.updateCanvasLoop.bind(this));
-                    // CanvasManager can now be constructed (video dimensions are known)
-                    this.initCanvasManager();
+
+                    this.ui.video.onloadedmetadata = () => {
+                        const textEl = this.ui.loadingScreen.querySelector('.loading-text');
+                        if (textEl) textEl.textContent = "INITIALIZING SYSTEM...";
+                        this.initCanvasManager();
+                    };
+
+                    //Add this check immediately after setting the handler:
+                    if (this.ui.video.readyState >= 1) {
+                        //Metadata already loaded, manually trigger
+                        this.ui.video.onloadedmetadata(new Event('loadedmetadata'));
+                    }
                 }
             },
         });
@@ -198,9 +243,32 @@ class AppController {
         //Add function to clean the state when connection starts
         this.wsHandler.onOpen = () => {
             console.log("WS Connected: Initiating Clean Slate Protocol...");
-            this.resetToDefaults();
+            this.isWsReady = true;
+            this.checkAppReady();
         };
         this.wsHandler.connect();
+    }
+
+    private async checkAppReady(): Promise<void> {
+        if (this.isWsReady && this.isVideoReady && !this.hasBooted) {
+            console.log("System Ready: Initiating Clean Slate Protocol...");
+            this.hasBooted = true;
+
+            //Don't block UI on reset - do it in background with timeout
+            Promise.race([
+                this.resetToDefaults(),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Reset timeout')), 5000)
+                )
+            ]).catch(err => {
+                console.warn("Reset failed or timed out, continuing anyway:", err);
+            });
+
+            //Show UI immediately
+            setTimeout(() => {
+                this.ui.loadingScreen.classList.add('hidden');
+            }, 500);
+        }
     }
 
     /**
@@ -244,27 +312,53 @@ class AppController {
                 method: 'POST'
             });
 
-            //Wait for CanvasManager to be ready before trying to upload masks!
-            const uploadBlankMasks = async () => {
-                if (this.canvasManager) {
-                    await this.canvasManager.clearFixturesOnServer();
-                    await this.canvasManager.resetHeatArea();
-                    await this.canvasManager.clearPathAndRasterOnServer();
+            //Canvas manager should definitely exist by now
+            if (this.canvasManager) {
+                await this.canvasManager.clearFixturesOnServer();
+                await this.canvasManager.resetHeatArea();
+                await this.canvasManager.clearPathAndRasterOnServer();
 
-                    //Clear the local canvas visually once we know it exists
-                    this.canvasManager.clearFixtures();
-                    this.canvasManager.clearDrawing();
-                } else {
-                    //Check again in 250ms if the video stream hasn't loaded yet
-                    setTimeout(uploadBlankMasks, 250);
-                }
-            };
-
-            uploadBlankMasks();
+                this.canvasManager.clearFixtures();
+                this.canvasManager.clearDrawing();
+            }
 
         } catch (e) {
             console.warn("Could not reach endpoints to reset masks:", e);
         }
+    }
+
+    /**
+     * Methods to handle keeping the screen awake while the app is open
+     */
+    private async requestWakeLock(): Promise<void> {
+        try {
+            if ('wakeLock' in navigator) {
+                this.wakeLock = await (navigator as any).wakeLock.request('screen');
+                console.log('Screen Wake Lock acquired');
+
+                this.wakeLock.addEventListener('release', () => {
+                    console.log('Screen Wake Lock released');
+                });
+            }
+        } catch (err: any) {
+            console.warn(`Wake Lock error: ${err.name}, ${err.message}`);
+        }
+    }
+    private setupWakeLock(): void {
+        //Browsers require a user gesture to grant a wake lock
+        const initWakeLock = () => {
+            this.requestWakeLock();
+            //Once acquired, we don't need this listener anymore
+            document.removeEventListener('pointerdown', initWakeLock);
+        };
+        document.addEventListener('pointerdown', initWakeLock);
+        //If the user minimizes the browser or switches tabs, the OS releases the lock.
+        //We must re-request it when they come back to the app.
+        document.addEventListener('visibilitychange', () => {
+            if (this.wakeLock !== null && document.visibilityState === 'visible') {
+                this.requestWakeLock();
+            }
+        });
     }
 
     /**
@@ -300,6 +394,9 @@ class AppController {
         this.toolHandler.updateDrawButtonState();
         this.toolHandler.updateFixturesButtonState();
         this.toolHandler.updateThermalButtonState();
+
+        this.isVideoReady = true;
+        this.checkAppReady();
     }
 
     // ===================================================================
@@ -408,10 +505,31 @@ class AppController {
 
         // --- Real-time drawing pointer events ---
         this.ui.realTimePen.addEventListener('click', () => this.toolHandler.handleRealTimeToolSelection(this.ui.realTimePen, 'pen'));
-        this.ui.viewport.addEventListener('pointerdown', (e) => this.realTime.handleStart(e));
-        this.ui.viewport.addEventListener('pointermove', (e) => this.realTime.handleMove(e));
-        this.ui.viewport.addEventListener('pointerup', (e) => this.realTime.handleEnd(e));
-        this.ui.viewport.addEventListener('pointercancel', (e) => this.realTime.handleEnd(e));
+
+        //Gate the real-time routing so it only takes the pointer if we are actively on the path tab
+        this.ui.viewport.addEventListener('pointerdown', (e) => {
+            if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
+                this.realTime.handleStart(e);
+            }
+        });
+
+        this.ui.viewport.addEventListener('pointermove', (e) => {
+            if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
+                this.realTime.handleMove(e);
+            }
+        });
+
+        this.ui.viewport.addEventListener('pointerup', (e) => {
+            if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
+                this.realTime.handleEnd(e);
+            }
+        });
+
+        this.ui.viewport.addEventListener('pointercancel', (e) => {
+            if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
+                this.realTime.handleEnd(e);
+            }
+        });
 
         // --- Processing mode toggle ---
         this.ui.processingModeSwitch.addEventListener('change', () => this.modeManager.toggleMode());
@@ -695,6 +813,30 @@ class AppController {
             }
         });
 
+        this.ui.autoHeightSwitch.addEventListener('change', () => {
+            this.wsHandler.updateState({ isAutoHeightAdjustOn: this.ui.autoHeightSwitch.checked });
+        });
+
+        // --- Data Recording ---
+        this.ui.recordDataSwitch.addEventListener('change', () => {
+            this.wsHandler.updateState({ isRecordingOn: this.ui.recordDataSwitch.checked });
+        });
+
+        // --- Processing Mode Segment Wrapper ---
+        // (This triggers the existing hidden checkbox so you don't have to refactor the rest of your app)
+        this.ui.modeBatchBtn.addEventListener('click', () => {
+            this.ui.modeBatchBtn.classList.add('active');
+            this.ui.modeRealtimeBtn.classList.remove('active');
+            this.ui.processingModeSwitch.checked = false;
+            this.ui.processingModeSwitch.dispatchEvent(new Event('change'));
+        });
+
+        this.ui.modeRealtimeBtn.addEventListener('click', () => {
+            this.ui.modeRealtimeBtn.classList.add('active');
+            this.ui.modeBatchBtn.classList.remove('active');
+            this.ui.processingModeSwitch.checked = true;
+            this.ui.processingModeSwitch.dispatchEvent(new Event('change'));
+        });
 
         // --- Layout position controls ---
         this.ui.layoutTopBtn.addEventListener('click', () => this.settingsManager.setMenuPosition('top'));
@@ -738,7 +880,7 @@ class AppController {
         //Calculates clamp boundaries and applies the transform
         const updateTransform = () => {
             if (!this.ui.zoomWrapper) return;
-            
+
             //Clamp Pan to prevent dragging the canvas entirely off-screen
             const rect = this.ui.viewport.getBoundingClientRect();
             const maxPanX = 0;
@@ -849,16 +991,19 @@ class AppController {
             };
         };
 
+        //Raw touchevents handled for zoom, not send to canvas
         this.ui.viewport.addEventListener('touchstart', (e: TouchEvent) => {
+            e.stopPropagation(); //Block from reaching canvas
             if (e.touches.length === 2) {
                 e.preventDefault();
                 initialDistance = getDistance(e.touches);
                 startZoom = this.zoomLevel;
                 lastCenter = getCenter(e.touches);
             }
-        }, { passive: false });
+        }, { capture: true, passive: false });
 
         this.ui.viewport.addEventListener('touchmove', (e: TouchEvent) => {
+            e.stopPropagation(); //Block from reaching canvas
             if (e.touches.length === 2 && this.ui.zoomWrapper) {
                 e.preventDefault();
 
@@ -877,7 +1022,27 @@ class AppController {
                 // Zoom exactly towards the center point of the two fingers
                 applyZoomAt(currentCenter.x, currentCenter.y, newZoom);
             }
-        }, { passive: false });
+        }, { capture: true, passive: false });
+
+        this.ui.viewport.addEventListener('touchend', (e: TouchEvent) => {
+            e.stopPropagation(); //Block from reaching canvas
+        }, { capture: true, passive: false });
+
+        this.ui.viewport.addEventListener('touchcancel', (e: TouchEvent) => {
+            e.stopPropagation(); //Block from reaching canvas
+        }, { capture: true, passive: false });
+
+        //Block finger touches at the viewport level, but allow pen/mouse
+        const blockTouchPointers = (e: PointerEvent) => {
+            if (e.pointerType === 'touch') {
+                e.stopPropagation();
+            }
+        };
+
+        this.ui.viewport.addEventListener('pointerdown', blockTouchPointers, { capture: true });
+        this.ui.viewport.addEventListener('pointermove', blockTouchPointers, { capture: true });
+        this.ui.viewport.addEventListener('pointerup', blockTouchPointers, { capture: true });
+        this.ui.viewport.addEventListener('pointercancel', blockTouchPointers, { capture: true });
     }
 
     // ===================================================================
@@ -915,7 +1080,10 @@ class AppController {
             this.ui.heightTrigger.disabled = false;
 
             if (!this.isChangingHeight) {
-                const heightCm = state.current_height * 100;
+                let heightCm = state.current_height * 100;
+                if (Math.abs(heightCm) < 0.05) {
+                    heightCm = 0;
+                }
                 const displayVal = heightCm.toFixed(1);
                 //Update the physical slider position
                 this.ui.heightSlider.value = displayVal;
@@ -961,6 +1129,14 @@ class AppController {
         }
         if (state.isRobotOn !== undefined) {
             this.hardware.applyServerRobotState(!!state.isRobotOn);
+        }
+
+        if (state.isRecordingOn !== undefined) {
+            this.ui.recordDataSwitch.checked = state.isRecordingOn;
+        }
+
+        if (state.isAutoHeightAdjustOn !== undefined) {
+            this.ui.autoHeightSwitch.checked = state.isAutoHeightAdjustOn;
         }
     }
 

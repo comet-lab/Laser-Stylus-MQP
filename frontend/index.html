@@ -21,6 +21,18 @@
 </head>
 
 <body>
+  <div id="loading-screen">
+    <svg class="loading-spinner" width="60" height="60" viewBox="0 0 50 50">
+      <circle cx="25" cy="25" r="20" fill="none" stroke="#2c343b" stroke-width="5"></circle>
+      <circle cx="25" cy="25" r="20" fill="none" stroke="#70ff57" stroke-width="5" stroke-dasharray="31.4 125.6"
+        stroke-linecap="round">
+        <animateTransform attributeName="transform" type="rotate" from="0 25 25" to="360 25 25" dur="1s"
+          repeatCount="indefinite" />
+      </circle>
+    </svg>
+    <div class="loading-text">INITIALIZING SYSTEM...</div>
+  </div>
+
   <div id="app-scaler">
     <div id="overlay"></div>
     <div id="preparePopup">
@@ -80,8 +92,10 @@
 
           <div class="preview-action-container">
             <div class="setting-row-wrapper preview-wrapper">
-              <span class="row-label">Preview Path</span>
-              <span class="row-label-2">(Enable to Execute)</span>
+              <div class="row-label-stack">
+                <span class="row-label">Preview Path</span>
+                <span class="row-label-2" style="color: #fa8500; opacity: 0.8;">(Required Before Execution)</span>
+              </div>
               <div class="segment-control preview-control">
                 <button id="previewOff" class="segment-btn active">OFF</button>
                 <button id="previewOn" class="segment-btn">ON</button>
@@ -142,43 +156,26 @@
       </div>
       <div class="settings-body">
         <div class="settings-sidebar">
-          <button class="sidebar-btn active" data-target="general-settings">General</button>
-          <button class="sidebar-btn" data-target="camera-settings">Camera</button>
+          <button class="sidebar-btn active" data-target="system-settings">System & Hardware</button>
+          <button class="sidebar-btn" data-target="ui-settings">UI & Layout</button>
         </div>
         <div class="settings-main">
-          <div id="general-settings" class="settings-panel active">
-            <h3>General Settings</h3>
-            <div class="setting-item">
-              <span class="setting-label">Processing Mode</span>
-              <div class="switch-container">
-                <span class="switch-label">Batch</span>
-                <label class="toggle-switch">
-                  <input type="checkbox" id="processing-mode">
-                  <span class="slider round"></span>
-                </label>
-                <span class="switch-label">Real-Time</span>
-              </div>
-            </div>
-            <div class="setting-item">
-              <span class="setting-label">Menu Position</span>
-              <div class="segment-control" style="width: 150px;">
-                <button id="layout-top" class="segment-btn active">Top</button>
-                <button id="layout-bottom" class="segment-btn">Bottom</button>
+
+          <input type="checkbox" id="processing-mode" style="display:none;">
+          <div id="system-settings" class="settings-panel active">
+            <h3>Workflow</h3>
+            <div class="setting-item"
+              style="background: rgba(250, 133, 0, 0.1); border: 1px solid #fa8500; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+              <span class="setting-label" style="color: #fa8500; font-weight: bold;">Processing Mode</span>
+              <div class="segment-control" style="width: 180px; border-color: #fa8500;">
+                <button id="mode-batch" class="segment-btn active">Batch</button>
+                <button id="mode-realtime" class="segment-btn" style="color: #fa8500;">Real-Time</button>
               </div>
             </div>
 
+            <h3>Hardware & Vision</h3>
             <div class="setting-item">
-              <span class="setting-label">Sidebar Position</span>
-              <div class="segment-control" style="width: 150px;">
-                <button id="layout-left" class="segment-btn active">Left</button>
-                <button id="layout-right" class="segment-btn">Right</button>
-              </div>
-            </div>
-          </div>
-          <div id="camera-settings" class="settings-panel">
-            <h3>Camera Settings</h3>
-            <div class="setting-item">
-              <span class="setting-label">Transformed</span>
+              <span class="setting-label">Transformed View</span>
               <div class="switch-container">
                 <span class="switch-label">Off</span>
                 <label class="toggle-switch">
@@ -186,6 +183,46 @@
                   <span class="slider round"></span>
                 </label>
                 <span class="switch-label">On</span>
+              </div>
+            </div>
+            <div class="setting-item">
+              <span class="setting-label">Auto-Height Adjustment</span>
+              <div class="switch-container">
+                <span class="switch-label">Off</span>
+                <label class="toggle-switch">
+                  <input type="checkbox" id="height-adjust-mode">
+                  <span class="slider round"></span>
+                </label>
+                <span class="switch-label">On</span>
+              </div>
+            </div>
+            <div class="setting-item">
+              <span class="setting-label">Record Data</span>
+              <div class="switch-container">
+                <span class="switch-label">Off</span>
+                <label class="toggle-switch recording-switch">
+                  <input type="checkbox" id="record-data-mode">
+                  <span class="slider round"></span>
+                </label>
+                <span class="switch-label">On</span>
+              </div>
+            </div>
+          </div>
+
+          <div id="ui-settings" class="settings-panel">
+            <h3>Layout Preferences</h3>
+            <div class="setting-item">
+              <span class="setting-label">Menu Position</span>
+              <div class="segment-control" style="width: 150px;">
+                <button id="layout-top" class="segment-btn active">Top</button>
+                <button id="layout-bottom" class="segment-btn">Bottom</button>
+              </div>
+            </div>
+            <div class="setting-item">
+              <span class="setting-label">Sidebar Position</span>
+              <div class="segment-control" style="width: 150px;">
+                <button id="layout-left" class="segment-btn active">Left</button>
+                <button id="layout-right" class="segment-btn">Right</button>
               </div>
             </div>
           </div>
@@ -277,10 +314,6 @@
           </span>
           <span class="btn-text">RESET HEATMAP</span>
         </button>
-
-        <div id="max-heat-container">
-          MAX HEAT: <span id="max-heat-display">N/A</span>
-        </div>
       </div>
 
       <div id="status-panel-right" class="status-message">
@@ -312,7 +345,7 @@
                   d="M8 19.75C7.88333 19.75 7.775 19.7417 7.675 19.725C7.575 19.7083 7.475 19.6833 7.375 19.65C5.125 18.9 3.33333 17.5127 2 15.488C0.666667 13.4633 0 11.284 0 8.95V4.225C0 3.80833 0.121 3.43333 0.363 3.1C0.605 2.76667 0.917334 2.525 1.3 2.375L7.3 0.125C7.53333 0.0416667 7.76667 0 8 0C8.23333 0 8.46667 0.0416667 8.7 0.125L14.7 2.375C15.0833 2.525 15.396 2.76667 15.638 3.1C15.88 3.43333 16.0007 3.80833 16 4.225V8.95C16 11.2833 15.3333 13.4627 14 15.488C12.6667 17.5133 10.875 18.9007 8.625 19.65C8.525 19.6833 8.425 19.7083 8.325 19.725C8.225 19.7417 8.11667 19.75 8 19.75ZM8 17.75C9.73333 17.2 11.1667 16.1 12.3 14.45C13.4333 12.8 14 10.9667 14 8.95V4.225L8 1.975L2 4.225V8.95C2 10.9667 2.56667 12.8 3.7 14.45C4.83333 16.1 6.26667 17.2 8 17.75Z" />
               </svg>
             </span>
-            <span class="btn-text" style="letter-spacing: -0.1px; font-size: 12.5px;">FIXTURES</span>
+            <span class="btn-text">FIXTURES</span>
           </button>
         </div>
       </div>
@@ -328,7 +361,8 @@
         <span id="robot-on-text">ON</span>
         <div class="lock-overlay">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z"/>
+            <path
+              d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10zm-6-3c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z" />
           </svg>
         </div>
       </div>
@@ -468,7 +502,8 @@
     </div>
     <div id="viewport">
       <div id="zoom-indicator" class="hidden">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+          stroke-linecap="round" stroke-linejoin="round">
           <circle cx="11" cy="11" r="8"></circle>
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           <line x1="11" y1="8" x2="11" y2="14"></line>
@@ -476,12 +511,21 @@
         </svg>
         <span id="zoom-text">100%</span>
       </div>
+      <div id="max-heat-indicator">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fa8500" stroke-width="2.5"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path>
+        </svg>
+        <span>MAX: <span id="max-heat-display">N/A</span></span>
+      </div>
       <div id="thermal-gradient-legend" class="hidden">
         <div class="legend-core">
           <div class="gradient-bar"></div>
           <div class="gradient-labels">
             <span>100+</span>
+            <span>80</span>
             <span>60</span>
+            <span>40</span>
             <span>20</span>
           </div>
         </div>
@@ -490,7 +534,7 @@
       <div id="zoom-wrapper">
         <canvas id="canvas"></canvas>
         <canvas id="previewOverlay"></canvas>
-        <video id="video"></video>
+        <video id="video" playsinline webkit-playsinline muted autoplay></video>
         <div id="robot-marker"></div>
         <div id="preview-marker"></div>
       </div>

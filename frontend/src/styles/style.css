@@ -42,6 +42,18 @@ body {
   touch-action: none;
 }
 
+button,
+.action-btn,
+.icon-btn,
+.mode-btn,
+.popout-trigger,
+#top-panel,
+#left-panel,
+.prepare-header,
+.settings-header {
+  touch-action: none !important;
+}
+
 body {
   font-weight: 400;
   background-color: #000000;
@@ -69,6 +81,43 @@ select {
   -ms-user-select: auto;
   -webkit-user-select: auto;
 }
+
+/* ============================================
+   LOADING SCREEN
+   ============================================ */
+#loading-screen {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #0f1419;
+  z-index: 99999; /* Highest possible z-index */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  transition: opacity 0.5s ease, visibility 0.5s;
+}
+
+#loading-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.loading-text {
+  color: #e0f2e0;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 700;
+  font-size: calc(var(--base-scale) * 1.2);
+  letter-spacing: 2px;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 
 /* Attempt to prevent zoom issues breaking the iPad UI */
 #top-panel,
@@ -312,8 +361,8 @@ pre {
 /* === ZOOM INDICATOR === */
 #zoom-indicator {
   position: absolute;
-  bottom: 16px;
-  right: 16px;
+  bottom: 3px;
+  right: 3px;
   background-color: rgba(21, 27, 33, 0.85);
   border: 2px solid #2c343b;
   color: #e0f2e0;
@@ -334,7 +383,7 @@ pre {
 }
 
 #zoom-indicator.hidden {
-  display: flex !important; /* Override your global .hidden */
+  display: flex !important;
   opacity: 0;
   transform: translateY(-10px);
 }
@@ -392,8 +441,8 @@ pre {
 #robot-marker,
 #preview-marker {
   position: absolute;
-  width: 24px;
-  height: 24px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background-color: transparent;
   pointer-events: none;
@@ -658,7 +707,7 @@ body.menu-bottom.sidebar-right #viewport {
 
 .gradient-bar {
   width: 20px;
-  height: 200px;
+  height: clamp(200px, 35vh, 320px);
   background: linear-gradient(to top,
       #00007F 0%,
       #0000FF 12.5%,
@@ -690,6 +739,33 @@ body.menu-bottom.sidebar-right #viewport {
   font-weight: 700;
   width: 100%;
   text-align: left;
+}
+
+/* === MAX HEAT INDICATOR === */
+#max-heat-indicator {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  background-color: rgba(21, 27, 33, 0.85);
+  border: 2px solid #2c343b;
+  color: #e0f2e0;
+  padding: 6px 12px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 700;
+  font-size: calc(var(--base-scale) * 0.85);
+  z-index: 60;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  opacity: 0.75
+}
+
+#max-heat-display { 
+  color: #fa8500; 
+  margin-left: 2px; 
 }
 
 /* === INLINE ROBOT WARNING === */
@@ -739,10 +815,11 @@ body.menu-bottom.sidebar-right #viewport {
    2. Drawing / Fabric Canvas (10)
    3. Preview Path Overlay (20)
    4. Fixtures Canvas (30)
-   5. Heat Markers / Robot Markers (50)
-   6. UI Panels (Sidebars/Top) (60)
-   7. Overlay Dimmer (100)
-   8. Popups (Settings/Prepare) (101)
+   5. Heat Markers Canvas (40)
+   6. Live Robot/Preview Markers (50)
+   7. UI Panels (Sidebars/Top) (60)
+   8. Overlay Dimmer (100)
+   9. Popups (Settings/Prepare) (101)
 */
 
 #video { z-index: 0; }
@@ -753,6 +830,7 @@ body.menu-bottom.sidebar-right #viewport {
 
 #previewOverlay { z-index: 20 !important; }
 #fixturesCanvas { z-index: 30 !important; }
+#markerCanvas { z-index: 40 !important; pointer-events: none; }
 
 #robot-marker,
 #preview-marker { z-index: 50 !important; }
@@ -764,4 +842,3 @@ body.menu-bottom.sidebar-right #viewport {
 
 #preparePopup,
 #settingsPopup { z-index: 101; }
-
