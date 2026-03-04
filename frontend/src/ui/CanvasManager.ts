@@ -230,6 +230,9 @@ export class CanvasManager {
         //Create a temp canvas at the exact video resolution
         const width = this.fCanvas.getWidth();
         const height = this.fCanvas.getHeight();
+
+        if (width === 0 || height === 0 || this.video.videoWidth === 0) return '';
+        
         this.offscreenCanvas.width = width;
         this.offscreenCanvas.height = height;
         
