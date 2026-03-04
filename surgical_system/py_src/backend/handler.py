@@ -2,20 +2,34 @@ from robot.robot import RobotSchema
 from robot.mock_robot_controller import MockRobotController
 from registration.mock_camera_registration import MockCameraRegistration
 from laser_control.mock_laser import MockLaser
-import numpy as np
-from backend.listener import BackendConnection
-import time, math
-import json
-import cv2
-from dataclasses import asdict
-import asyncio
-import base64
 from motion_planning.motion_planning import Motion_Planner
-import matplotlib.pyplot as plt
+from backend.listener import BackendConnection
 from robot.controllers.trajectory_controller import TrajectoryController
+from robot.robot_fixtures import RobotFixtures, GridBoundary
+from backend.datastorage import SystemDataStore, CameraFrame, RobotState, UserCommand
+from dataclasses import asdict
+from typing import Dict, Any, Tuple
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+import time, math, json, cv2, asyncio, base64, os
+
+from registration.transformations.depth_estimation import DepthEstimation
+
 
 class Handler:
-    def __init__(self, desired_state: RobotSchema, robot_controller: MockRobotController, cam_reg: MockCameraRegistration, laser_obj: MockLaser, start_pose, mock_robot):
+    def __init__(self, desired_state: RobotSchema, 
+                 robot_controller: MockRobotController, 
+                 cam_reg: MockCameraRegistration, 
+                 laser_obj: MockLaser, 
+                 start_pose, 
+                 mock_robot,
+                 data_storage: SystemDataStore):
+        self.pathToCWD = os.getcwd()
+        self.directory = self.pathToCWD 
+        os.makedirs(os.path.join(self.pathToCWD, "plots"), exist_ok=True)
+        
         self.desired_state = desired_state
         self.robot_controller = robot_controller
         self.last_update_time = time.time()
@@ -34,6 +48,27 @@ class Handler:
 
         self.path_display_pixels = None
         self.new_path_flag = False
+        
+        # Recording Data
+        self._start_recording_time = 0
+        self._current_recording_time = 0; 
+        self.recording_data = False 
+        self.data_storage = data_storage
+        self.desired_state.isRecordingOn = None
+        
+        boundary = self.cam_reg.meta_base_homography_data["boundary"] 
+        if boundary is not None:
+            print("[Handler] Loading Robot Fixtures")
+        else:
+            # Default 
+            print("[Handler] Defaulting Robot Fixtures")
+            boundary = [[-0.0215, -0.0215],
+                        [ 0.0215, -0.0215],
+                        [ 0.0215,  0.0215],
+                        [-0.0215,  0.0215]] 
+            
+        self.robot_fixtures = RobotFixtures(boundary, include_boundary=False)
+        self.robot_fixtures.plot_valid_region() # Debug
         
         
         self.virtual_fixture, self.dx, self.dy, self.distance_field = self.generate_virtual_fixture()
@@ -152,7 +187,8 @@ class Handler:
             ys_plot = [p[1] for p in path]
             ax.plot(xs, ys_plot, linewidth=1)  # default color
         ax.set_axis_off()
-        fig.savefig("raster path.png")
+        fig.savefig("plots/raster path.png")
+        plt.close(fig)
         return path
     
 ###------------------------ Virtual Fixtures -------------------####    
@@ -174,12 +210,19 @@ class Handler:
 ###------------------------ Robot Tracking -------------------####                
     def _do_current_position(self):
         now = time.time()
+        curr_position = self.robot_controller.current_robot_to_world_position()
+        
+        if self.recording_data and self.prev_robot_on:
+            self.data_storage.put_robot(curr_position, 
+                                        np.zeros(3),
+                                        t=self._current_recording_time - self._start_recording_time,
+                                        laser_on=self.laser_obj.is_firing())
+            
         if now - self._last_pose_ui < 1/75.0:  # 75 Hz
             return
         self._last_pose_ui = now
     
         warped = self.desired_state.isTransformedViewOn
-        curr_position = self.robot_controller.current_robot_to_world_position()
         current_pixel_location = self.cam_reg.get_world_m_to_UI(self.cam_type, curr_position, warped)[0].astype(np.int16)
         
         self._track_virtual_fixtures(current_pixel_location)
@@ -192,7 +235,6 @@ class Handler:
         if self.desired_state.heat_markers != None:
             if(len(self.desired_state.heat_markers) == 0 ):
                 return
-            temps = np.zeros(len(self.desired_state.heat_markers))
             markers = np.array([[pixel['x'], pixel['y']] for pixel in self.desired_state.heat_markers])
             # print("[Temperature Markers] Marker Locations: ", markers)
             warped_view = self.desired_state.isTransformedViewOn
@@ -212,7 +254,7 @@ class Handler:
             
             for i, marker in enumerate(self.desired_state.heat_markers):
                 if valid[i]:
-                    self.desired_state.heat_markers[i]["temp"] = float(therm_img[ys[i], xs[i]])
+                    self.desired_state.heat_markers[i]["temp"] = float(temps[i])
                 else:
                     marker["temp"] = None
                     
@@ -245,10 +287,11 @@ class Handler:
             ys_plot = [p[1] for p in pixels]
             ax.plot(xs, ys_plot, linewidth=1)  # default color
         ax.set_axis_off()
-        fig.savefig("pixels path.png")
+        fig.savefig("plots/pixels path.png")
+        plt.close(fig)
         
         warped_view = self.desired_state.isTransformedViewOn
-        print("Warped Path: ", warped_view)
+        # print("Warped Path: ", warped_view)
         robot_path = self.cam_reg.get_UI_to_world_m(
                 self.cam_type, 
                 pixels, 
@@ -271,7 +314,7 @@ class Handler:
     
     def _do_show_path(self, traj: TrajectoryController):
         target_positions = traj.get_path_position()
-        fig, ax = plt.subplots(figsize=(8,4))
+        # fig, ax = plt.subplots(figsize=(8,4))
         # ax.imshow(img, cmap='gray')
         # if len(target_positions) > 1:
         #     xs = [p[0] for p in target_positions]
@@ -296,7 +339,8 @@ class Handler:
         x, y = list(pixels[:, 0].astype(np.float64)), list(pixels[:, 1].astype(np.float64))
         # print(pixels)
         time = [total_time]
-        print(f"Total Time: {total_time}")
+        # print(f"Total Time: {total_time}")
+        # print("[package_path Handler] pixels:", pixels)
         self.desired_state.path_preview = {
             "x" : x,
             "y" : y,
@@ -321,7 +365,7 @@ class Handler:
                 
             target_pose = np.eye(4)
             target_pose[:3, -1] = target_world_point
-            target_vel = self.robot_controller.live_control(target_pose, 0.05, KP = 5.0, KD=0.5)
+            target_vel = self.robot_controller.live_control(target_pose, 0.05, KP = 0.5)
             self.robot_controller.set_velocity(target_vel, np.zeros(3))
         else:
             # print("holding")
@@ -336,14 +380,28 @@ class Handler:
         # print(height_change)
         # print(f"[INPUT DOWN TIME] {self._input_downtime()}")
         # print(f"[Height Diff] {np.abs(height_diff)}")
+        
+        
+                    
         if(self._input_downtime() > .12 and np.abs(height_diff) < 0.001): # 1mm
             # print("[Live Control] Holding Position")
             self._do_hold_pose()
         else:
-            if self.desired_state.x is not None and  self.desired_state.y is not None:
+            if self.desired_state.x is not None and self.desired_state.y is not None:
                 if (self.desired_state.x < 0 and self.desired_state.y < 0):
                     return
+                
+                world_position = self.robot_controller.current_robot_to_world_position()
+                valid_robot_position = self.robot_fixtures.is_valid(world_position[:2])
+                
                 pixel = np.array([[self.desired_state.x, self.desired_state.y]])
+                
+                if self.recording_data:
+                    payload = {"pixel": pixel}
+                    self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
+                                            mode = "live control",
+                                            payload=payload)
+                    print("[Handler Recorded Input] Live Control ", payload)
                 
                 warped_view = self.desired_state.isTransformedViewOn
                 target_world_point = self.cam_reg.get_UI_to_world_m(
@@ -351,20 +409,45 @@ class Handler:
                     pixel, 
                     warped_view, 
                     z = self.working_height)[0]
+                
+                valid_input_position = self.robot_fixtures.is_valid(target_world_point[:2])
+                
+                # print("[Hander] Robot Fixtures: Valid Input: ", valid_input_position, " | Valid Robot", valid_robot_position)
+                if(not valid_input_position and not valid_robot_position):
+                    # print("[Hander] Robot Fixtures: Stopping target", target_world_point[:2])
+                    # print("[Hander] Robot Fixtures: Stopping current", world_position[:2])
+                    self._do_hold_pose()
+                    return
+                    
+                    
                 self.laser_obj.set_output(self.desired_state.isLaserOn)
             else:
+                # Holding but change height
                 target_world_point = self.robot_controller.current_robot_to_world_position()
                 target_world_point[-1] = self.working_height
+            
+            
+            
                 
             target_pose = np.eye(4)
             target_pose[:3, -1] = target_world_point
-            target_vel = self.robot_controller.live_control(target_pose, 0.05, KP = 5.0, KD=0.5)
+            live_control_speed = self.desired_state.speed / 1000.0 if self.desired_state.speed != None else 0.01
+            # print(f"[Handler Live Control] Speed: {self.desired_state.speed}")
+            target_vel = self.robot_controller.live_control(target_pose, live_control_speed, KP = 5.0)
             # TODO Multiply velocity controller in unit component direction * max(min_speed, min(1, (distance / max_distance)))
             
             
             self.robot_controller.set_velocity(target_vel, np.zeros(3))
 
-    
+###------------------------ Auto Laser Focus ------------------####
+
+    def _do_auto_focus(self, world_pos):
+        if self.cam_reg.depth_map is not None:
+            current_height = DepthEstimation.current_height(depth_map = self.cam_reg.depth_map, 
+                                                            current_position = world_pos[:2], 
+                                                            meta = self.cam_reg.depth_meta)
+            print(f"[Handler Depth Estimation] Current Height [mm]: {current_height*1000:0.2f}")
+            # print("[Handler Depth Estimation] Current position [m]: ", world_pos[:2])
 
     async def main_loop(self):
         # Yield to other threads (video stream, websocket comms)
@@ -377,22 +460,45 @@ class Handler:
         # print(self.desired_state.heat_markers)
         self._do_current_position()
         
+        if self.desired_state.isRecordingOn and not self.recording_data:
+            self.recording_data = True
+            self._start_recording_time = time.time()
+            print("[Hander] Start Recording ")
+            self.desired_state.isRecordingOn = None
+        elif self.desired_state.isRecordingOn is not None and \
+            not self.desired_state.isRecordingOn and self.recording_data:
+            self.recording_data = False
+            print("[Hander] Ending Recording ", self.desired_state.isRecordingOn)
+            self.data_storage.save_data_storage(os.path.join(self.directory, "data_collection"))
+        
+        if self.recording_data:
+            self._current_recording_time = time.time() 
         
         if(self.desired_state.raster_mask is not None
                and not self.robot_controller.is_trajectory_running()):
-                self.desired_state.x = None
-                self.desired_state.y = None
-                self.laser_obj.set_output(False)
-                print("Raster Trigger")
-                raster = self._read_raster()
-                if len(raster) < 1:
-                    print("[Warning] : Raster path is empty")
-                    self._package_path(np.empty((1, 2), dtype=float), -1)
-                else: 
-                    self.current_traj = self._do_create_path(raster)
-                    
-                self.desired_state.raster_mask = None
-                self.desired_state.path = None
+            self.desired_state.x = None
+            self.desired_state.y = None
+            self.laser_obj.set_output(False)
+            print("Raster Trigger")
+            raster = self._read_raster()
+            
+            if len(raster) < 1:
+                print("[Warning] : Raster path is empty")
+                self._package_path(np.empty((1, 2), dtype=float), -1)
+            else: 
+                self.current_traj = self._do_create_path(raster)
+                
+            if self.recording_data:
+                payload = {"pixel points": raster,
+                            "img": self.desired_state.raster_mask}
+                
+                self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
+                                            mode = "raster",
+                                            payload=payload)
+                print("[Handler Recorded Input] Raster Control ", raster)
+            
+            self.desired_state.raster_mask = None
+            self.desired_state.path = None
                 
         elif(self.desired_state.path is not None and len(self.desired_state.path) > 1
                 and not self.robot_controller.is_trajectory_running()):
@@ -402,14 +508,24 @@ class Handler:
             
             self.current_traj = self._do_create_path(path)
             
+            if self.recording_data:
+                payload = {"pixel points": self.desired_state.path}
+                    
+                self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
+                                            mode = "outline",
+                                            payload=payload)
+            
             self.desired_state.x = None
             self.desired_state.y = None
             self.desired_state.path = None
             
-        self.desired_state.current_height = self.robot_controller.current_robot_to_world_position()[-1]
+        world_pos = self.robot_controller.current_robot_to_world_position()
+        world_z = world_pos[-1]
+        self.desired_state.current_height = world_z
 
         if(self.desired_state.isRobotOn):          
             self.working_height = self.desired_state.height / 100.0 if self.desired_state.height else  0 # cm to m
+            self._do_auto_focus(world_pos)
             # print(f"[Robot Height] {self.working_height} m")
                 
             # print("loop",
@@ -417,7 +533,7 @@ class Handler:
             # "path?", self.desired_state.path is not None,
             # "Path event?", self.desired_state.pathEvent,
             # "traj_running?", self.robot_controller.is_trajectory_running())
-            height_diff = self.working_height - self.robot_controller.current_robot_to_world_position()[-1]
+            height_diff = self.working_height - world_z
             height_change = np.abs(height_diff) > 0.0001 #0.1 mm
             # print(f"[Robot Height] Height Change: {height_change}")
             if(self.robot_controller.is_trajectory_running() and self.path_display_pixels is not None):
@@ -434,6 +550,12 @@ class Handler:
             if(self.current_traj is not None and self.desired_state.executeCommand
                    and not self.robot_controller.is_trajectory_running()):
                 print("Executing Path")
+                if self.recording_data:
+                    payload = {"traj":  self.current_traj}
+                    self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
+                                            mode = "execute",
+                                            payload=payload)
+                    
                 self._do_path(self.current_traj)
                 self.desired_state.executeCommand = None
                 self.current_traj = None

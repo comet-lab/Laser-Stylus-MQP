@@ -215,6 +215,7 @@ class Robot_Controller():
                     break
 
                 if dt < time_step:
+                    time.sleep(0.002)
                     continue
                 t_prev = now
                 
