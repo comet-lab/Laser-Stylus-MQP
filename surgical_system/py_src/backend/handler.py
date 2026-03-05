@@ -126,6 +126,8 @@ class Handler:
         img = cv2.imdecode(numpy_array, cv2.IMREAD_UNCHANGED)
         img = cv2.resize(img, (1280, 720))
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        # cv2.imshow("mask", gray)
+        # cv2.waitKey(0)
         return gray       
             
     def _read_raster(self):
