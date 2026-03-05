@@ -1,33 +1,60 @@
-//frontend/src/services/WebSocketHandler.ts
+// frontend/src/services/WebSocketHandler.ts
+import { ToastManager } from '../ui/ToastManager';
 
-// Define the state interface matching your backend example_data
+// Define the state interface matching backend RobotSchema (robot.py)
 export interface WebSocketMessage {
-    x: number;
-    y: number;
-    z: number;
-    rx: number;
-    ry: number;
-    rz: number;
-    laserX: number;
-    laserY: number;
-    maxHeat: number; 
-    beamWaist: number;
-    height: number;
-    speed: number;
-    isLaserOn: boolean;
-    isRobotOn: boolean;
-    isTransformedViewOn: boolean;
-    pathEvent: string | null;
+    //Coordinates
+    x?: number;
+    y?: number;
+    z?: number;
+    rx?: number;
+    ry?: number;
+    rz?: number;
+
+    //Laser and Vision State
+    laserX?: number;
+    laserY?: number;
+    averageHeat?: number;
+    maxHeat?: number; 
+    beamWaist?: number;
+
+    //Flags and Views
+    isLaserOn?: boolean;
+    isRobotOn?: boolean;
+    isLaserFiring?: boolean;
+    isAutoHeightAdjustOn?: boolean;
+    isRecordingOn?: boolean;
+    isTransformedViewOn?: boolean;
+    isThermalViewOn?: boolean;
+    request_sync?: boolean;
+
+    //Settings
+    speed?: number;
+    passes?: number;
+    density?: number;
+    height?: number;
+    current_height?: number;
+    raster_type?: string;
+    pathEvent?: string | null;
+
+    //Complex Data and Masks
+    path?: { x: number, y: number }[];
     heat_markers?: { x: number, y: number }[];
-    
+    raster_mask?: string;
+    fixtures_mask?: string;
+    heat_mask?: string;
+
+    //Execution and Preview
+    pathPrepared?: boolean;
+    executeCommand?: boolean;
     path_preview?: {
         x: number[];
         y: number[];
+        time?: number[] | number;
     };
     preview_duration?: number;
 }
 
-// Type for partial updates, any subset of WebSocketMessage
 export type PartialWebSocketMessage = Partial<WebSocketMessage>;
 
 export class WebSocketHandler {
@@ -35,19 +62,23 @@ export class WebSocketHandler {
     private url: string;
     private outputElement: HTMLElement | null;
     public onStateUpdate: ((newState: WebSocketMessage) => void) | null = null;
+    public onOpen: (() => void) | null = null;
+
+    private isReconnecting: boolean = false;
 
     constructor(outputElement: HTMLElement | null) {
-        this.url = `ws://${window.location.hostname}:443/ws/${import.meta.env.VITE_UI_WEBSOCKET_NAME}`;
+        // Fallback to local 8000 if env variable is missing
+        const wsName = import.meta.env.VITE_UI_WEBSOCKET_NAME || 'ui';
+        this.url = `ws://${window.location.hostname}:443/ws/${wsName}`;
         this.outputElement = outputElement;
     }
 
     private log(message: string) {
         if (this.outputElement) {
-            // If an element was provided, use it
             this.outputElement.textContent += message + "\n";
         } else {
-            // Otherwise, log to the console
-            //console.log(`[WebSocketHandler]: ${message}`);
+            // Uncomment to debug raw WS traffic in console
+            // console.log(`[WebSocket]: ${message}`);
         }
     }
 
@@ -62,12 +93,22 @@ export class WebSocketHandler {
 
         this.log("Connecting to WebSocket...");
         this.ws = new WebSocket(this.url);
+
+        this.ws.onopen = () => {
+            console.log('WebSocket Connected');
+
+            if (this.isReconnecting) {
+                ToastManager.clearAll();
+                ToastManager.show("Connection restored!", { type: 'info', durationMs: 3000 });
+                this.isReconnecting = false;
+            }
+
+            if (this.onOpen) this.onOpen();
+        };
         
-        //this.ws.onopen = () => this.log("Connected to WebSocket");
         this.ws.onmessage = (event) => {
             try {
                 const newState = JSON.parse(event.data) as WebSocketMessage;
-                
                 if (this.onStateUpdate) {
                     this.onStateUpdate(newState);
                 }
@@ -75,7 +116,24 @@ export class WebSocketHandler {
                 this.log(`Error parsing incoming state: ${e instanceof Error ? e.message : String(e)}`);
             }
         };
-        this.ws.onclose = () => this.log("Disconnected");
+        
+        this.ws.onclose = () => {
+            console.warn('WebSocket Disconnected. Reconnecting in 2 seconds...');
+            this.log("Disconnected");
+
+            if (!this.isReconnecting) {
+                ToastManager.show(
+                    "Connection lost! Hardware controls and live updates are disabled.", 
+                    { type: 'error', requireAck: true, ackText: 'DISMISS' }
+                );
+                
+                this.isReconnecting = true;
+            }
+
+            // Optional: Auto-reconnect logic
+            setTimeout(() => this.connect(), 2000);
+        };
+        
         this.ws.onerror = (error) => this.log(`WebSocket error: ${String(error)}`);
     }
 
@@ -84,14 +142,13 @@ export class WebSocketHandler {
             this.ws.send(message);
             return true;
         }
-        this.log("Not connected. Cannot send data");
+        this.log("Not connected. Cannot send data.");
         return false;
     }
 
-    // Generic method to update any subset of the state
     public updateState(updates: PartialWebSocketMessage): boolean {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-            this.log("Not connected. Cannot send data");
+            this.log("Not connected. Cannot update state.");
             return false;
         }
 

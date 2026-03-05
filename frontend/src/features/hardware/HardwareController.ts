@@ -1,8 +1,7 @@
-//frontend/src/features/hardware/HardwareController.ts
-
 import { UIRegistry }              from '../../core/UIRegistry';
 import { AppState }                from '../../core/AppState';
 import { WebSocketHandler }        from '../../services/WebSocketHandler';
+import { ToastManager }            from '../../ui/ToastManager';
 
 /**
  * HardwareController
@@ -24,6 +23,13 @@ export class HardwareController {
     // ---------------------------------------------------------------
 
     changeLaserState(newState: boolean): void {
+        // Intercept: Prevent turning the laser ON if we are in real-time mode but NOT on the drawing tab
+        if (newState === true && this.ui.processingModeSwitch.checked && this.state.currentMode !== 'drawing') {
+            ToastManager.show("Hardware controls disabled. Switch to the PATH tab to use Real-Time mode.", { type: 'warning' });
+            this.ui.laserBtn.style.pointerEvents = 'auto'; // Release the click lock from AppController
+            return;
+        }
+
         this.ui.laserBtn.style.pointerEvents = 'none';   // Lock UI
 
         const updates: any = { isLaserOn: newState };
@@ -48,6 +54,13 @@ export class HardwareController {
     }
 
     changeRobotState(newState: boolean): void {
+        // Intercept: Prevent turning the robot ON if we are in real-time mode but NOT on the drawing tab
+        if (newState === true && this.ui.processingModeSwitch.checked && this.state.currentMode !== 'drawing') {
+            ToastManager.show("Hardware controls disabled. Switch to the PATH tab to use Real-Time mode.", { type: 'warning' });
+            this.ui.robotBtn.style.pointerEvents = 'auto'; // Release the click lock from AppController
+            return;
+        }
+
         this.ui.robotBtn.style.pointerEvents = 'none';   // Lock UI
 
         const updates: any = { isRobotOn: newState };

@@ -12,6 +12,8 @@ import { ToolHandler } from '../features/drawing/ToolHandler';
 import { ExecutionManager } from '../features/drawing/ExecutionManager';
 import { SettingsManager } from '../features/settings/SettingsManager';
 import { PreviewManager } from '../features/drawing/PreviewManager';
+import { ShapeType } from '../ui/types';
+import { ToastManager } from '../ui/ToastManager';
 
 // ---------------------------------------------------------------------------
 // Global type augmentation – MediaMTXWebRTCReader lives on window at runtime
@@ -63,12 +65,26 @@ class AppController {
 
     private isHardwareHeightSynced: boolean = false;
     private isChangingHeight: boolean = false;
+    private lastViewportWidth: number = 0;
+    private lastViewportHeight: number = 0;
+    private isConnectingVideo: boolean = false;
+
+    private isVideoReady: boolean = false;
+    private isWsReady: boolean = false;
+    private hasBooted: boolean = false;
+
+    private zoomLevel: number = 1;
+    private panX: number = 0;
+    private panY: number = 0;
+    private readonly MIN_ZOOM = 1;
+    private readonly MAX_ZOOM = 4;
 
     // ---------------------------------------------------------------
     // Late-initialised (created once the video track arrives)
     // ---------------------------------------------------------------
     private canvasManager: CanvasManager | null = null;
     private reader: any = null;   // MediaMTXWebRTCReader instance
+    private wakeLock: any = null; //Keeps screen awake
 
     // ---------------------------------------------------------------
     // Constructor
@@ -128,6 +144,16 @@ class AppController {
         this.settingsManager.handleResize();
 
         this.init();
+
+        //Clean up existing connections on page unload
+        window.addEventListener('beforeunload', () => {
+            if (this.reader) {
+                try { this.reader.destroy(); } catch (e) { }
+            }
+            if (this.wsHandler) {
+                this.wsHandler.disconnect();
+            }
+        });
     }
 
     // ===================================================================
@@ -139,12 +165,17 @@ class AppController {
         this.setupWebSocket();
         this.bindEvents();
         this.setupInitialState();
+        this.setupWakeLock();
     }
 
     private setupInitialState(): void {
-        // Mute is required for autoplay in most browsers
+        //Mute and PlaysInline are strictly required for autoplay on iOS Safari
         this.ui.video.muted = true;
         this.ui.video.autoplay = true;
+        this.ui.video.setAttribute('playsinline', 'true');
+        this.ui.video.setAttribute('webkit-playsinline', 'true');
+        //Force iOS to start the media engine, catch any background auto-play blocks
+        this.ui.video.play().catch(e => console.warn("iOS Autoplay wait:", e));
 
         // Match canvas to container size
         this.ui.canvas.width = this.ui.viewport.offsetWidth;
@@ -168,16 +199,42 @@ class AppController {
     // ===================================================================
 
     private setupVideoCanvas(): void {
+        if (this.isConnectingVideo) {
+            console.log("Video connection already in progress, skipping...");
+            return;
+        }
+        this.isConnectingVideo = true;
+        //Clean up any broken previous connection attempts
+        if (this.reader) {
+            try { this.reader.destroy(); } catch (e) { }
+            this.reader = null;
+        }
+
         this.reader = new window.MediaMTXWebRTCReader({
             url: new URL(`http://169.254.0.3:8889/mystream/whep`),
-            onError: (err: string) => this.setMessage(err),
+            // TODO mock/physical mode different IP - could set ENV var for host name?
+            // url: new URL(`http://${window.location.hostname}:8889/mystream/whep`),
+            onError: (err: string) => {
+                console.warn("Video stream not ready yet. Retrying in 2s...", err);
+                this.isConnectingVideo = false; // Reset flag before retry
+                setTimeout(() => this.setupVideoCanvas(), 2000);
+            },
             onTrack: (evt: RTCTrackEvent) => {
+                this.isConnectingVideo = false;
                 if (evt.track.kind === 'video') {
                     this.ui.video.srcObject = evt.streams[0];
-                    // Start the per-frame render loop
-                    this.ui.video.requestVideoFrameCallback(this.updateCanvasLoop.bind(this));
-                    // CanvasManager can now be constructed (video dimensions are known)
-                    this.initCanvasManager();
+
+                    this.ui.video.onloadedmetadata = () => {
+                        const textEl = this.ui.loadingScreen.querySelector('.loading-text');
+                        if (textEl) textEl.textContent = "INITIALIZING SYSTEM...";
+                        this.initCanvasManager();
+                    };
+
+                    //Add this check immediately after setting the handler:
+                    if (this.ui.video.readyState >= 1) {
+                        //Metadata already loaded, manually trigger
+                        this.ui.video.onloadedmetadata(new Event('loadedmetadata'));
+                    }
                 }
             },
         });
@@ -185,7 +242,125 @@ class AppController {
 
     private setupWebSocket(): void {
         this.wsHandler.onStateUpdate = (newState: WebSocketMessage) => this.syncUiToState(newState);
+        //Add function to clean the state when connection starts
+        this.wsHandler.onOpen = () => {
+            console.log("WS Connected: Initiating Clean Slate Protocol...");
+            this.isWsReady = true;
+            this.checkAppReady();
+        };
         this.wsHandler.connect();
+    }
+
+    private async checkAppReady(): Promise<void> {
+        if (this.isWsReady && this.isVideoReady && !this.hasBooted) {
+            console.log("System Ready: Initiating Clean Slate Protocol...");
+            this.hasBooted = true;
+
+            //Don't block UI on reset - do it in background with timeout
+            Promise.race([
+                this.resetToDefaults(),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Reset timeout')), 5000)
+                )
+            ]).catch(err => {
+                console.warn("Reset failed or timed out, continuing anyway:", err);
+            });
+
+            //Show UI immediately
+            setTimeout(() => {
+                this.ui.loadingScreen.classList.add('hidden');
+            }, 500);
+        }
+    }
+
+    /**
+     * CLEAN SLATE PROTOCOL
+     * Resets the application to a safe, known state upon connection/refresh.
+     */
+    private async resetToDefaults(): Promise<void> {
+        // --- Turn off hardware ---
+        this.hardware.applyServerLaserState(false);
+        this.hardware.applyServerRobotState(false);
+
+        // --- Tool reset ---
+        document.getElementById('drawingBtn')?.click();
+        this.ui.toggleButtons.forEach(btn => btn.classList.remove('selected'));
+        this.state.selectedShape = null;
+        this.state.drawnShapeType = null;
+        this.toolHandler.updateDrawButtonState();
+
+        // --- Transformed view on by default ---
+        this.ui.transformedModeSwitch.checked = true;
+        this.ui.transformedModeSwitch.dispatchEvent(new Event('change'));
+        if (this.canvasManager) {
+            await this.canvasManager.updateViewSettings(true, false);
+        }
+
+        // --- Height Sync ---
+        this.isHardwareHeightSynced = false;
+        this.ui.heightTrigger.disabled = true;
+        this.ui.heightDisplay.textContent = "...";
+
+        // --- Speed default 10 mm/s ---
+        this.ui.speedSlider.value = "10";
+        this.ui.speedDisplay.textContent = "10";
+
+        this.wsHandler.updateState({ speed: 10, isLaserOn: false, isRobotOn: false, request_sync: true });
+
+        // --- Reset all masks and the server memory ---
+        console.log("Resetting server environment...");
+        try {
+            await fetch(`http://${window.location.hostname}:443/api/system_reset`, {
+                method: 'POST'
+            });
+
+            //Canvas manager should definitely exist by now
+            if (this.canvasManager) {
+                await this.canvasManager.clearFixturesOnServer();
+                await this.canvasManager.resetHeatArea();
+                await this.canvasManager.clearPathAndRasterOnServer();
+
+                this.canvasManager.clearFixtures();
+                this.canvasManager.clearDrawing();
+            }
+
+        } catch (e) {
+            console.warn("Could not reach endpoints to reset masks:", e);
+        }
+    }
+
+    /**
+     * Methods to handle keeping the screen awake while the app is open
+     */
+    private async requestWakeLock(): Promise<void> {
+        try {
+            if ('wakeLock' in navigator) {
+                this.wakeLock = await (navigator as any).wakeLock.request('screen');
+                console.log('Screen Wake Lock acquired');
+
+                this.wakeLock.addEventListener('release', () => {
+                    console.log('Screen Wake Lock released');
+                });
+            }
+        } catch (err: any) {
+            console.warn(`Wake Lock error: ${err.name}, ${err.message}`);
+        }
+    }
+    private setupWakeLock(): void {
+        //Browsers require a user gesture to grant a wake lock
+        const initWakeLock = () => {
+            this.requestWakeLock();
+            //Once acquired, we don't need this listener anymore
+            document.removeEventListener('pointerdown', initWakeLock);
+        };
+        document.addEventListener('pointerdown', initWakeLock);
+        //If the user minimizes the browser or switches tabs, the OS releases the lock.
+        //We must re-request it when they come back to the app.
+        document.addEventListener('visibilitychange', () => {
+            if (this.wakeLock !== null && document.visibilityState === 'visible') {
+                this.requestWakeLock();
+            }
+        });
     }
 
     /**
@@ -205,19 +380,25 @@ class AppController {
             () => { this.ui.resetHeatAreaBtn.disabled = false; this.ui.heatLegend.classList.remove('hidden'); },
         );
 
+        //Force transformed view on init
+        this.canvasManager.updateViewSettings(this.ui.transformedModeSwitch.checked, false);
+
         this.canvasManager.onShapeModified = () => {
             if (this.ui.previewToggleOn.classList.contains('active')) {
                 // The preview window is currently open, so silently refresh the data!
                 this.previewManager.refreshPreview();
             } else {
                 // The preview window is closed. Invalidate old data to wait for new request
-                this.executionManager.onShapeComplete(); 
+                this.executionManager.onShapeComplete();
             }
         };
 
         this.toolHandler.updateDrawButtonState();
         this.toolHandler.updateFixturesButtonState();
         this.toolHandler.updateThermalButtonState();
+
+        this.isVideoReady = true;
+        this.checkAppReady();
     }
 
     // ===================================================================
@@ -243,6 +424,12 @@ class AppController {
         //Get authoritative viewport dimensions
         const w = this.ui.viewport.offsetWidth;
         const h = this.ui.viewport.offsetHeight;
+
+        if (w === 0 || h === 0) return;
+        if (w === this.lastViewportWidth && h === this.lastViewportHeight) return;
+
+        this.lastViewportWidth = w;
+        this.lastViewportHeight = h;
 
         //Preview Manager: Resize overlay and re-project path
         this.previewManager.updateOverlaySize();
@@ -271,7 +458,12 @@ class AppController {
 
         this.ui.prepareBtn.addEventListener('click', () => this.ui.preparePopup.classList.add('active'));
         this.ui.prepareCloseBtn.addEventListener('click', () => this.ui.preparePopup.classList.remove('active'));
-        this.ui.prepareCancelBtn.addEventListener('click', () => this.ui.preparePopup.classList.remove('active'));
+        this.ui.prepareCancelBtn.addEventListener('click', () => {
+            this.ui.preparePopup.classList.remove('active');
+            this.previewManager.togglePreview(false);
+            ToastManager.clearAll();
+            this.previewManager.resetPreviewState();
+        });
 
         this.ui.previewToggleOn.addEventListener('click', () => {
             this.previewManager.togglePreview(true);
@@ -286,9 +478,6 @@ class AppController {
                 this.previewManager.refreshPreview();
             }
         };
-
-        this.ui.rasterBtnA.addEventListener('click', refreshPreview);
-        this.ui.rasterBtnB.addEventListener('click', refreshPreview);
 
         let debounceTimer: any;
         this.ui.rasterDensityInput.addEventListener('input', () => {
@@ -318,17 +507,56 @@ class AppController {
 
         // --- Real-time drawing pointer events ---
         this.ui.realTimePen.addEventListener('click', () => this.toolHandler.handleRealTimeToolSelection(this.ui.realTimePen, 'pen'));
-        this.ui.viewport.addEventListener('pointerdown', (e) => this.realTime.handleStart(e));
-        this.ui.viewport.addEventListener('pointermove', (e) => this.realTime.handleMove(e));
-        this.ui.viewport.addEventListener('pointerup', (e) => this.realTime.handleEnd(e));
-        this.ui.viewport.addEventListener('pointercancel', (e) => this.realTime.handleEnd(e));
 
-        // --- Processing mode toggle (real-time ↔ batch) ---
+        //Gate the real-time routing so it only takes the pointer if we are actively on the path tab
+        this.ui.viewport.addEventListener('pointerdown', (e) => {
+            if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
+                this.realTime.handleStart(e);
+            }
+        });
+
+        this.ui.viewport.addEventListener('pointermove', (e) => {
+            if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
+                this.realTime.handleMove(e);
+            }
+        });
+
+        this.ui.viewport.addEventListener('pointerup', (e) => {
+            if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
+                this.realTime.handleEnd(e);
+            }
+        });
+
+        this.ui.viewport.addEventListener('pointercancel', (e) => {
+            if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
+                this.realTime.handleEnd(e);
+            }
+        });
+
+        // --- Processing mode toggle ---
         this.ui.processingModeSwitch.addEventListener('change', () => this.modeManager.toggleMode());
 
         // --- Top-level mode buttons (Drawing / Thermal / Fixtures) ---
         this.ui.modeButtons.forEach(btn => {
             btn.addEventListener('click', () => {
+                //If clicking the tab they are already on, do nothing
+                if (btn.classList.contains('active')) return;
+
+                //If we are in real time mode and we switch tabs, turn off robot/laser
+                if (this.ui.processingModeSwitch.checked) {
+                    console.warn("Safety Interlock: In-app tab switched. Disabling hardware.");
+
+                    this.hardware.changeLaserState(false);
+                    this.hardware.changeRobotState(false);
+
+                    //Stop the drawing loop if they were mid-stroke while clicking the tab
+                    if (this.state.isRealTimeDrawing) {
+                        const mockEvent = new PointerEvent('pointerup');
+                        this.realTime.handleEnd(mockEvent);
+                    }
+                }
+
+                // Proceed with normal tab switching
                 this.ui.modeButtons.forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 this.modeManager.switchMode(btn.id);
@@ -342,12 +570,12 @@ class AppController {
         });
         this.ui.resetHeatAreaBtn.addEventListener('click', async () => {
             if (!this.canvasManager) return;
-            try { 
+            try {
                 await this.canvasManager.resetHeatArea();
                 this.ui.resetHeatAreaBtn.disabled = true;
                 this.ui.heatLegend.classList.add('hidden')
 
-             }
+            }
             catch (e) { console.error(e); this.ui.resetHeatAreaBtn.disabled = false; }
         });
         this.ui.clearMarkersBtn.addEventListener('click', async () => {
@@ -379,20 +607,74 @@ class AppController {
 
         this.ui.heightSlider.addEventListener('mousedown', () => this.isChangingHeight = true);
         this.ui.heightSlider.addEventListener('touchstart', () => this.isChangingHeight = true, { passive: true });
-        
+
         this.ui.heightSlider.addEventListener('mouseup', () => this.isChangingHeight = false);
         this.ui.heightSlider.addEventListener('touchend', () => this.isChangingHeight = false);
 
+        const togglePopout = (trigger: HTMLElement, flyout: HTMLElement, otherFlyouts: HTMLElement[]) => {
+            const isActive = flyout.classList.contains('active');
+
+            // Close any other open flyouts
+            otherFlyouts.forEach(f => {
+                f.classList.remove('active');
+                const t = document.getElementById(f.id.replace('Flyout', 'Trigger'));
+                if (t) t.classList.remove('active');
+            });
+
+            if (isActive) {
+                flyout.classList.remove('active');
+                trigger.classList.remove('active');
+            } else {
+                flyout.classList.add('active');
+                trigger.classList.add('active');
+            }
+        };
+
+        this.ui.speedTrigger.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent document click from firing
+            togglePopout(this.ui.speedTrigger, this.ui.speedFlyout, [this.ui.heightFlyout]);
+        });
+
+        this.ui.heightTrigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            togglePopout(this.ui.heightTrigger, this.ui.heightFlyout, [this.ui.speedFlyout]);
+        });
+
+        // Click outside to close
+        document.addEventListener('click', (e) => {
+            const target = e.target as HTMLElement;
+            if (!target.closest('.popout-control')) {
+                this.ui.speedFlyout.classList.remove('active');
+                this.ui.speedTrigger.classList.remove('active');
+                this.ui.heightFlyout.classList.remove('active');
+                this.ui.heightTrigger.classList.remove('active');
+            }
+        });
+
+        // Speed Slider event (Update text and send to backend)
+        this.ui.speedSlider.addEventListener('input', () => {
+            this.ui.speedDisplay.textContent = this.ui.speedSlider.value;
+        });
+        this.ui.speedSlider.addEventListener('change', () => {
+            const val = this.ui.speedSlider.value;
+            console.log(`Sending final speed command to robot: ${val}`);
+            this.wsHandler.updateState({ speed: parseInt(val) });
+        });
+
         // Height Slider 
         this.ui.heightSlider.addEventListener('input', () => {
-            //Block the browser from sending cached defaults on boot
+            // Only update the text on the screen
+            this.ui.heightDisplay.textContent = this.ui.heightSlider.value;
+        });
+        this.ui.heightSlider.addEventListener('change', () => {
             if (!this.isHardwareHeightSynced) return;
+            const heightValue = this.ui.heightSlider.value;
+            const heightCm = parseFloat(heightValue) * 100;
+            const displayVal = heightCm.toFixed(1);
+            console.log(`Sending final height command to robot: ${displayVal}`);
 
-            const heightValue = parseInt(this.ui.heightSlider.value);
-            this.ui.heightDisplay.textContent = String(heightValue + ' CM');
-            
-            //Send to backend
-            this.wsHandler.updateState({ height: heightValue });
+            // Send exactly one command to the backend
+            this.wsHandler.updateState({ height: parseInt(heightValue) });
         });
 
         // --- Shape drawing tools ---
@@ -407,8 +689,83 @@ class AppController {
         this.ui.canvas.addEventListener('touchend', () => setTimeout(() => this.toolHandler.updateDrawButtonState(), 50));
 
         // --- Execution actions ---;
-        this.ui.executeBtn.addEventListener('click', () => this.executionManager.executePath());
+        this.ui.executeBtn.addEventListener('click', () => {
+            // Take a snapshot of the geometry before executing
+            if (this.canvasManager && this.state.drawnShapeType) {
+                this.canvasManager.backupDrawing();
+                this.state.hasBackupShape = true;
+                this.state.backupShapeType = this.state.drawnShapeType;
+            }
+            this.executionManager.executePath();
+            // Update button states so the UI knows a backup exists now
+            this.toolHandler.updateDrawButtonState();
+        });
         this.ui.clearBtn.addEventListener('click', () => this.executionManager.clearDrawing());
+
+        this.ui.restorePathBtn.addEventListener('click', () => {
+            if (this.canvasManager && this.state.hasBackupShape) {
+                // Restore the state tracker
+                this.state.drawnShapeType = this.state.backupShapeType;
+
+                // Ask CanvasManager to rebuild the geometry
+                this.canvasManager.restoreDrawing();
+
+                // Lock the tool buttons and disable the restore button
+                this.toolHandler.updateDrawButtonState();
+
+                // Highlight the tool button that matches the restored shape
+                this.modeManager.highlightShapeBtn(this.state.drawnShapeType as ShapeType);
+            }
+        });
+
+        this.ui.speedInput.addEventListener('input', () => {
+            const val = parseFloat(this.ui.speedInput.value);
+            const isValid = !isNaN(val) && val >= 1 && val <= 30;
+
+            if (!isValid) {
+                //Highlight the input field red
+                this.ui.speedInput.classList.add('input-error');
+
+                //Hard-lock the execute button
+                this.ui.executeBtn.disabled = true;
+                this.ui.executeBtn.style.pointerEvents = 'none';
+                this.ui.executeBtn.style.opacity = '0.3';
+
+                //Lock the preview toggle
+                this.ui.previewToggleOn.style.pointerEvents = 'none';
+                this.ui.previewToggleOn.style.opacity = '0.3';
+
+                //If preview is currently calculating/open, show an error
+                if (this.ui.previewToggleOn.classList.contains('active')) {
+                    this.ui.previewDuration.textContent = 'Invalid Speed';
+                }
+
+                //Stop any pending auto-refreshes
+                clearTimeout(debounceTimer);
+            } else {
+                //Remove the red highlight
+                this.ui.speedInput.classList.remove('input-error');
+
+                //Unlock the preview toggle
+                this.ui.previewToggleOn.style.pointerEvents = 'auto';
+                this.ui.previewToggleOn.style.opacity = '1';
+
+                //Changing speed changes the kinematics, so the old preview is now void.
+                if (this.ui.previewToggleOn.classList.contains('active')) {
+                    //Auto-refresh the live preview after they stop typing
+                    this.ui.previewDuration.textContent = 'Computing...';
+                    this.ui.executeBtn.disabled = true;
+                    this.ui.executeBtn.style.pointerEvents = 'none';
+                    this.ui.executeBtn.style.opacity = '0.3';
+
+                    clearTimeout(debounceTimer);
+                    debounceTimer = setTimeout(refreshPreview, 500);
+                } else {
+                    //If preview is off, silently void any hidden preview state
+                    this.previewManager.resetPreviewState();
+                }
+            }
+        });
 
         // --- Fill / Raster settings ---
         const updateFillState = (isEnabled: boolean) => {
@@ -431,7 +788,11 @@ class AppController {
         this.ui.fillOnBtn.addEventListener('click', () => updateFillState(true));
         this.ui.fillOffBtn.addEventListener('click', () => updateFillState(false));
 
-        // Raster pattern buttons are mutually exclusive
+        //TODO: Remove entirely, unless we want to add more raster patterns in the future.
+        /*
+        this.ui.rasterBtnA.addEventListener('click', refreshPreview);
+        this.ui.rasterBtnB.addEventListener('click', refreshPreview);
+
         this.ui.rasterBtnA.addEventListener('click', () => {
             this.ui.rasterBtnA.classList.add('active');
             this.ui.rasterBtnB.classList.remove('active');
@@ -442,6 +803,7 @@ class AppController {
             this.ui.rasterBtnA.classList.remove('active');
             this.state.selectedRasterPattern = 'spiral_raster';
         });
+        */
 
         // --- View-transform  ---
         this.ui.transformedModeSwitch.addEventListener('change', async () => {
@@ -453,6 +815,30 @@ class AppController {
             }
         });
 
+        this.ui.autoHeightSwitch.addEventListener('change', () => {
+            this.wsHandler.updateState({ isAutoHeightAdjustOn: this.ui.autoHeightSwitch.checked });
+        });
+
+        // --- Data Recording ---
+        this.ui.recordDataSwitch.addEventListener('change', () => {
+            this.wsHandler.updateState({ isRecordingOn: this.ui.recordDataSwitch.checked });
+        });
+
+        // --- Processing Mode Segment Wrapper ---
+        // (This triggers the existing hidden checkbox so you don't have to refactor the rest of your app)
+        this.ui.modeBatchBtn.addEventListener('click', () => {
+            this.ui.modeBatchBtn.classList.add('active');
+            this.ui.modeRealtimeBtn.classList.remove('active');
+            this.ui.processingModeSwitch.checked = false;
+            this.ui.processingModeSwitch.dispatchEvent(new Event('change'));
+        });
+
+        this.ui.modeRealtimeBtn.addEventListener('click', () => {
+            this.ui.modeRealtimeBtn.classList.add('active');
+            this.ui.modeBatchBtn.classList.remove('active');
+            this.ui.processingModeSwitch.checked = true;
+            this.ui.processingModeSwitch.dispatchEvent(new Event('change'));
+        });
 
         // --- Layout position controls ---
         this.ui.layoutTopBtn.addEventListener('click', () => this.settingsManager.setMenuPosition('top'));
@@ -465,70 +851,200 @@ class AppController {
             this.handleResize();
         });
 
-        // code for the zoom functionality
-        let zoomLevel = 1;
-        const MIN_ZOOM = 1;   
-        const MAX_ZOOM = 4;
-
-        this.ui.viewport.addEventListener('wheel', (e: WheelEvent) => {
-            if (!e.ctrlKey) return;
-
-            e.preventDefault();
-
-            const zoomSpeed = 0.0015;
-
-            zoomLevel *= (1 - e.deltaY * zoomSpeed);
-
-            // prevents the zoom from going below the min or max that we set. These can be changed
-            zoomLevel = Math.min(Math.max(zoomLevel, MIN_ZOOM), MAX_ZOOM);
-
-            const zoomWrapper = document.getElementById('zoom-wrapper');
-            if (zoomWrapper) {
-                zoomWrapper.style.transform = `scale(${zoomLevel})`;
+        //DISABLE DEFAULT BROWSER ZOOM
+        document.addEventListener('wheel', (e: WheelEvent) => {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
             }
-
-
-
         }, { passive: false });
 
-        // pinch zoom
-        zoomLevel = 1;
+        document.addEventListener('keydown', (e: KeyboardEvent) => {
+            if (e.ctrlKey || e.metaKey) {
+                // Check for +, -, =, and 0 
+                if (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '0') {
+                    e.preventDefault();
+                }
+            }
+        });
 
-        const zoomWrapper = document.getElementById('zoom-wrapper');
+        //DISABLE IPAD DEFAULT GESTURE ZOOM
+        document.addEventListener('gesturestart', (e: Event) => e.preventDefault(), { passive: false });
+        document.addEventListener('gesturechange', (e: Event) => e.preventDefault(), { passive: false });
+        document.addEventListener('gestureend', (e: Event) => e.preventDefault(), { passive: false });
+
+        //DISABLE MULTI-TOUCH SWIPING, ALLOW THE CUSTOM CANVAS ZOOM
+        document.addEventListener('touchmove', (e: TouchEvent) => {
+            if (e.touches.length > 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        //Calculates clamp boundaries and applies the transform
+        const updateTransform = () => {
+            if (!this.ui.zoomWrapper) return;
+
+            //Clamp Pan to prevent dragging the canvas entirely off-screen
+            const rect = this.ui.viewport.getBoundingClientRect();
+            const maxPanX = 0;
+            const minPanX = rect.width - (rect.width * this.zoomLevel);
+            const maxPanY = 0;
+            const minPanY = rect.height - (rect.height * this.zoomLevel);
+
+            //If zoomed all the way out, snap to center
+            if (this.zoomLevel <= this.MIN_ZOOM) {
+                this.panX = 0;
+                this.panY = 0;
+                this.zoomLevel = this.MIN_ZOOM;
+            } else {
+                this.panX = Math.min(Math.max(this.panX, minPanX), maxPanX);
+                this.panY = Math.min(Math.max(this.panY, minPanY), maxPanY);
+            }
+
+            this.ui.zoomWrapper.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.zoomLevel})`;
+
+            // --- Update UI Indicator ---
+            if (this.ui.zoomIndicator && this.ui.zoomText) {
+                if (this.zoomLevel > this.MIN_ZOOM) {
+                    this.ui.zoomIndicator.classList.remove('hidden');
+                    this.ui.zoomText.textContent = `${Math.round(this.zoomLevel * 100)}%`;
+                } else {
+                    this.ui.zoomIndicator.classList.add('hidden');
+                }
+            }
+        };
+
+        //Zoom in not just on center
+        const applyZoomAt = (clientX: number, clientY: number, newZoom: number) => {
+            const viewportRect = this.ui.viewport.getBoundingClientRect();
+
+            //Convert screen coordinates to viewport-local coordinates
+            const x = clientX - viewportRect.left;
+            const y = clientY - viewportRect.top;
+
+            //Find where that point currently lies on the unscaled/unpanned canvas
+            const unscaledX = (x - this.panX) / this.zoomLevel;
+            const unscaledY = (y - this.panY) / this.zoomLevel;
+
+            this.zoomLevel = newZoom;
+
+            //Recalculate panning so the unscaled point remains exactly under the cursor
+            this.panX = x - (unscaledX * this.zoomLevel);
+            this.panY = y - (unscaledY * this.zoomLevel);
+
+            updateTransform();
+        };
+
+        // --- Mouse Wheel Zooming ---
+        this.ui.viewport.addEventListener('wheel', (e: WheelEvent) => {
+            if (!e.ctrlKey && !e.metaKey) return;
+            e.preventDefault();
+
+            const zoomSpeed = 0.003;
+            const delta = -e.deltaY * zoomSpeed;
+            const newZoom = Math.min(Math.max(this.zoomLevel * (1 + delta), this.MIN_ZOOM), this.MAX_ZOOM);
+
+            applyZoomAt(e.clientX, e.clientY, newZoom);
+        }, { passive: false });
+
+        // --- Desktop Panning (Middle mouse or Alt left click) ---
+        let isMousePanning = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        this.ui.viewport.addEventListener('pointerdown', (e: PointerEvent) => {
+            //Button 1 is middle mouse. Or fallback to alt click for trackpads.
+            if (e.button === 1 || (e.button === 0 && e.altKey)) {
+                isMousePanning = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                e.preventDefault();
+            }
+        });
+
+        window.addEventListener('pointermove', (e: PointerEvent) => {
+            if (isMousePanning) {
+                e.preventDefault();
+                this.panX += e.clientX - lastMouseX;
+                this.panY += e.clientY - lastMouseY;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                updateTransform();
+            }
+        });
+
+        window.addEventListener('pointerup', () => { isMousePanning = false; });
+        window.addEventListener('pointercancel', () => { isMousePanning = false; });
+
+        // --- iPad Touch pinch to zoom and 2 finger pan ---
         let initialDistance = 0;
         let startZoom = 1;
+        let lastCenter = { x: 0, y: 0 };
 
-        function getDistance(touches: TouchList) {
+        const getDistance = (touches: TouchList) => {
             const dx = touches[0].clientX - touches[1].clientX;
             const dy = touches[0].clientY - touches[1].clientY;
             return Math.sqrt(dx * dx + dy * dy);
-        }
+        };
 
+        const getCenter = (touches: TouchList) => {
+            return {
+                x: (touches[0].clientX + touches[1].clientX) / 2,
+                y: (touches[0].clientY + touches[1].clientY) / 2
+            };
+        };
+
+        //Raw touchevents handled for zoom, not send to canvas
         this.ui.viewport.addEventListener('touchstart', (e: TouchEvent) => {
+            e.stopPropagation(); //Block from reaching canvas
             if (e.touches.length === 2) {
+                e.preventDefault();
                 initialDistance = getDistance(e.touches);
-                startZoom = zoomLevel;
+                startZoom = this.zoomLevel;
+                lastCenter = getCenter(e.touches);
             }
-        }, { passive: false });
+        }, { capture: true, passive: false });
 
         this.ui.viewport.addEventListener('touchmove', (e: TouchEvent) => {
-            if (e.touches.length === 2 && zoomWrapper) {
+            e.stopPropagation(); //Block from reaching canvas
+            if (e.touches.length === 2 && this.ui.zoomWrapper) {
                 e.preventDefault();
 
                 const currentDistance = getDistance(e.touches);
+                const currentCenter = getCenter(e.touches);
+
+                //Handle the panning shift caused by two fingers dragging across the screen
+                this.panX += currentCenter.x - lastCenter.x;
+                this.panY += currentCenter.y - lastCenter.y;
+                lastCenter = currentCenter;
+
+                //Handle the scaling
                 const scaleFactor = currentDistance / initialDistance;
+                const newZoom = Math.min(Math.max(startZoom * scaleFactor, this.MIN_ZOOM), this.MAX_ZOOM);
 
-                zoomLevel = startZoom * scaleFactor;
-
-                // clamp zoom
-                zoomLevel = Math.min(Math.max(zoomLevel, MIN_ZOOM), MAX_ZOOM);
-
-                zoomWrapper.style.transform = `scale(${zoomLevel})`;
-
+                // Zoom exactly towards the center point of the two fingers
+                applyZoomAt(currentCenter.x, currentCenter.y, newZoom);
             }
-        }, { passive: false });
+        }, { capture: true, passive: false });
 
+        this.ui.viewport.addEventListener('touchend', (e: TouchEvent) => {
+            e.stopPropagation(); //Block from reaching canvas
+        }, { capture: true, passive: false });
 
+        this.ui.viewport.addEventListener('touchcancel', (e: TouchEvent) => {
+            e.stopPropagation(); //Block from reaching canvas
+        }, { capture: true, passive: false });
+
+        //Block finger touches at the viewport level, but allow pen/mouse
+        const blockTouchPointers = (e: PointerEvent) => {
+            if (e.pointerType === 'touch') {
+                e.stopPropagation();
+            }
+        };
+
+        this.ui.viewport.addEventListener('pointerdown', blockTouchPointers, { capture: true });
+        this.ui.viewport.addEventListener('pointermove', blockTouchPointers, { capture: true });
+        this.ui.viewport.addEventListener('pointerup', blockTouchPointers, { capture: true });
+        this.ui.viewport.addEventListener('pointercancel', blockTouchPointers, { capture: true });
     }
 
     // ===================================================================
@@ -554,24 +1070,51 @@ class AppController {
             }
         }
 
-        if (state.height !== undefined && state.height !== null) {
+        if (state.isLaserFiring !== undefined) {
+            // Toggles a class on both the viewport and the robot marker
+            this.ui.viewport.classList.toggle('laser-firing', state.isLaserFiring);
+        }
+
+        if (state.current_height !== undefined && state.current_height !== null) {
             //If this is our first time hearing from the robot since refreshing
             this.isHardwareHeightSynced = true;
 
+            this.ui.heightTrigger.disabled = false;
+
             if (!this.isChangingHeight) {
+                let heightCm = state.current_height * 100;
+                if (Math.abs(heightCm) < 0.05) {
+                    heightCm = 0;
+                }
+                const displayVal = heightCm.toFixed(1);
                 //Update the physical slider position
-                this.ui.heightSlider.value = state.height.toString();
-                
+                this.ui.heightSlider.value = displayVal;
+
                 //Update the text label next to the slider
                 if (this.ui.heightDisplay) {
-                    this.ui.heightDisplay.textContent = `${state.height + ' CM'}`;
+                    this.ui.heightDisplay.textContent = `${displayVal}`;
                 }
-                
+
             }
         }
 
         if (state.path_preview) {
-            this.previewManager.handlePathFromWebSocket(state.path_preview, state.preview_duration);
+            //Check for duration at the root level first (Your ideal schema)
+            let duration = state.preview_duration;
+
+            //Fallback: Check if it is nested inside path_preview (Robot backend schema)
+            if (duration === undefined && state.path_preview.time !== undefined) {
+                //Safely extract whether it's an array or a direct number 10.5
+                duration = Array.isArray(state.path_preview.time)
+                    ? state.path_preview.time[0]
+                    : state.path_preview.time;
+            }
+
+            if (!duration) {
+                console.log("Did not receive a duration from backend. Will use default duration.");
+            }
+
+            this.previewManager.handlePathFromWebSocket(state.path_preview, duration);
         }
 
         // --- Thermal / heat data ---
@@ -588,6 +1131,14 @@ class AppController {
         }
         if (state.isRobotOn !== undefined) {
             this.hardware.applyServerRobotState(!!state.isRobotOn);
+        }
+
+        if (state.isRecordingOn !== undefined) {
+            this.ui.recordDataSwitch.checked = state.isRecordingOn;
+        }
+
+        if (state.isAutoHeightAdjustOn !== undefined) {
+            this.ui.autoHeightSwitch.checked = state.isAutoHeightAdjustOn;
         }
     }
 

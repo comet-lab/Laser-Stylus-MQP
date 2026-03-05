@@ -26,6 +26,7 @@ class Handler:
         self.cam_type = "color"
         self.prev_robot_on = False
         self.working_height = 0.0
+        self.desired_state.current_height = None
         self.show_path = True
         self.current_traj = None
         self._last_pose_ui = 0.0
@@ -86,6 +87,7 @@ class Handler:
         status.maxHeat = self.desired_state.maxHeat
         if not self.mock_robot:
             status.laserX, status.laserY = int(self.desired_state.laserX), int(self.desired_state.laserY)
+            status.current_height =  self.desired_state.current_height 
         else:
             status.laserX, status.laserY = status.x, status.y
         status.laserX *= 640/1280
@@ -95,6 +97,8 @@ class Handler:
             status.path_preview = self.desired_state.path_preview
             status.path_preview['x'] = [x * 640/1280 for x in status.path_preview['x']]
             status.path_preview['y'] = [y * 480/720 for y in status.path_preview['y']]
+            print(f"[send_fn Handler] Sending Speed: {self.desired_state.path_preview['time']}")
+            status.current_height =  np.pi # ?
             self.new_path_flag = False
             
         return status.to_str()
@@ -132,7 +136,7 @@ class Handler:
             return []
         spacing = int(spacing) # TODO calculate lines per distance 
         
-        print(f"[Spacing (pixels)]: {spacing}")
+        # print(f"[Spacing (pixels)]: {spacing}")
         # path = Motion_Planner.raster_pattern(img, pitch = spacing) # pixel spacing
         #TODO check if raster is valid 
 
@@ -412,10 +416,12 @@ class Handler:
             self.desired_state.x = None
             self.desired_state.y = None
             self.desired_state.path = None
+            
+        self.desired_state.current_height = self.robot_controller.current_robot_to_world_position()[-1]
 
         if(self.desired_state.isRobotOn):          
             self.working_height = self.desired_state.height / 100.0 if self.desired_state.height else  0 # cm to m
-            print(f"[Robot Height] {self.working_height} m")
+            # print(f"[Robot Height] {self.working_height} m")
                 
             # print("loop",
             # "raster?", self.desired_state.raster_mask is not None,

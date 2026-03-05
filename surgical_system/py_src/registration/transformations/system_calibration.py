@@ -391,8 +391,8 @@ class System_Calibration():
             
         else:
             center = np.flip(np.asarray((np.unravel_index(np.argmax(img), img.shape))))
-        print("Raw Image Peak Temp Loc: ",np.flip(np.asarray((np.unravel_index(np.argmax(img), img.shape)))))
-        print("Raw Image Center of centroid: ",center)
+        # print("Raw Image Peak Temp Loc: ",np.flip(np.asarray((np.unravel_index(np.argmax(img), img.shape)))))
+        # print("Raw Image Center of centroid: ",center)
         
         return center
     

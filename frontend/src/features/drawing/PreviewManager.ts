@@ -12,6 +12,7 @@ import { ToastManager } from '../../ui/ToastManager';
 export class PreviewManager {
   private ctx: CanvasRenderingContext2D;
   private isPreviewActive: boolean = false;
+  private ignoreWebsocketPaths: boolean = false;
   // "Source of Truth": The path in raw video coordinates
   private sourcePath: Position[] = [];
   private pathData: Position[] = [];
@@ -24,12 +25,15 @@ export class PreviewManager {
   private animationFrameId: number | null = null;
 
   // Visual styling
-  private readonly PATH_COLOR = '#002B4C'; // Neon Yellow
-  private readonly PATH_ARROW_COLOR = '#002B4C';
-  private readonly PATH_WIDTH = 4;
-  private readonly DASH_PATTERN = [12, 6];
-  private readonly GLOW_COLOR = 'rgba(255, 255, 0, 0.4)';
-  private readonly GLOW_WIDTH = 10;
+  private readonly PATH_GLOW_COLOR = 'rgba(255, 215, 0, 0.4)';
+  private readonly PATH_GLOW_WIDTH = 8;
+  private readonly PATH_OUTLINE_COLOR = '#00000080';
+  private readonly PATH_OUTLINE_WIDTH = 5;
+  private readonly PATH_COLOR = '#FFFF00';
+  private readonly PATH_WIDTH = 2;         
+  private readonly DASH_PATTERN = [10, 10];
+  
+  private dashOffset: number = 0;
 
   constructor(
     private readonly ui: UIRegistry,
@@ -42,7 +46,7 @@ export class PreviewManager {
 
     this.updateOverlaySize();
 
-    // Disable execute button immediately when clicked
+    //Disable execute button immediately when clicked
     const executeBtn = this.getExecuteBtn();
     if (executeBtn) {
       executeBtn.addEventListener('click', () => {
@@ -63,19 +67,16 @@ export class PreviewManager {
     if (!btn) return;
 
     if (isEnabled) {
-      btn.disabled = false;
-      // MUST override the inline styles set by ExecutionManager
-      btn.style.pointerEvents = 'auto';
-      btn.style.opacity = '1';
+      btn.classList.remove('locked');
     } else {
-      btn.disabled = true;
-      btn.style.pointerEvents = 'none';
-      btn.style.opacity = '0.3';
+      btn.classList.add('locked');
     }
   }
 
   public togglePreview(enable: boolean): void {
     this.isPreviewActive = enable;
+
+    const btnText = this.ui.executeBtn.querySelector('.btn-text');
 
     if (enable) {
       this.ui.previewToggleOn.classList.add('active');
@@ -83,6 +84,7 @@ export class PreviewManager {
       this.ui.previewInfoPanel.classList.add('open');
       this.updateOverlaySize();
       this.refreshPreview();
+      if (btnText) btnText.textContent = 'EXECUTE';
     } else {
       this.ui.previewToggleOn.classList.remove('active');
       this.ui.previewToggleOff.classList.add('active');
@@ -102,35 +104,78 @@ export class PreviewManager {
     const density = this.state.fillEnabled
       ? parseFloat(this.ui.rasterDensityInput.value)
       : 0;
-    const rasterType = this.state.selectedRasterPattern || '';
+    const rasterType = 'line_raster'; //TODO: Remove entirely, unless we want to add more raster patterns in the future.
     const isFill = this.state.fillEnabled;
 
     this.ui.previewDuration.textContent = 'Computing...';
 
-    // Disable execute while computing new path
+    //Disable execute while computing new path
     this.setExecuteButtonState(false);
     this.stopAnimation();
+    ToastManager.clearAll();
 
     try {
       const response = await cm.previewPath(speed, rasterType, density, isFill);
+      const hasValidPath = response.path && response.path.length > 0;
 
-      // Trigger the soft warning
-      if (response.warning === "FIXTURE_OVERLAP") {
-        ToastManager.show("Warning: Your path crosses into a restricted fixture zone. Please double-check before executing.");
+      if (hasValidPath) {
+        this.ignoreWebsocketPaths = true;
       }
 
-      if (response.path && response.path.length > 0) {
-        this.handlePathData(response.path, response.duration);
-      } else {
+      //Handle Active Safety Warnings
+      if (response.warning === "FIXTURE_OVERLAP") {
+        ToastManager.show(
+          "SAFETY WARNING: Your planned path crosses into a restricted fixture zone. Please confirm to allow execution.",
+          {
+            type: 'warning',
+            requireAck: true,
+            ackText: 'CONFIRM',
+            onAcknowledge: () => {
+              //Only unlock the button once the user explicitly clicks CONFIRM
+              if (hasValidPath) this.setExecuteButtonState(true);
+            }
+          }
+        );
+
+        if (hasValidPath) {
+          //Draw the path to show them the mistake, but do not enable the button
+          this.handlePathData(response.path, response.duration, false);
+        }
+      }
+      //If the previewed path goes outside of the boundaries of the drawn path
+      //THIS IS JUST FOR THE SIMULATED RESPONSE WHEN THE ROBOT IS NOT CONNECTED
+      else if (response.warning === "PATH_ESCAPES_BOUNDS") {
+        ToastManager.show(
+          "PRECISION WARNING: The generated path extends outside your originally drawn boundaries. Please confirm to allow execution.",
+          {
+            type: 'warning',
+            requireAck: true,
+            ackText: 'CONFIRM',
+            onAcknowledge: () => {
+              if (hasValidPath) this.setExecuteButtonState(true);
+            }
+          }
+        );
+        //Draw the path to show the mistake, but keep the button locked
+        if (hasValidPath) this.handlePathData(response.path, response.duration, false);
+      }
+      //Handle Safe Paths
+      else if (hasValidPath) {
+        this.handlePathData(response.path, response.duration, true);
+      }
+      else {
         this.ui.previewDuration.textContent = 'Waiting...';
       }
+
     } catch (e: any) {
-      // Handle the hard stop gracefully
       if (e.message === "OUT_OF_BOUNDS") {
-        ToastManager.show("Error: Part of your shape is off the screen! Please move it fully inside the camera view.");
+        ToastManager.show(
+          "HARD STOP: Part of your shape is off the screen. Please move it fully inside the camera view.",
+          { type: 'error', requireAck: true, ackText: 'DISMISS' }
+        );
         this.ui.previewDuration.textContent = 'Out of Bounds';
         this.clearOverlay();
-        this.setExecuteButtonState(false); // Force the Execute button to stay disabled
+        this.setExecuteButtonState(false);
       } else {
         console.error('Preview refresh error:', e);
         this.ui.previewDuration.textContent = 'Error';
@@ -142,31 +187,69 @@ export class PreviewManager {
   public handlePathFromWebSocket(previewData: { x: number[], y: number[] }, serverDuration?: number): void {
     if (!this.isPreviewActive) return;
 
+    if (this.ignoreWebsocketPaths) {
+      console.log("Simulated HTTP path is active. Ignoring WS path echo.");
+      return;
+    }
+
+    const newLength = Math.min(previewData.x.length, previewData.y.length);
+
+    //TODO: Get rid of this check, shouldn't be necessary if the data is being sent properly from backend
+    //If we don't get a duration, and the path is the same, drop this message
+    if (serverDuration === undefined && this.sourcePath.length === newLength) {
+      console.log("Ignored duplicate path from robot.");
+      return;
+    }
+
     const path: Position[] = [];
     const len = Math.min(previewData.x.length, previewData.y.length);
     for (let i = 0; i < len; i++) {
       path.push({ x: previewData.x[i], y: previewData.y[i] });
     }
 
-    this.handlePathData(path, serverDuration || 15);
+    const finalDuration = serverDuration || (this.durationSeconds > 0 ? this.durationSeconds : 10);
+
+    //ToastManager.clearAll();
+    const cm = this.getCanvasManager();
+
+    if (cm && cm.checkIfPathEscapes(path)) {
+      ToastManager.show(
+        "SAFETY WARNING: The generated path extends outside your originally drawn boundaries. Please confirm to allow execution.",
+        {
+          type: 'warning',
+          requireAck: true,
+          ackText: 'CONFIRM',
+          onAcknowledge: () => {
+            this.setExecuteButtonState(true);
+          }
+        }
+      );
+      //Pass false to keep the execute button locked until confirmed
+      this.handlePathData(path, finalDuration, false);
+    } else {
+      this.handlePathData(path, finalDuration, true);
+    }
   }
 
-  private handlePathData(videoPath: Position[], duration: number): void {
-    if (videoPath.length === 0) {
+  private handlePathData(videoPath: Position[], duration: number, enableExecute: boolean): void {
+    //Catch empty or single-point paths before they break the renderer
+    if (videoPath.length < 2) {
       this.clearOverlay();
+      this.setExecuteButtonState(false); //Force lock the execute button
+      this.ui.previewDuration.textContent = '--';
       return;
     }
 
-    //STORE SOURCE OF TRUTH (Video Coordinates)
     this.sourcePath = videoPath;
     this.durationSeconds = duration;
     this.hasPreviewedCurrentDrawing = true;
 
-    //CALCULATE SCREEN COORDINATES
     this.updatePathTransform();
 
     this.ui.previewDuration.textContent = `${duration.toFixed(1)}s`;
-    this.setExecuteButtonState(true);
+
+    //Explicitly apply the boolean state to lock/unlock the button
+    this.setExecuteButtonState(enableExecute);
 
     this.drawPath();
     this.startAnimation();
@@ -203,23 +286,25 @@ export class PreviewManager {
     const ctx = this.ctx;
     ctx.save();
 
-    // Draw glow
-    ctx.strokeStyle = this.GLOW_COLOR;
-    ctx.lineWidth = this.GLOW_WIDTH;
+    //Draw glow
+    ctx.strokeStyle = this.PATH_GLOW_COLOR;
+    ctx.lineWidth = this.PATH_GLOW_WIDTH;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.setLineDash([]);
     this.drawPathLine(ctx);
 
-    // Draw main path
-    ctx.strokeStyle = this.PATH_COLOR;
-    ctx.lineWidth = this.PATH_WIDTH;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.setLineDash(this.DASH_PATTERN);
+    //Draw translucent background line
+    ctx.strokeStyle = this.PATH_OUTLINE_COLOR;
+    ctx.lineWidth = this.PATH_OUTLINE_WIDTH;
     this.drawPathLine(ctx);
 
-    this.drawDirectionArrows(ctx);
+    //Draw dashed bright foreground line
+    ctx.strokeStyle = this.PATH_COLOR;
+    ctx.lineWidth = this.PATH_WIDTH;
+    ctx.setLineDash(this.DASH_PATTERN);
+    ctx.lineDashOffset = this.dashOffset;
+    this.drawPathLine(ctx);
 
     ctx.restore();
   }
@@ -231,45 +316,6 @@ export class PreviewManager {
       ctx.lineTo(this.pathData[i].x, this.pathData[i].y);
     }
     ctx.stroke();
-  }
-
-  private drawDirectionArrows(ctx: CanvasRenderingContext2D): void {
-    const arrowSpacing = 200;
-    let accumulatedDist = 0;
-
-    ctx.fillStyle = this.PATH_ARROW_COLOR;
-    ctx.setLineDash([]);
-
-    for (let i = 1; i < this.pathData.length; i++) {
-      const p1 = this.pathData[i - 1];
-      const p2 = this.pathData[i];
-
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      accumulatedDist += dist;
-
-      if (accumulatedDist >= arrowSpacing) {
-        accumulatedDist = 0;
-
-        const angle = Math.atan2(dy, dx);
-        const arrowSize = 10;
-
-        ctx.save();
-        ctx.translate(p2.x, p2.y);
-        ctx.rotate(angle);
-
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(-arrowSize, -arrowSize / 2);
-        ctx.lineTo(-arrowSize, arrowSize / 2);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.restore();
-      }
-    }
   }
 
   private startAnimation(): void {
@@ -309,12 +355,15 @@ export class PreviewManager {
       totalPoints - 1
     );
 
-    // Grab the current point (already in correct local viewport coordinates)
+    //Update the DOM marker
     const point = this.pathData[index];
-
-    // Apply directly. The browser's #app-scaler will handle the zoom automatically!
     this.ui.previewMarker.style.left = `${point.x}px`;
     this.ui.previewMarker.style.top = `${point.y}px`;
+
+    //Change offset to modify speed
+    this.dashOffset -= 0.1; 
+    this.drawPath(); 
+    // ------------------------------------
 
     this.animationFrameId = requestAnimationFrame(() => this.animationLoop());
   }
@@ -330,11 +379,11 @@ export class PreviewManager {
     const canvas = this.ui.previewOverlay;
     const viewport = this.ui.viewport;
 
-    // 1. Match Canvas to DOM
+    //Match Canvas to DOM
     canvas.width = viewport.offsetWidth;
     canvas.height = viewport.offsetHeight;
 
-    // 2. Re-calculate path positions for new size
+    //Re-calculate path positions for new size
     if (this.sourcePath.length > 0) {
       this.updatePathTransform();
 
@@ -350,6 +399,7 @@ export class PreviewManager {
 
   public resetPreviewState(): void {
     this.hasPreviewedCurrentDrawing = false;
+    this.ignoreWebsocketPaths = false;
     this.pathData = [];
     this.sourcePath = [];
     this.durationSeconds = 0;

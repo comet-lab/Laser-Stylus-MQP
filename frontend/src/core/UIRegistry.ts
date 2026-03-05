@@ -9,6 +9,7 @@
 
 export interface UIRegistry {
     // --- Core Viewport ---
+    loadingScreen: HTMLElement;
     viewport: HTMLElement;
     video: HTMLVideoElement;
     canvas: HTMLCanvasElement;
@@ -18,6 +19,9 @@ export interface UIRegistry {
     overlay: HTMLElement;
     settingsPopup: HTMLElement;
     preparePopup: HTMLElement;
+    zoomWrapper: HTMLElement;
+    zoomIndicator: HTMLElement,
+    zoomText: HTMLElement,
 
     // --- Action Buttons ---
     settingsBtn: HTMLButtonElement;
@@ -31,6 +35,7 @@ export interface UIRegistry {
     prepareCancelBtn: HTMLButtonElement;
     executeBtn: HTMLButtonElement;
     clearBtn: HTMLButtonElement;
+    restorePathBtn: HTMLButtonElement;
     previewOverlay: HTMLCanvasElement;
     previewToggleOn: HTMLButtonElement;
     previewToggleOff: HTMLButtonElement;
@@ -45,6 +50,10 @@ export interface UIRegistry {
     // --- View & Mode Toggles ---
     processingModeSwitch: HTMLInputElement;
     transformedModeSwitch: HTMLInputElement;
+    autoHeightSwitch: HTMLInputElement;
+    recordDataSwitch: HTMLInputElement;
+    modeBatchBtn: HTMLButtonElement;
+    modeRealtimeBtn: HTMLButtonElement;
     saveView: HTMLInputElement;
     layoutTopBtn: HTMLButtonElement;
     layoutBottomBtn: HTMLButtonElement;
@@ -110,11 +119,19 @@ export interface UIRegistry {
     // Universal UI Elements
     heightSlider: HTMLInputElement;
     heightDisplay: HTMLElement;
+    heightTrigger: HTMLButtonElement;
+    heightFlyout: HTMLElement;
+
+    speedSlider: HTMLInputElement;
+    speedDisplay: HTMLElement;
+    speedTrigger: HTMLButtonElement;
+    speedFlyout: HTMLElement;
 }
 
 export function createUIRegistry(): UIRegistry {
     return {
         // Core Viewport
+        loadingScreen: document.getElementById('loading-screen') as HTMLElement,
         viewport: document.getElementById('viewport') as HTMLElement,
         video: document.getElementById('video') as HTMLVideoElement,
         canvas: document.getElementById('canvas') as HTMLCanvasElement,
@@ -124,6 +141,9 @@ export function createUIRegistry(): UIRegistry {
         overlay: document.getElementById('overlay') as HTMLElement,
         settingsPopup: document.getElementById('settingsPopup') as HTMLElement,
         preparePopup: document.getElementById('preparePopup') as HTMLElement,
+        zoomWrapper: document.getElementById('zoom-wrapper') as HTMLElement,
+        zoomIndicator: document.getElementById('zoom-indicator') as HTMLElement,
+        zoomText: document.getElementById('zoom-text') as HTMLElement,
 
         // Action Buttons
         settingsBtn: document.getElementById('settingsBtn') as HTMLButtonElement,
@@ -140,6 +160,7 @@ export function createUIRegistry(): UIRegistry {
         previewDuration: document.getElementById('previewDuration') as HTMLElement,
         previewMarker: document.getElementById('preview-marker') as HTMLElement,
         clearBtn: document.getElementById('clearBtn') as HTMLButtonElement,
+        restorePathBtn: document.getElementById('restorePathBtn') as HTMLButtonElement,
 
         // Hardware Controls
         robotBtn: document.getElementById('robot-toggle-container') as HTMLButtonElement,
@@ -148,6 +169,10 @@ export function createUIRegistry(): UIRegistry {
         // View & Mode Toggles
         processingModeSwitch: document.getElementById('processing-mode') as HTMLInputElement,
         transformedModeSwitch: document.getElementById('transformed-view-mode') as HTMLInputElement,
+        autoHeightSwitch: document.getElementById('height-adjust-mode') as HTMLInputElement,
+        recordDataSwitch: document.getElementById('record-data-mode') as HTMLInputElement,
+        modeBatchBtn: document.getElementById('mode-batch') as HTMLButtonElement,
+        modeRealtimeBtn: document.getElementById('mode-realtime') as HTMLButtonElement,
         saveView: document.getElementById('save-view') as HTMLInputElement,
         layoutTopBtn: document.getElementById('layout-top') as HTMLButtonElement,
         layoutBottomBtn: document.getElementById('layout-bottom') as HTMLButtonElement,
@@ -212,5 +237,12 @@ export function createUIRegistry(): UIRegistry {
         // Universal UI Elements
         heightSlider: document.getElementById('heightSlider') as HTMLInputElement,
         heightDisplay: document.getElementById('heightDisplay') as HTMLElement,
+        heightTrigger: document.getElementById('heightTrigger') as HTMLButtonElement,
+        heightFlyout: document.getElementById('heightFlyout') as HTMLElement,
+
+        speedSlider: document.getElementById('speedSlider') as HTMLInputElement,
+        speedDisplay: document.getElementById('speedDisplay') as HTMLElement,
+        speedTrigger: document.getElementById('speedTrigger') as HTMLButtonElement,
+        speedFlyout: document.getElementById('speedFlyout') as HTMLElement,
     };
 }

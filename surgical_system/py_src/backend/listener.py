@@ -25,6 +25,7 @@ class BackendConnection():
         host = "backend" if self.mocking else "localhost"
         port = "8080" if self.mocking else "443"
         ws_robot_name = os.getenv("ROBOT_WEBSOCKET_NAME", "robot")
+        print(host, port, ws_robot_name)
         uri = f"ws://{host}:{port}/ws/{ws_robot_name}"
         while True:
             try:

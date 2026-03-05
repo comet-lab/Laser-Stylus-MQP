@@ -27,7 +27,8 @@ export interface AppState {
 
     // --- Raster / Fill State ---
     fillEnabled: boolean;
-    selectedRasterPattern: 'line_raster' | 'spiral_raster' | null;
+    //TODO: Remove entirely, unless we want to add more raster patterns in the future.
+    selectedRasterPattern: 'line_raster' | null;
 
     // --- Application Mode ---
     currentMode: 'drawing' | 'thermal' | 'fixtures';
@@ -35,6 +36,9 @@ export interface AppState {
     // --- Fixture Brush State ---
     selectedBrushType: 'round' | 'square' | null;
     isEraserActive: boolean;
+
+    hasBackupShape: boolean; //Flag to indicate if a backup shape exists for restoration
+    backupShapeType: ShapeType | null;
 }
 
 /**
@@ -59,5 +63,8 @@ export function createAppState(): AppState {
 
         selectedBrushType: null,
         isEraserActive:    false,
+
+        hasBackupShape: false,
+        backupShapeType: null
     };
 }
