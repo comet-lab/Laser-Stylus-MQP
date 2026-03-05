@@ -521,7 +521,7 @@ if __name__ == '__main__':
     camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_controller)
     
     ### -------------------- Run calibration ---------------- ####
-    # camera_reg.run() 
+    camera_reg.run() 
     
     # base 2.23 
     # heights = np.array([2.08, 2.65, 3.15, 3.65, 4.18, 4.73, 5.15, 5.62, 6.15, 6.64,
@@ -546,10 +546,10 @@ if __name__ == '__main__':
     # exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.035/24)
     path = "surgical_system/py_src/registration/calibration_info/depth_map.npz"
     path_filter = "surgical_system/py_src/registration/calibration_info/depth_map_filter.npz"
-    depth, meta = DepthEstimation.load_depth_npz(path)    
-    depth_map = DepthEstimation.patch_depth(depth)
-    DepthEstimation.save_depth_npz(path_filter, depth_map=depth_map, meta=meta)
-    DepthEstimation.plot_depth_surface(depth_map, meta)
+    # depth, meta = DepthEstimation.load_depth_npz(path)    
+    # depth_map = DepthEstimation.patch_depth(depth)
+    # DepthEstimation.save_depth_npz(path_filter, depth_map=depth_map, meta=meta)
+    # DepthEstimation.plot_depth_surface(depth_map, meta)
     
     # camera_reg.view_rgbd_therm_heat_overlay()
     # camera_reg.draw_traj()

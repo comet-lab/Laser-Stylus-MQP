@@ -525,7 +525,7 @@ class Handler:
 
         if(self.desired_state.isRobotOn):          
             self.working_height = self.desired_state.height / 100.0 if self.desired_state.height else  0 # cm to m
-            self._do_auto_focus(world_pos)
+            # self._do_auto_focus(world_pos)
             # print(f"[Robot Height] {self.working_height} m")
                 
             # print("loop",
