@@ -88,10 +88,13 @@ class Handler:
             status.laserX, status.laserY = int(self.desired_state.laserX), int(self.desired_state.laserY)
         else:
             status.laserX, status.laserY = status.x, status.y
-            
+        status.laserX *= 640/1280
+        status.laserY *= 480/720
             
         if self.new_path_flag:
             status.path_preview = self.desired_state.path_preview
+            status.path_preview['x'] = [x * 640/1280 for x in status.path_preview['x']]
+            status.path_preview['y'] = [y * 480/720 for y in status.path_preview['y']]
             self.new_path_flag = False
             
         return status.to_str()
@@ -99,6 +102,13 @@ class Handler:
     def _recv_fn(self, msg: str):
         self.last_update_time = time.time()
         data = json.loads(msg)
+        if 'x' in data.keys() and data['x'] is not None:
+            data['x'] *= 1280 / 640
+        if 'y' in data.keys() and data['y'] is not None:
+            data['y'] *= 720 / 480
+        if 'path' in data.keys():
+            data['path'] = [{'x': d['x'] * 1280/640, 'y': d['y'] * 720/480} for d in data['path']]
+            
         self.desired_state.update(data)
         
         

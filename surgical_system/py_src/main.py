@@ -22,6 +22,7 @@ if(not mock_robot):
     from cameras.RGBD_cam import RGBD_Cam
     from laser_control.laser_arduino import Laser_Arduino
     from registration.cameraRegistration import Camera_Registration
+    from registration.display_world_transform import Display_World_Transform
 else:
     from robot.mock_robot_controller import MockRobotController
     from cameras.mock_camera import MockCamera
@@ -152,17 +153,26 @@ async def main():
     start_pose[2,3] = 0.0
     robot_controller.go_to_pose(start_pose@home_pose,1) # Send robot to start position
     
+    H = camera_reg.cam_M['color']
     S = np.array([
         [640/1280, 0, 0],
         [0, 480/720, 0],
         [0, 0, 1]
     ])
+    H = S @ H @ np.linalg.inv(S)
+
+    cam_obj = camera_reg.get_cam_obj('color')
+    tf = Display_World_Transform(H,
+                                 (480, 640),
+                                 cam_obj.pix_Per_M,
+                                 (480, 640)
+                                 )
 
     while (True):
         await control_flow_handler.main_loop() 
 
         overlay = np.zeros([720,1280,3]).astype(np.uint8)
-        overlay = cv2.circle(overlay, (300,300), 100, (0,0,255), -1)
+
         latest = overlay           
             
         # # Camera frame publishing
@@ -173,32 +183,31 @@ async def main():
 
         H = np.eye(3)
         if control_flow_handler.desired_state.isTransformedViewOn:
-            H = camera_reg.cam_M['color']
-            H = np.linalg.inv(H) @ S
+            H = tf.H_display
                 
         H = H.astype(np.dtype(os.getenv("HOMOGRAPHY_DTYPE", "float32"))).reshape((9,))
             
         homography_socket.send(
             H, 
-            lambda obj: obj.tobytes(),
-            lambda x, y: np.array_equal(x, y)
+            lambda obj: obj.tobytes()
         )
 
         if(type(latest) == type(None)):
             continue
 
-        if latest.shape != (720, 1280):
-            latest = cv2.resize(latest, (1280, 720), interpolation=cv2.INTER_NEAREST)
             
-        # if control_flow_handler.desired_state.heat_mask is not None and not mock_robot:
-        #     latest = control_flow_handler.get_heat_overlay(latest)
-        # else:
-        #     # print("trigger")
-        #     thermal_data = camera_reg.get_cam_latest("thermal")
-        #     control_flow_handler.desired_state.maxHeat = float(np.max(thermal_data))
-
+        if control_flow_handler.desired_state.heat_mask is not None and not mock_robot:
+            latest = control_flow_handler.get_heat_overlay(latest)
+        else:
+            # print("trigger")
+            thermal_data = camera_reg.get_cam_latest("thermal")
+            control_flow_handler.desired_state.maxHeat = float(np.max(thermal_data))
+        
         if camera_reg.display_path and not mock_robot:
             latest = camera_reg.show_path(latest)
+            
+        if latest.shape != (720, 1280):
+            latest = cv2.resize(latest, (1280, 720), interpolation=cv2.INTER_NEAREST)
         
         if not mock_robot:
             latest = camera_reg.tracking_display(latest, 

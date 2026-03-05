@@ -9,7 +9,6 @@ class Sender():
         self.server = server
         self.last_sent = None
 
-    def send(self, obj: Any, obj_to_bytes: Callable, check_equality: Callable):
-        if not check_equality(obj, self.last_sent):
-            self.server.sendall(obj_to_bytes(obj))
-            self.last_sent = obj
+    def send(self, obj: Any, obj_to_bytes: Callable):
+        self.server.sendall(obj_to_bytes(obj))
+        self.last_sent = obj
