@@ -18,7 +18,6 @@ class Broadcast:
             '-i', '-',
             '-c:v', 'rawvideo',
             '-f', 'rawvideo',
-            '-vf', 'scale=640:480',
             'tcp://169.254.0.3:5000'
         ]
 

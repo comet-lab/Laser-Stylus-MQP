@@ -154,19 +154,20 @@ async def main():
     robot_controller.go_to_pose(start_pose@home_pose,1) # Send robot to start position
     
     H = camera_reg.cam_M['color']
-    S = np.array([
-        [640/1280, 0, 0],
-        [0, 480/720, 0],
-        [0, 0, 1]
-    ])
-    H = S @ H @ np.linalg.inv(S)
+    # S = np.array([
+    #     [640/1280, 0, 0],
+    #     [0, 480/720, 0],
+    #     [0, 0, 1]
+    # ])
+    # H = S @ H @ np.linalg.inv(S)
 
     cam_obj = camera_reg.get_cam_obj('color')
     tf = Display_World_Transform(H,
-                                 (480, 640),
+                                 (720, 1280),
                                  cam_obj.pix_Per_M,
-                                 (480, 640)
+                                 (720, 1280)
                                  )
+    print(tf.out_h, tf.out_w)
 
     while (True):
         await control_flow_handler.main_loop() 
