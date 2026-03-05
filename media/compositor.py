@@ -85,13 +85,18 @@ with vpi.Backend.CUDA:
         image = get_camera_input(pipeline)
         if image is None:
             continue
-        frame = blend(image, overlay_receiver.read())
-        frame_vpi = vpi.asimage(frame)
+        # frame_vpi = vpi.asimage(frame)
         H = homography_receiver.read()
-        # warped = cv2.warpPerspective(frame, homography_receiver.read(), (w, h))
-        warped_vpi = frame_vpi.perspwarp(H, interp=vpi.Interp.LINEAR)
-        warped = warped_vpi.cpu().view(np.ndarray)
-        output_pipe.write(warped.tobytes())
+        out = image
+        if not np.all(np.isclose(np.eye(3), H)):
+            warped = cv2.warpPerspective(out, H, (998, 695))
+        # warped_vpi = frame_vpi.perspwarp(H, interp=vpi.Interp.LINEAR)
+        # warped = warped_vpi.cpu().view(np.ndarray)
+
+            warped = cv2.resize(warped, (640, 480), interpolation=(cv2.INTER_NEAREST))
+            out = warped
+        out = blend(out, overlay_receiver.read())
+        output_pipe.write(out.tobytes())
         output_pipe.flush()
         # cv2.imshow("VPI Image", warped)
         # cv2.waitKey(0)
