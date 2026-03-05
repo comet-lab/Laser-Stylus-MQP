@@ -174,7 +174,7 @@ async def main():
         H = np.eye(3)
         if control_flow_handler.desired_state.isTransformedViewOn:
             H = camera_reg.cam_M['color']
-            H = np.linalg.inv(H @ S)
+            H = np.linalg.inv(H) @ S
                 
         H = H.astype(np.dtype(os.getenv("HOMOGRAPHY_DTYPE", "float32"))).reshape((9,))
             
