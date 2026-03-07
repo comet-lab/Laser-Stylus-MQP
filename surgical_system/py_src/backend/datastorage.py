@@ -28,6 +28,11 @@ class UserCommand:
     mode: str                     # "draw", "live_control", 
     payload: Dict[str, Any]       # markers, path, etc.
     
+@dataclass(frozen=True)
+class CaliState:
+    cali_type: str                     
+    payload: Dict[str, Any]       
+    
 class SystemDataStore:
     """
     Central in-memory data store:
@@ -169,11 +174,12 @@ class SystemDataStore:
     
     @staticmethod
     def load_storage(file_path):
-        try: 
+        try:
             with open(file_path, "rb") as f:
                 return pickle.load(f)
-        except:
-            print("Failed to open storage")
+        except Exception as e:
+            print(f"[load_storage] Failed to open storage: {e}")
+            raise
     
 
     # --- Transforms ---

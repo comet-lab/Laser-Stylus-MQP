@@ -4,196 +4,226 @@ from typing import Dict, Tuple, Optional
 import matplotlib.pyplot as plt
 from scipy import ndimage
 class DepthEstimation():
+   
     @staticmethod
-    def project_xy(H: np.ndarray,
-                     pts: np.ndarray,
-                     eps: float = 1e-12) -> np.ndarray:
+    def project_xy(H: np.ndarray, pts: np.ndarray, eps: float = 1e-12) -> np.ndarray:
         """
-        Vectorized homography projection.
+        Project 2D Euclidean points through a homography.
 
         Parameters
         ----------
-        H   : (3,3) homography matrix
-        pts : (N,2) array of (X,Y) plane coordinates
+        H : (3,3)
+        pts : (N,2)
 
         Returns
         -------
-        uv  : (N,2) projected pixel coordinates
-            invalid points (small denom) -> [inf, inf]
+        uv : (N,2)
         """
-
         pts = np.asarray(pts, dtype=float)
+        ones = np.ones((pts.shape[0], 1), dtype=float)
+        pts_h = np.hstack([pts, ones])                  # (N,3)
 
-        # Add homogeneous coordinate
-        ones = np.ones((pts.shape[0], 1))
-        pts_h = np.hstack((pts, ones))  # (N,3)
+        p = (H @ pts_h.T).T                             # (N,3)
+        denom = p[:, 2:3]                               # (N,1)
 
-        # Apply homography
-        p = pts_h @ H.T  # (N,3)
-
-        denom = p[:, 2:3]                 # (N,1)
-        valid = np.abs(denom) >= eps      # (N,1)
-
-        uv = np.full((pts.shape[0], 2), np.inf)
-
-        m = valid[:, 0]                   # (N,)
-        uv[m] = p[m, :2] / denom[m, :] 
-
+        uv = np.full((pts.shape[0], 2), np.inf, dtype=float)
+        valid = np.abs(denom[:, 0]) >= eps
+        uv[valid] = p[valid, :2] / denom[valid]
         return uv
-
+    
     @staticmethod
     def estimate_depth_from_dense_stack(
         dense_stack: Dict[float, np.ndarray],
-        obs_uv: Tuple[float, float],
-        cmd_XY: Tuple[float, float],
+        obs_uvs: np.ndarray,
+        cmd_XYs: np.ndarray,
         *,
         metric: str = "l2",
         refine: bool = True,
         min_valid_heights: int = 3,
-    ) -> Tuple[float, float, Tuple[float, float], float]:
+        invert_homographies: bool = True,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
-        Estimate depth (height z) using a dense homography stack.
+        Vectorized depth estimation for multiple observations/commands.
 
         Parameters
         ----------
         dense_stack : dict
-            {z: H_z} where H_z is 3x3 (ideally normalized) homography at height z.
-            z units(e.g., mm).
-        obs_uv : (u_obs, v_obs)
-            Observed pixel location of the laser spot (or feature) in the RGB image.
-        cmd_XY : (X_cmd, Y_cmd)
-            Commanded / known plane coordinates (object coordinates in the calibration plane frame).
-        metric : "l2" or "l1"
-            Error metric in pixel space.
+            {z: H_z}, each H_z is (3,3)
+        obs_uvs : (N,2)
+            Observed pixel coordinates.
+        cmd_XYs : (N,2)
+            Commanded / known plane coordinates.
+        metric : {'l2', 'l1'}
         refine : bool
-            If True, do a local quadratic refinement around the best discrete z (sub-grid estimate).
+            If True, do per-point local quadratic refinement after coarse batch search.
         min_valid_heights : int
-            Require at least this many heights in the stack.
+        invert_homographies : bool
+            If True, use inv(H_z) before projection, matching your original function.
 
         Returns
         -------
-        z_hat : float
-            Estimated depth/height.
-        err_hat : float
-            Residual error at z_hat (pixels, metric-dependent).
-        uv_pred : (u_pred, v_pred)
-            Predicted pixel at z_hat.
-        conf : float
-            Simple confidence proxy in (0,1], based on error separation between best and 2nd best.
-            (Higher is better.) Use your own gating thresholds in practice.
-
-        Notes
-        -----
-        - This assumes the environment can be approximated by one height z for this point.
+        z_hat : (N,)
+        err_hat : (N,)
+        uv_hat : (N,2)
+        conf : (N,)
         """
         if len(dense_stack) < min_valid_heights:
             raise ValueError(f"dense_stack must have at least {min_valid_heights} entries.")
 
-        u_obs, v_obs = map(float, obs_uv)
-        X_cmd, Y_cmd = map(float, cmd_XY)
+        obs_uvs = np.asarray(obs_uvs, dtype=float)
+        cmd_XYs = np.asarray(cmd_XYs, dtype=float)
 
-        # Sort heights
-        zs = np.array(sorted(dense_stack.keys()), dtype=float)
-        # Hs = np.array([dense_stack[z] for z in zs])
-        Hs = np.array([np.linalg.inv(dense_stack[z]) for z in zs])
+        if obs_uvs.ndim != 2 or obs_uvs.shape[1] != 2:
+            raise ValueError("obs_uvs must have shape (N,2)")
+        if cmd_XYs.ndim != 2 or cmd_XYs.shape[1] != 2:
+            raise ValueError("cmd_XYs must have shape (N,2)")
+        if obs_uvs.shape[0] != cmd_XYs.shape[0]:
+            raise ValueError("obs_uvs and cmd_XYs must have the same number of rows")
 
-        # ----- Project commanded point through all homographies -----
-
-        # Numerators
-        u_num = Hs[:, 0, 0] * X_cmd + Hs[:, 0, 1] * Y_cmd + Hs[:, 0, 2]
-        v_num = Hs[:, 1, 0] * X_cmd + Hs[:, 1, 1] * Y_cmd + Hs[:, 1, 2]
-        denom = Hs[:, 2, 0] * X_cmd + Hs[:, 2, 1] * Y_cmd + Hs[:, 2, 2]
-
+        N = obs_uvs.shape[0]
         eps = 1e-12
+
+        # ---- sort heights and stack homographies ----
+        zs = np.array(sorted(dense_stack.keys()), dtype=float)          # (Z,)
+        Hs = np.array([dense_stack[z] for z in zs], dtype=float)        # (Z,3,3)
+
+        if invert_homographies:
+            Hs = np.linalg.inv(Hs)                                      # (Z,3,3)
+
+        Z = Hs.shape[0]
+
+        X = cmd_XYs[:, 0]                                               # (N,)
+        Y = cmd_XYs[:, 1]                                               # (N,)
+
+        # ---- project all N points through all Z homographies ----
+        # preds shape will be (N, Z, 2)
+        u_num = (
+            Hs[:, 0, 0][None, :] * X[:, None]
+            + Hs[:, 0, 1][None, :] * Y[:, None]
+            + Hs[:, 0, 2][None, :]
+        )                                                               # (N,Z)
+
+        v_num = (
+            Hs[:, 1, 0][None, :] * X[:, None]
+            + Hs[:, 1, 1][None, :] * Y[:, None]
+            + Hs[:, 1, 2][None, :]
+        )                                                               # (N,Z)
+
+        denom = (
+            Hs[:, 2, 0][None, :] * X[:, None]
+            + Hs[:, 2, 1][None, :] * Y[:, None]
+            + Hs[:, 2, 2][None, :]
+        )                                                               # (N,Z)
+
         valid = np.abs(denom) >= eps
 
-        # Initialize predictions
-        preds = np.full((Hs.shape[0], 2), np.inf)
+        u_pred = np.full((N, Z), np.inf, dtype=float)
+        v_pred = np.full((N, Z), np.inf, dtype=float)
 
-        preds[valid, 0] = u_num[valid] / denom[valid]
-        preds[valid, 1] = v_num[valid] / denom[valid]
+        u_pred[valid] = u_num[valid] / denom[valid]
+        v_pred[valid] = v_num[valid] / denom[valid]
 
-        # ----- Compute residuals -----
-        # print("Predictions: ", preds)
-        du = preds[:, 0] - u_obs
-        dv = preds[:, 1] - v_obs
+        # ---- residuals ----
+        du = u_pred - obs_uvs[:, 0:1]                                   # (N,Z)
+        dv = v_pred - obs_uvs[:, 1:2]                                   # (N,Z)
 
         if metric == "l2":
-            errs = np.hypot(du, dv)
+            errs = np.hypot(du, dv)                                     # (N,Z)
         elif metric == "l1":
             errs = np.abs(du) + np.abs(dv)
         else:
             raise ValueError("metric must be 'l2' or 'l1'")
 
-        # ----- Select best depth -----
+        # ---- coarse discrete best height ----
+        best_idx = np.argmin(errs, axis=1)                              # (N,)
+        rows = np.arange(N)
 
-        best_idx = int(np.argmin(errs))
-        # print("predicted heights :", zs)
-        # print("errors: :", errs)
-        z_best = float(zs[best_idx])
-        err_best = float(errs[best_idx])
-        uv_best = (float(preds[best_idx, 0]), float(preds[best_idx, 1]))
+        z_best = zs[best_idx].astype(float)                             # (N,)
+        err_best = errs[rows, best_idx].astype(float)                   # (N,)
+        uv_best = np.column_stack([
+            u_pred[rows, best_idx],
+            v_pred[rows, best_idx]
+        ]).astype(float)                                                # (N,2)
 
-        # Confidence proxy
-        if zs.size >= 2:
-            sorted_errs = np.sort(errs)
-            err2 = float(sorted_errs[1])
-            conf = float(np.clip((err2 - err_best) / max(err2, 1e-9), 0.0, 1.0))
+        # ---- confidence proxy from best vs second-best ----
+        if Z >= 2:
+            part = np.partition(errs, 1, axis=1)
+            err1 = part[:, 0]
+            err2 = part[:, 1]
+            conf = np.clip((err2 - err1) / np.maximum(err2, 1e-9), 0.0, 1.0)
         else:
-            conf = 0.0
+            conf = np.zeros(N, dtype=float)
 
-        if not refine or best_idx == 0 or best_idx == zs.size - 1:
+        if not refine or Z < 3:
             return z_best, err_best, uv_best, conf
 
-        # ---- Local quadratic refinement on error(z) using 3 neighboring samples ----
-        # Fit e(z) ≈ a z^2 + b z + c around best_idx-1, best_idx, best_idx+1
-        z0, z1, z2 = float(zs[best_idx - 1]), float(zs[best_idx]), float(zs[best_idx + 1])
-        e0, e1, e2 = float(errs[best_idx - 1]), float(errs[best_idx]), float(errs[best_idx + 1])
+        # ---- local refinement ----
+        # Most of the speedup is already achieved. Refinement is done only on
+        # each point's local winner neighborhood.
+        z_out = z_best.copy()
+        err_out = err_best.copy()
+        uv_out = uv_best.copy()
 
-        # Solve for parabola coefficients via Lagrange form (stable for 3 points)
-        d01 = z0 - z1
-        d02 = z0 - z2
-        d12 = z1 - z2
+        interior = (best_idx > 0) & (best_idx < Z - 1)
+        refine_ids = np.where(interior)[0]
 
-        a = (e0 / (d01 * d02)
-            - e1 / (d01 * d12)
-            + e2 / (d02 * d12))
+        for i in refine_ids:
+            k = best_idx[i]
 
-        b = (-e0 * (z1 + z2) / (d01 * d02)
-            + e1 * (z0 + z2) / (d01 * d12)
-            - e2 * (z0 + z1) / (d02 * d12))
+            z0 = float(zs[k - 1])
+            z1 = float(zs[k])
+            z2 = float(zs[k + 1])
 
-        if abs(a) < 1e-12:
-            # Nearly linear; refinement not meaningful
-            return z_best, err_best, uv_best, conf
- 
-        z_ref = -b / (2.0 * a)
+            e0 = float(errs[i, k - 1])
+            e1 = float(errs[i, k])
+            e2 = float(errs[i, k + 1])
 
-        # Clamp refined z to the local interval to avoid nonsense
-        z_ref = float(np.clip(z_ref, min(z0, z2), max(z0, z2)))
+            d01 = z0 - z1
+            d02 = z0 - z2
+            d12 = z1 - z2
 
-        # Interpolate homography between nearest neighbors for refined z (piecewise linear)
-        if z_ref <= z1:
-            # between z0 and z1
-            t = 0.0 if z1 == z0 else (z_ref - z0) / (z1 - z0)
-            H_ref = (1.0 - t) * np.asarray(dense_stack[z0], float) + t * np.asarray(dense_stack[z1], float)
-        else:
-            # between z1 and z2
-            t = 0.0 if z2 == z1 else (z_ref - z1) / (z2 - z1)
-            H_ref = (1.0 - t) * np.asarray(dense_stack[z1], float) + t * np.asarray(dense_stack[z2], float)
+            a = (
+                e0 / (d01 * d02)
+                - e1 / (d01 * d12)
+                + e2 / (d02 * d12)
+            )
 
-        uv_ref = DepthEstimation.project_xy(H_ref, np.array([[X_cmd, Y_cmd]]))
-        u_ref, v_ref = uv_ref[0]
-        
-        du = u_ref - u_obs
-        dv = v_ref - v_obs
-        err_ref = float(np.hypot(du, dv)) if metric == "l2" else float(abs(du) + abs(dv))
+            b = (
+                -e0 * (z1 + z2) / (d01 * d02)
+                + e1 * (z0 + z2) / (d01 * d12)
+                - e2 * (z0 + z1) / (d02 * d12)
+            )
 
-        # Keep refinement only if it improves
-        if np.isfinite(err_ref) and err_ref <= err_best:
-            return z_ref, err_ref, (float(u_ref), float(v_ref)), conf
+            if abs(a) < 1e-12:
+                continue
 
-        return z_best, err_best, uv_best, conf
+            z_ref = -b / (2.0 * a)
+            z_ref = float(np.clip(z_ref, min(z0, z2), max(z0, z2)))
+
+            if z_ref <= z1:
+                t = 0.0 if z1 == z0 else (z_ref - z0) / (z1 - z0)
+                H_ref = (1.0 - t) * np.asarray(dense_stack[z0], float) + t * np.asarray(dense_stack[z1], float)
+            else:
+                t = 0.0 if z2 == z1 else (z_ref - z1) / (z2 - z1)
+                H_ref = (1.0 - t) * np.asarray(dense_stack[z1], float) + t * np.asarray(dense_stack[z2], float)
+
+            if invert_homographies:
+                H_ref = np.linalg.inv(H_ref)
+
+            uv_ref = DepthEstimation.project_xy(H_ref, cmd_XYs[i:i+1])
+            u_ref, v_ref = uv_ref[0]
+
+            du_i = u_ref - obs_uvs[i, 0]
+            dv_i = v_ref - obs_uvs[i, 1]
+            err_ref = float(np.hypot(du_i, dv_i)) if metric == "l2" else float(abs(du_i) + abs(dv_i))
+
+            if np.isfinite(err_ref) and err_ref <= err_out[i]:
+                z_out[i] = z_ref
+                err_out[i] = err_ref
+                uv_out[i] = [u_ref, v_ref]
+
+        return z_out, err_out, uv_out, conf
+    
     
     @staticmethod
     def load_homography_stack_npz(file_path):
@@ -207,8 +237,7 @@ class DepthEstimation():
     @staticmethod
     def normalize_homography(H, eps=1e-9):
         """
-        Normalize homography to remove scale ambiguity.
-        Prefer H[2,2] normalization; fallback to Frobenius.
+        Normalize homography to remove scale ambiguity
         """
         H = H.astype(float)
         
