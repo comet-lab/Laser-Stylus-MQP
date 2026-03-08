@@ -35,6 +35,9 @@ def read_file():
     
     data_set: List[CaliState] = []
     data_set = SystemDataStore.load_storage(full_path) # list of cali_states
+    return data_set
+    
+def calculate_stack(data_set):
     
     H_rgb_to_world = {}
     H_therm_to_world = {} 
@@ -71,35 +74,60 @@ def read_file():
 
 
 def simulate_scan(h_stack: homography_stack, cmd_points, obs_points):
-    num_points = len(cmd_points)
     z_best, err_best, uv_best, conf = DepthEstimation.estimate_depth_from_dense_stack(
             h_stack.H_rw,
             obs_uvs=obs_points,
             cmd_XYs=cmd_points,
-            refine=True) 
+            refine=False) 
+    
+    # pair z heights for each pixel 
     
     world_points = np.hstack((cmd_points, z_best[:, None]))
     depth_map, meta = DepthEstimation.generate_depth_mapping(world_points)
     depth_map = DepthEstimation.patch_depth(depth_map)
     DepthEstimation.plot_depth_surface(depth_map, meta)
+    return depth_map, meta, z_best
     
-    # for i in range(num_points):
-    #     z_best, err_best, uv_best, conf = DepthEstimation.estimate_depth_from_dense_stack(
-    #         h_stack.H_rw,
-    #         obs_uv=obs_points[i],
-    #         cmd_XY=cmd_points[i],
-    #         refine=True) 
-    #     print(z_best)
+
+# depth_map, meta, h_stack: homography_stack
+def disp_cam_in_world(resolution, obs_points, z):
+    H, W = resolution
+
+    grid_u, grid_v = np.meshgrid(
+        np.arange(W),
+        np.arange(H)
+    )
     
-    # pass
+    from scipy.interpolate import griddata
+
+    Z = griddata(
+        obs_points,
+        z,
+        (grid_u, grid_v),
+        method="nearest"
+    )
+    
+    plt.figure(figsize=(6,5))
+    plt.imshow(Z, cmap="viridis")
+    plt.colorbar(label="Height (m)")
+    plt.title("Depth / Height Map")
+    plt.xlabel("u (pixel)")
+    plt.ylabel("v (pixel)")
+    plt.show()
     
 
 
 def main():
     scanned_points = np.load("surgical_system/py_src/image_developement/Calibration Data/scan_points.npz", allow_pickle=True)
     cmd_points, obs_points = scanned_points["cmd_points"], scanned_points["obs_pixels"]
-    h_stack: homography_stack = read_file()
-    simulate_scan(h_stack, cmd_points, obs_points)
+    data_set = read_file()
+    h_stack: homography_stack = calculate_stack(data_set)
+    depthmap, meta, z = simulate_scan(h_stack, cmd_points, obs_points)
+    
+    resolution = (720, 1280)
+    disp_cam_in_world(resolution, obs_points, z)
+    
+    # boundary = data_set
     
     
     

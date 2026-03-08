@@ -474,11 +474,11 @@ class DepthEstimation():
         d[mask] = nearest[mask]
         return d
 
-    def patch_depth(depth_map: np.ndarray, smooth_sigma: float = 0.2) -> np.ndarray:
+    def patch_depth(depth_map: np.ndarray, smooth_sigma: float = 0.2, d_f = 10, sigmaColor = 0.1, sigmaSpace = 1) -> np.ndarray:
         d = DepthEstimation.fill_nans_nearest(depth_map)  
 
         # Edge-preserving smoothing (optional; tune)
-        d = cv2.bilateralFilter(d.astype(np.float32), d=10, sigmaColor=0.1, sigmaSpace=1)
+        d = cv2.bilateralFilter(d.astype(np.float32), d=d_f, sigmaColor=sigmaColor, sigmaSpace=sigmaSpace)
 
         # Optional final light Gaussian
         if smooth_sigma and smooth_sigma > 0:
