@@ -325,7 +325,7 @@ class DepthEstimation():
         return dense_stack
     
     def generate_depth_mapping(positions: np.ndarray,
-                               cell_size: float = 0.001,          # meters per cell (example: 1 mm)
+                               cell_size: float = 0.0002,          # meters per cell (example: 0.2 mm)
                                # (xmin, xmax, ymin, ymax) in same units as x,y
                                bounds: Optional[Tuple[float, float, float, float]] = None,    
                                agg: str = "median",               # "median", "mean", "min", "max", "last"
