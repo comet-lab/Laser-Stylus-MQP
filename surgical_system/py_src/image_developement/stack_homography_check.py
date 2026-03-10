@@ -15,7 +15,6 @@ if __name__=='__main__':
             break
         
 from backend.datastorage import SystemDataStore, CaliState
-from common.vision import normalize_homography
 from registration.transformations.depth_estimation import DepthEstimation
 
 
@@ -50,7 +49,7 @@ def calculate_stack(data_set):
         height = float(cali.cali_type)
         world_points = cali.payload["obj_Points"]
         rgb_points = cali.payload["rgb_img_points"].T
-        therm_points = cali.payload["rgb_img_points"].T
+        therm_points = cali.payload["therm_img_points"].T
         
         H_rgb_to_world[height] = cv2.findHomography(rgb_points, world_points)[0]
         H_therm_to_world[height] = cv2.findHomography(therm_points, world_points)[0]
@@ -77,8 +76,7 @@ def simulate_scan(h_stack: homography_stack, cmd_points, obs_points):
     z_best, err_best, uv_best, conf = DepthEstimation.estimate_depth_from_dense_stack(
             h_stack.H_rw,
             obs_uvs=obs_points,
-            cmd_XYs=cmd_points,
-            refine=False) 
+            cmd_XYs=cmd_points) 
     
     # pair z heights for each pixel 
     
@@ -86,7 +84,7 @@ def simulate_scan(h_stack: homography_stack, cmd_points, obs_points):
     depth_map, meta = DepthEstimation.generate_depth_mapping(world_points, cell_size = 0.0002)
     depth_map = DepthEstimation.patch_depth(depth_map, smooth_sigma = 0.3, d_f = 10, sigmaColor = 0.2, sigmaSpace = 2)
     DepthEstimation.plot_depth_surface(depth_map, meta)
-    return depth_map, meta, z_best
+    return depth_map, meta, z_best, err_best
     
 
 # depth_map, meta, h_stack: homography_stack
@@ -127,8 +125,7 @@ def world_to_camera(depthmap, meta, stack_H):
         Must contain:
             xmin, xmax, ymin, ymax
         describing the world bounds of the depthmap.
-    stack_H : homography_stack
-        Must contain H_wr, a dict {z: H_world_to_rgb}
+    stack_H : a dict {z: H_world_to_"camera type"}
 
     Returns
     -------
@@ -158,8 +155,8 @@ def world_to_camera(depthmap, meta, stack_H):
     Z = Z_grid.ravel()                                                   # (N,)
     N = XY.shape[0]
 
-    # ---- choose nearest available homography for each z ----
-    zs_stack = np.array(sorted(stack_H.H_wr.keys()), dtype=float)        # (K,)
+    # ---- choose nearest homography for each z ----
+    zs_stack = np.array(sorted(stack_H.keys()), dtype=float)        # (K,)
     idx_z = np.abs(Z[:, None] - zs_stack[None, :]).argmin(axis=1)        # (N,)
 
     uv = np.full((N, 2), np.nan, dtype=float)
@@ -170,7 +167,7 @@ def world_to_camera(depthmap, meta, stack_H):
         if not np.any(sel):
             continue
 
-        H = np.asarray(stack_H.H_wr[float(z_key)], dtype=float)          # world -> rgb
+        H = np.asarray(stack_H[float(z_key)], dtype=float)          # world -> rgb
         uv[sel] = DepthEstimation.project_xy(H, XY[sel])
 
     uv_map = uv.reshape(Hh, Ww, 2)
@@ -337,15 +334,13 @@ def plot_surface_3d(depthmap, meta, color_map=None, stride=1, z_scale=1.0):
     plt.show()
     
 
-    
-
 
 def main():
     scanned_points = np.load("surgical_system/py_src/image_developement/Calibration Data/scan_points.npz", allow_pickle=True)
     cmd_points, obs_points = scanned_points["cmd_points"], scanned_points["obs_pixels"]
     data_set = read_file()
     h_stack: homography_stack = calculate_stack(data_set)
-    depthmap, meta, z = simulate_scan(h_stack, cmd_points, obs_points)
+    depthmap, meta, z, err_best = simulate_scan(h_stack, cmd_points, obs_points)
 
     
     img = cv2.imread("surgical_system\py_src\image_developement\Calibration Data\step_img.png")
@@ -353,13 +348,19 @@ def main():
     if img.ndim == 3 and img.shape[2] >= 3:
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-    uv_map, valid_mask, xyz_world = world_to_camera(depthmap, meta, h_stack)
+    rgb_uv_map, valid_mask, xyz_world = world_to_camera(depthmap, meta, h_stack.H_wr) # Maps raw camera to world 
+    therm_uv_map, valid_mask, xyz_world = world_to_camera(depthmap, meta, h_stack.H_wt)
 
-    print("u range:", uv_map[... ,0].min(), uv_map[...,0].max())
-    print("v range:", uv_map[...,1].min(), uv_map[...,1].max())
+    print("RGB Camera Mapping")
+    print("u range:", rgb_uv_map[... ,0].min(), rgb_uv_map[...,0].max())
+    print("v range:", rgb_uv_map[...,1].min(), rgb_uv_map[...,1].max())
     print("image size:", img.shape)
+    
+    print("Thermal Camera Mapping")
+    print("u range:", therm_uv_map[... ,0].min(), therm_uv_map[...,0].max())
+    print("v range:", therm_uv_map[...,1].min(), therm_uv_map[...,1].max())
 
-    out, valid = bilinear_sample_image(img, uv_map)
+    out, valid = bilinear_sample_image(img, rgb_uv_map) # flat view 
     img_out = np.flipud(out)
     plt.figure(figsize=(6,6), dpi=200)
     plt.imshow(img_out.astype(np.uint8))

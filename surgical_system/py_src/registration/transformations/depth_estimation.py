@@ -3,6 +3,8 @@ import cv2
 from typing import Dict, Tuple, Optional
 import matplotlib.pyplot as plt
 from scipy import ndimage
+from scipy.optimize import minimize_scalar
+
 class DepthEstimation():
    
     @staticmethod
@@ -31,6 +33,7 @@ class DepthEstimation():
         uv[valid] = p[valid, :2] / denom[valid]
         return uv
     
+
     @staticmethod
     def estimate_depth_from_dense_stack(
         dense_stack: Dict[float, np.ndarray],
@@ -39,6 +42,8 @@ class DepthEstimation():
         *,
         metric: str = "l2",
         refine: bool = True,
+        refine_method: str = "nonlinear",   # "quadratic" | "nonlinear"
+        nonlinear_maxiter: int = 50,
         min_valid_heights: int = 3,
         invert_homographies: bool = True,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -55,7 +60,12 @@ class DepthEstimation():
             Commanded / known plane coordinates.
         metric : {'l2', 'l1'}
         refine : bool
-            If True, do per-point local quadratic refinement after coarse batch search.
+            If True, do per-point refinement after coarse batch search.
+        refine_method : {'quadratic', 'nonlinear'}
+            - 'quadratic': local 3-point parabola fit (fast)
+            - 'nonlinear': continuous bounded optimization in z
+        nonlinear_maxiter : int
+            Maximum number of iterations for nonlinear optimization.
         min_valid_heights : int
         invert_homographies : bool
             If True, use inv(H_z) before projection, matching your original function.
@@ -79,16 +89,20 @@ class DepthEstimation():
             raise ValueError("cmd_XYs must have shape (N,2)")
         if obs_uvs.shape[0] != cmd_XYs.shape[0]:
             raise ValueError("obs_uvs and cmd_XYs must have the same number of rows")
+        if refine_method not in {"quadratic", "nonlinear"}:
+            raise ValueError("refine_method must be 'quadratic' or 'nonlinear'")
 
         N = obs_uvs.shape[0]
         eps = 1e-12
 
         # ---- sort heights and stack homographies ----
         zs = np.array(sorted(dense_stack.keys()), dtype=float)          # (Z,)
-        Hs = np.array([dense_stack[z] for z in zs], dtype=float)        # (Z,3,3)
+        Hs_raw = np.array([dense_stack[z] for z in zs], dtype=float)    # (Z,3,3)
 
         if invert_homographies:
-            Hs = np.linalg.inv(Hs)                                      # (Z,3,3)
+            Hs = np.linalg.inv(Hs_raw)                                  # (Z,3,3)
+        else:
+            Hs = Hs_raw.copy()
 
         Z = Hs.shape[0]
 
@@ -96,7 +110,6 @@ class DepthEstimation():
         Y = cmd_XYs[:, 1]                                               # (N,)
 
         # ---- project all N points through all Z homographies ----
-        # preds shape will be (N, Z, 2)
         u_num = (
             Hs[:, 0, 0][None, :] * X[:, None]
             + Hs[:, 0, 1][None, :] * Y[:, None]
@@ -128,7 +141,7 @@ class DepthEstimation():
         dv = v_pred - obs_uvs[:, 1:2]                                   # (N,Z)
 
         if metric == "l2":
-            errs = np.hypot(du, dv)                                     # (N,Z)
+            errs = np.hypot(du, dv)
         elif metric == "l1":
             errs = np.abs(du) + np.abs(dv)
         else:
@@ -157,9 +170,50 @@ class DepthEstimation():
         if not refine or Z < 3:
             return z_best, err_best, uv_best, conf
 
+        # ------------------------------------------------------------------
+        # Helpers for continuous interpolation / reprojection evaluation
+        # ------------------------------------------------------------------
+        def interpolated_H_proj(zq: float) -> np.ndarray:
+            """
+            Return interpolated projection homography at query height zq.
+            Output homography is in the same direction as Hs (already inverted
+            if invert_homographies=True).
+            """
+            zq = float(np.clip(zq, zs[0], zs[-1]))
+
+            # exact hit
+            idx_exact = np.where(np.isclose(zs, zq))[0]
+            if idx_exact.size > 0:
+                return Hs[idx_exact[0]]
+
+            hi = int(np.searchsorted(zs, zq))
+            lo = hi - 1
+
+            z_lo, z_hi = float(zs[lo]), float(zs[hi])
+            t = 0.0 if z_hi == z_lo else (zq - z_lo) / (z_hi - z_lo)
+
+            # Interpolate in the same domain as the projection matrices used
+            H_interp = (1.0 - t) * Hs[lo] + t * Hs[hi]
+            return H_interp
+
+        def eval_uv_err(i: int, zq: float) -> Tuple[float, np.ndarray]:
+            """
+            Evaluate predicted uv and error for point i at continuous depth zq.
+            """
+            Hq = interpolated_H_proj(zq)
+            uv_q = DepthEstimation.project_xy(Hq, cmd_XYs[i:i+1])[0]
+
+            du_i = uv_q[0] - obs_uvs[i, 0]
+            dv_i = uv_q[1] - obs_uvs[i, 1]
+
+            if metric == "l2":
+                err_q = float(np.hypot(du_i, dv_i))
+            else:
+                err_q = float(abs(du_i) + abs(dv_i))
+
+            return err_q, uv_q
+
         # ---- local refinement ----
-        # Most of the speedup is already achieved. Refinement is done only on
-        # each point's local winner neighborhood.
         z_out = z_best.copy()
         err_out = err_best.copy()
         uv_out = uv_best.copy()
@@ -174,56 +228,71 @@ class DepthEstimation():
             z1 = float(zs[k])
             z2 = float(zs[k + 1])
 
-            e0 = float(errs[i, k - 1])
-            e1 = float(errs[i, k])
-            e2 = float(errs[i, k + 1])
+            if refine_method == "quadratic":
+                # ------------------------------------------
+                # Original local quadratic refinement
+                # ------------------------------------------
+                e0 = float(errs[i, k - 1])
+                e1 = float(errs[i, k])
+                e2 = float(errs[i, k + 1])
 
-            d01 = z0 - z1
-            d02 = z0 - z2
-            d12 = z1 - z2
+                d01 = z0 - z1
+                d02 = z0 - z2
+                d12 = z1 - z2
 
-            a = (
-                e0 / (d01 * d02)
-                - e1 / (d01 * d12)
-                + e2 / (d02 * d12)
-            )
+                a = (
+                    e0 / (d01 * d02)
+                    - e1 / (d01 * d12)
+                    + e2 / (d02 * d12)
+                )
 
-            b = (
-                -e0 * (z1 + z2) / (d01 * d02)
-                + e1 * (z0 + z2) / (d01 * d12)
-                - e2 * (z0 + z1) / (d02 * d12)
-            )
+                b = (
+                    -e0 * (z1 + z2) / (d01 * d02)
+                    + e1 * (z0 + z2) / (d01 * d12)
+                    - e2 * (z0 + z1) / (d02 * d12)
+                )
 
-            if abs(a) < 1e-12:
-                continue
+                if abs(a) < 1e-12:
+                    continue
 
-            z_ref = -b / (2.0 * a)
-            z_ref = float(np.clip(z_ref, min(z0, z2), max(z0, z2)))
+                z_ref = -b / (2.0 * a)
+                z_ref = float(np.clip(z_ref, min(z0, z2), max(z0, z2)))
 
-            if z_ref <= z1:
-                t = 0.0 if z1 == z0 else (z_ref - z0) / (z1 - z0)
-                H_ref = (1.0 - t) * np.asarray(dense_stack[z0], float) + t * np.asarray(dense_stack[z1], float)
+                err_ref, uv_ref = eval_uv_err(i, z_ref)
+
+                if np.isfinite(err_ref) and err_ref <= err_out[i]:
+                    z_out[i] = z_ref
+                    err_out[i] = err_ref
+                    uv_out[i] = uv_ref
+
             else:
-                t = 0.0 if z2 == z1 else (z_ref - z1) / (z2 - z1)
-                H_ref = (1.0 - t) * np.asarray(dense_stack[z1], float) + t * np.asarray(dense_stack[z2], float)
+                # ------------------------------------------
+                # Continuous nonlinear optimization in z
+                # Search only in local winner neighborhood [z0, z2]
+                # ------------------------------------------
+                def objective(zq: float) -> float:
+                    err_q, _ = eval_uv_err(i, zq)
+                    return err_q
 
-            if invert_homographies:
-                H_ref = np.linalg.inv(H_ref)
+                result = minimize_scalar(
+                    objective,
+                    bounds=(min(z0, z2), max(z0, z2)),
+                    method="bounded",
+                    options={"maxiter": int(nonlinear_maxiter)}
+                )
 
-            uv_ref = DepthEstimation.project_xy(H_ref, cmd_XYs[i:i+1])
-            u_ref, v_ref = uv_ref[0]
+                if not result.success:
+                    continue
 
-            du_i = u_ref - obs_uvs[i, 0]
-            dv_i = v_ref - obs_uvs[i, 1]
-            err_ref = float(np.hypot(du_i, dv_i)) if metric == "l2" else float(abs(du_i) + abs(dv_i))
+                z_ref = float(result.x)
+                err_ref, uv_ref = eval_uv_err(i, z_ref)
 
-            if np.isfinite(err_ref) and err_ref <= err_out[i]:
-                z_out[i] = z_ref
-                err_out[i] = err_ref
-                uv_out[i] = [u_ref, v_ref]
+                if np.isfinite(err_ref) and err_ref <= err_out[i]:
+                    z_out[i] = z_ref
+                    err_out[i] = err_ref
+                    uv_out[i] = uv_ref
 
         return z_out, err_out, uv_out, conf
-    
     
     @staticmethod
     def load_homography_stack_npz(file_path):
