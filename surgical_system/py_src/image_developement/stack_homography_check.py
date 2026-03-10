@@ -349,7 +349,7 @@ def main():
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     rgb_uv_map, valid_mask, xyz_world = world_to_camera(depthmap, meta, h_stack.H_wr) # Maps raw camera to world 
-    therm_uv_map, valid_mask, xyz_world = world_to_camera(depthmap, meta, h_stack.H_wt)
+    therm_uv_map, valid_mask, xyz_world = world_to_camera(depthmap, meta, h_stack.H_wt) 
 
     print("RGB Camera Mapping")
     print("u range:", rgb_uv_map[... ,0].min(), rgb_uv_map[...,0].max())

@@ -47,7 +47,7 @@ class RobotFixtures:
     def _world_to_grid(self, x: float, y: float) -> Tuple[int, int]:
         ox, oy = self.boundary.origin
         s = self.boundary.grid_size
-
+ 
         col = int(np.floor((x - ox) / s))
         row = int(np.floor((y - oy) / s))
         return row, col
