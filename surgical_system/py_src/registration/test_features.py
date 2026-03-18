@@ -3,6 +3,8 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation
 
+
+
 if __name__=='__main__':
     import sys, pathlib
     HERE = pathlib.Path(__file__).resolve().parent
@@ -14,6 +16,7 @@ if __name__=='__main__':
     from registration.cameraRegistration import Camera_Registration
     from registration.transformations.depth_estimation import DepthEstimation
     from registration.transformations.roi_selector import ROISelector
+    
     
 import matplotlib.pyplot as plt
 from robot.robot_controller import Robot_Controller
@@ -521,7 +524,9 @@ if __name__ == '__main__':
     camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_controller)
     
     ### -------------------- Run calibration ---------------- ####
-    camera_reg.run() 
+    # camera_reg.run() 
+    # camera_reg.multi_checkerboard()
+    
     
     # base 2.23 
     # heights = np.array([2.08, 2.65, 3.15, 3.65, 4.18, 4.73, 5.15, 5.62, 6.15, 6.64,
@@ -543,7 +548,7 @@ if __name__ == '__main__':
         
     # live_control_view(camera_reg, 'color', warped=True, tracking=True, depth_path= depth_path) 
     
-    # exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.035/24)
+    exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.04/24)
     path = "surgical_system/py_src/registration/calibration_info/depth_map.npz"
     path_filter = "surgical_system/py_src/registration/calibration_info/depth_map_filter.npz"
     # depth, meta = DepthEstimation.load_depth_npz(path)    
