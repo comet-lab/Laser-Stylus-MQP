@@ -652,6 +652,7 @@ class AppController {
         // Speed Slider event (Update text and send to backend)
         this.ui.speedSlider.addEventListener('input', () => {
             this.ui.speedDisplay.textContent = this.ui.speedSlider.value;
+            this.ui.speedInput.value = this.ui.speedSlider.value;
         });
         this.ui.speedSlider.addEventListener('change', () => {
             const val = this.ui.speedSlider.value;
