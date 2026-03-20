@@ -156,19 +156,19 @@ class Camera_Registration(System_Calibration):
         # self.reprojection_test('thermal', self.cam_M['thermal'], gridShape = np.array([2, 2]), laserDuration = .15, \
         #                 debug=debug, height=0)
         
-        # self.laser_alignment()
+        self.laser_alignment()
         
         
-        homograpy = {"rgb_w": self.cam_M['color'],
-                     "therm_w" : self.cam_M['thermal'],
-                     "rgb_therm": self.rgbd_therm_M}
+        # homograpy = {"rgb_w": self.cam_M['color'],
+        #              "therm_w" : self.cam_M['thermal'],
+        #              "rgb_therm": self.rgbd_therm_M}
         
-        local_home_pose = self.robot_controller.get_home_pose()
-        system_calibration_storage = SystemDataStore(local_home_pose, homograpy)
+        # local_home_pose = self.robot_controller.get_home_pose()
+        # system_calibration_storage = SystemDataStore(local_home_pose, homograpy)
         
-        base_homography_data = {**base_homography_data, **meta_data}
-        system_calibration_storage.put_cali("base_homography", base_homography_data)
-        system_calibration_storage.save_data_storage(os.path.join(self.directory, "calibration"), reset=True)
+        # base_homography_data = {**base_homography_data, **meta_data}
+        # system_calibration_storage.put_cali("base_homography", base_homography_data)
+        # system_calibration_storage.save_data_storage(os.path.join(self.directory, "calibration"), reset=True)
         
         
     

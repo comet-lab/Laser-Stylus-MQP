@@ -74,6 +74,9 @@ class Handler:
         self.virtual_fixture, self.dx, self.dy, self.distance_field = self.generate_virtual_fixture()
         self.vf_valid_flag = None
         
+        self.hold_pose_flag = False
+        self.hold_position = None
+        
         
         initial_pose, _ = robot_controller.get_current_state()
         desired_state.update(asdict(RobotSchema.from_pose(initial_pose@np.linalg.inv(self.home_tf))))
@@ -354,13 +357,17 @@ class Handler:
 ###------------------------ Live Control ------------------####
         
     def _do_hold_pose(self):
+        if self.hold_position is None:
+            self.hold_position = self.robot_controller.current_robot_to_world_position()
+            print("[Handler] Holding Pose: ", self.hold_position)
+                
         current_pose, current_vel = self.robot_controller.get_current_state()
         # Stop robot, no drift
         # print(np.linalg.norm(current_vel[:3]))
         if np.linalg.norm(current_vel[:3]) > 2e-5:
             # print("Setting speed 0")
             # self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
-            target_world_point = self.robot_controller.current_robot_to_world_position()
+            target_world_point = self.hold_position
             target_world_point[-1] = self.working_height
                 
             target_pose = np.eye(4)
@@ -419,14 +426,12 @@ class Handler:
                     self._do_hold_pose()
                     return
                     
-                    
+                self.hold_position = None
                 self.laser_obj.set_output(self.desired_state.isLaserOn)
             else:
                 # Holding but change height
                 target_world_point = self.robot_controller.current_robot_to_world_position()
                 target_world_point[-1] = self.working_height
-            
-            
             
                 
             target_pose = np.eye(4)
