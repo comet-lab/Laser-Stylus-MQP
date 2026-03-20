@@ -199,39 +199,70 @@ class AppController {
     // ===================================================================
 
     private setupVideoCanvas(): void {
-        if (this.isConnectingVideo) {
-            console.log("Video connection already in progress, skipping...");
-            return;
-        }
-        this.isConnectingVideo = true;
         //Clean up any broken previous connection attempts
         if (this.reader) {
-            try { this.reader.destroy(); } catch (e) { }
+            try { this.reader.destroy(); } catch (e) {}
             this.reader = null;
         }
+
+        //Break Safari's cache by explicitly clearing the video element
+        this.ui.video.srcObject = null;
+        this.ui.video.load(); 
 
         this.reader = new window.MediaMTXWebRTCReader({
             url: new URL(`http://${window.location.hostname}:8889/mystream/whep`),
             onError: (err: string) => {
                 console.warn("Video stream not ready yet. Retrying in 2s...", err);
-                this.isConnectingVideo = false; // Reset flag before retry
+                
+                const textEl = this.ui.loadingScreen.querySelector('.loading-text');
+                if (textEl) textEl.textContent = "WAITING FOR CAMERA FEED...";
+
                 setTimeout(() => this.setupVideoCanvas(), 2000);
             },
             onTrack: (evt: RTCTrackEvent) => {
-                this.isConnectingVideo = false;
                 if (evt.track.kind === 'video') {
                     this.ui.video.srcObject = evt.streams[0];
+                    
+                    let isStarted = false;
+                    let stallTimeout: any;
 
-                    this.ui.video.onloadedmetadata = () => {
+                    const startSystem = () => {
+                        if (isStarted) return; //Prevent double-firing
+                        isStarted = true;
+                        clearTimeout(stallTimeout); //Cancel the watchdog
+
                         const textEl = this.ui.loadingScreen.querySelector('.loading-text');
                         if (textEl) textEl.textContent = "INITIALIZING SYSTEM...";
+                        
+                        this.ui.video.play().catch(e => {
+                            console.warn("Video play blocked by browser:", e);
+                            
+                            //If Safari hard-blocks the autoplay, give the user a button to tap
+                            if (e.name === 'NotAllowedError' && textEl) {
+                                textEl.innerHTML = '<button id="ios-start-btn" style="background:#fa8500; color:#fff; border:none; padding:12px 24px; border-radius:8px; font-weight:bold; cursor:pointer; letter-spacing:1px;">TAP TO START CAMERA</button>';
+                                document.getElementById('ios-start-btn')?.addEventListener('click', () => {
+                                    this.ui.video.play();
+                                    textEl.textContent = "INITIALIZING SYSTEM...";
+                                });
+                            }
+                        });
                         this.initCanvasManager();
                     };
 
-                    //Add this check immediately after setting the handler:
                     if (this.ui.video.readyState >= 1) {
-                        //Metadata already loaded, manually trigger
-                        this.ui.video.onloadedmetadata(new Event('loadedmetadata'));
+                        startSystem();
+                    } else {
+                        this.ui.video.onloadedmetadata = startSystem;
+                        
+                        //If we get a track, but no frames decode within 3 seconds, the WebRTC 
+                        //connection is likely a ghost. Kill it and force a retry.
+                        stallTimeout = setTimeout(() => {
+                            if (!isStarted) {
+                                console.warn("Stream stalled: Track received but no frames decoded. Force restarting...");
+                                this.ui.video.onloadedmetadata = null; //Clean up listener
+                                this.setupVideoCanvas(); 
+                            }
+                        }, 3000);
                     }
                 }
             },
@@ -652,6 +683,7 @@ class AppController {
         // Speed Slider event (Update text and send to backend)
         this.ui.speedSlider.addEventListener('input', () => {
             this.ui.speedDisplay.textContent = this.ui.speedSlider.value;
+            this.ui.speedInput.value = this.ui.speedSlider.value;
         });
         this.ui.speedSlider.addEventListener('change', () => {
             const val = this.ui.speedSlider.value;

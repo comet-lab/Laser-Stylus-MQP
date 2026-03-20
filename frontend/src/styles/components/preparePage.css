@@ -3,8 +3,8 @@
 /* === PREPARE PATH MODAL === */
 #preparePopup {
   position: absolute;
-  top: 10%;
-  right: 3%;
+  top: 14%;
+  right: 1%;
   width: fit-content;
   height: fit-content;
   display: none;
@@ -21,7 +21,7 @@
 
 /* Dynamically adjust position if the toolbar is mounted on the right */
 body.sidebar-right #preparePopup {
-  right: calc(3% + var(--left-panel-width) + 10px);
+  right: calc(1% + var(--left-panel-width));
 }
 
 #preparePopup.active {
