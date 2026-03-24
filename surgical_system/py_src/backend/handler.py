@@ -9,6 +9,7 @@ from robot.robot_fixtures import RobotFixtures, GridBoundary
 from backend.datastorage import SystemDataStore, CameraFrame, RobotState, UserCommand
 from dataclasses import asdict
 from typing import Dict, Any, Tuple
+from scipy.spatial.transform import Rotation
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -55,6 +56,7 @@ class Handler:
         self.recording_data = False 
         self.data_storage = data_storage
         self.desired_state.isRecordingOn = None
+        
         
         boundary = self.cam_reg.meta_base_homography_data["boundary"] 
         if boundary is not None:
@@ -179,7 +181,7 @@ class Handler:
             polygon,
             spacing=spacing,        # pixels
             theta_deg=45.0,      # angle
-            margin=5.0          # inward offset
+            margin=1.0          # inward offset
         )
         
         # print("Raster Path: ", path)
@@ -280,8 +282,8 @@ class Handler:
     def _do_create_path(self, path):
         pixels = path
         path = None
-        pixels = Motion_Planner.rdp(pixels, epsilon=1)
-        pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=3, n_arc=20)
+        pixels = Motion_Planner.rdp(pixels, epsilon=2)
+        pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=50, n_arc=20)
         
         fig, ax = plt.subplots(figsize=(8,4))
         # ax.imshow(img, cmap='gray')
@@ -359,12 +361,13 @@ class Handler:
     def _do_hold_pose(self):
         if self.hold_position is None:
             self.hold_position = self.robot_controller.current_robot_to_world_position()
-            print("[Handler] Holding Pose: ", self.hold_position)
+           
+            # print("[Handler] Holding Pose: ", self.hold_position)
                 
         current_pose, current_vel = self.robot_controller.get_current_state()
         # Stop robot, no drift
-        # print(np.linalg.norm(current_vel[:3]))
-        if np.linalg.norm(current_vel[:3]) > 2e-5:
+        # print(f"lin Norm: {np.linalg.norm(current_vel[:3]):0.4f}, rot Norm: {np.linalg.norm(current_vel[3:]):0.4f},")
+        if np.linalg.norm(current_vel[:3]) > 2e-5 or np.linalg.norm(current_vel[3:]) > 2e-7:
             # print("Setting speed 0")
             # self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
             target_world_point = self.hold_position
@@ -373,7 +376,15 @@ class Handler:
             target_pose = np.eye(4)
             target_pose[:3, -1] = target_world_point
             target_vel = self.robot_controller.live_control(target_pose, 0.05, KP = 0.5)
-            self.robot_controller.set_velocity(target_vel, np.zeros(3))
+            hold_orientation = self.robot_controller.hold_orientation
+            if hold_orientation is not None:
+                target_orien_vel =  self.robot_controller.live_orientation_control(hold_orientation, 0.02, KP = 0.5)
+            else:
+                target_orien_vel = np.zeros(3)
+                
+                
+            # print("[Handler] Orientation Correction: ", target_orien_vel)
+            self.robot_controller.set_velocity(target_vel, target_orien_vel)
         else:
             # print("holding")
             self.robot_controller.go_to_pose(current_pose, blocking=False)
@@ -441,8 +452,13 @@ class Handler:
             target_vel = self.robot_controller.live_control(target_pose, live_control_speed, KP = 5.0)
             # TODO Multiply velocity controller in unit component direction * max(min_speed, min(1, (distance / max_distance)))
             
+            hold_orientation = self.robot_controller.hold_orientation
+            if hold_orientation is not None:
+                target_orien_vel =  self.robot_controller.live_orientation_control(hold_orientation, 0.02, KP = 0.5)
+            else:
+                target_orien_vel = np.zeros(3)
             
-            self.robot_controller.set_velocity(target_vel, np.zeros(3))
+            self.robot_controller.set_velocity(target_vel, target_orien_vel)
 
 ###------------------------ Auto Laser Focus ------------------####
 

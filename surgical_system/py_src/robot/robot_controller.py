@@ -26,6 +26,7 @@ class Robot_Controller():
          # Trajectory thread management
         self._traj_thread = None
         self._stop_traj = threading.Event()
+        self.hold_orientation = None
 
     def load_home_pose(self, home_pose_path = "surgical_system/py_src/robot/home_pose.csv"):
         if(os.path.exists(home_pose_path)):
@@ -44,6 +45,10 @@ class Robot_Controller():
             homePose = np.concatenate((homePose,[[0,0,0,1]]),axis=0)
             np.savetxt(home_pose_path, homePose, delimiter=",")
             print("Saving new home_pose...")
+            
+        r_matrix_b = homePose[:3, :3]
+        self.hold_orientation = Rotation.from_matrix(r_matrix_b).as_euler('xyz', degrees=True)
+        print("[Robot Controller]: Holding Orientation (xyz): ", self.hold_orientation)
         return homePose
     
     def load_edit_pose(self, filePath = "surgical_system/py_src/robot/home_pose.csv"):
@@ -145,6 +150,7 @@ class Robot_Controller():
         new_pose = np.eye(4)
         new_pose[0:3, -1], new_pose[:3, :3] = position, Rmat
         current_vel = pose[7:]
+        
         return new_pose, current_vel
 
     def quat_to_Mat(self, pose):
@@ -232,7 +238,13 @@ class Robot_Controller():
                 velocity_correction = self.live_control(target_pose, 0.2, KP = 2, KD=3.0) #TODO CHANGE MAX SPEED
                 # print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
                 command_vel = target_vel + velocity_correction
-                state = self.set_velocity(command_vel, [0, 0, 0]) 
+                
+                if self.hold_orientation is not None:
+                    target_orien_vel = self.live_orientation_control(self.hold_orientation, 0.02, KP = 0.5)
+                else: 
+                    target_orien_vel = [0, 0, 0]
+                
+                state = self.set_velocity(command_vel, target_orien_vel) 
                 
                 
                 pos, vel = state[:3], state[7:10]
@@ -343,9 +355,7 @@ class Robot_Controller():
         current_pose, current_velocity = self.get_current_state()
         current_pose = current_pose[:3, -1] - self.home_pose[:3, -1]
         position_error = target_pose_home[:3, -1] - current_pose
-        vel_vector = np.array(current_velocity[:3])
-        # print("[Live Controller] KD Control : ", vel_vector * KD)
-        target_vel = position_error * KP #- vel_vector * KD
+        target_vel = position_error * KP
         mag = np.linalg.norm(target_vel)
         
         if mag == 0:
@@ -353,7 +363,20 @@ class Robot_Controller():
         elif mag > max_vel:
             target_vel = target_vel * (max_vel / mag)
         return target_vel
-            
+    
+    
+    def live_orientation_control(self, target_orientation, max_vel, KP = 1.0):
+        r_matrix_b = self.get_current_state()[0][:3, :3]
+        current_euler = Rotation.from_matrix(r_matrix_b).as_euler('xyz', degrees=True)
+        orientation_error = target_orientation - current_euler
+        target_vel = orientation_error * KP
+        mag = np.linalg.norm(target_vel)
+        
+        if mag == 0:
+            target_vel = np.zeros(3) 
+        elif mag > max_vel:
+            target_vel = target_vel * (max_vel / mag)
+        return target_vel
     
     
 if __name__=='__main__':
@@ -363,7 +386,7 @@ if __name__=='__main__':
     home_pose = robot_controller.get_home_pose()
     
     mode = 1
-    height = 0.05 # m
+    height = 0.00 # m
     x = 0
     y = 0
     target_pose = np.array([[1,0,0,x],[0,1,0,y],[0,0,1,height],[0,0,0,1]])
