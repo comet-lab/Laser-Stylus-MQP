@@ -78,6 +78,7 @@ class Handler:
         
         self.hold_pose_flag = False
         self.hold_position = None
+        self.hold_pose = None
         
         
         initial_pose, _ = robot_controller.get_current_state()
@@ -279,11 +280,14 @@ class Handler:
         path = np.array([[d['x'], d['y']] for d in self.desired_state.path])
         return path
     
-    def _do_create_path(self, path):
+    def _do_create_path(self, path, raster=False):
         pixels = path
         path = None
         pixels = Motion_Planner.rdp(pixels, epsilon=2)
-        pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=50, n_arc=20)
+        if raster:
+            pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=50, n_arc=20)
+        else:
+            pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=5, n_arc=20)
         
         fig, ax = plt.subplots(figsize=(8,4))
         # ax.imshow(img, cmap='gray')
@@ -361,29 +365,57 @@ class Handler:
     def _do_hold_pose(self):
         if self.hold_position is None:
             self.hold_position = self.robot_controller.current_robot_to_world_position()
-           
+            self.hold_pose, current_vel = self.robot_controller.get_current_state()
             # print("[Handler] Holding Pose: ", self.hold_position)
                 
         current_pose, current_vel = self.robot_controller.get_current_state()
         # Stop robot, no drift
         # print(f"lin Norm: {np.linalg.norm(current_vel[:3]):0.4f}, rot Norm: {np.linalg.norm(current_vel[3:]):0.4f},")
-        if np.linalg.norm(current_vel[:3]) > 2e-5 or np.linalg.norm(current_vel[3:]) > 2e-7:
-            # print("Setting speed 0")
-            # self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
-            target_world_point = self.hold_position
-            target_world_point[-1] = self.working_height
-                
-            target_pose = np.eye(4)
-            target_pose[:3, -1] = target_world_point
-            target_vel = self.robot_controller.live_control(target_pose, 0.05, KP = 0.5)
-            hold_orientation = self.robot_controller.hold_orientation
-            if hold_orientation is not None:
-                target_orien_vel =  self.robot_controller.live_orientation_control(hold_orientation, 0.02, KP = 0.5)
-            else:
+        hold_orientation = self.robot_controller.hold_orientation
+        if hold_orientation is not None:
+            target_orien_vel = self.robot_controller.live_orientation_control(
+                hold_orientation, 0.005, KP=0.05
+            )
+
+            if np.linalg.norm(target_orien_vel) < 1e-5:
                 target_orien_vel = np.zeros(3)
+        else:
+            target_orien_vel = np.zeros(3)
+            
+        target_world_point = self.hold_position
+        target_world_point[-1] = self.working_height
+            
+        target_pose = np.eye(4)
+        target_pose[:3, -1] = target_world_point
+        target_vel = self.robot_controller.live_control(target_pose, 0.01, KP = 0.1)
+        
+        if np.linalg.norm(target_vel) < 1e-4:
+                target_vel = np.zeros(3)
+            
+        lin_cmd_norm = np.linalg.norm(target_vel)
+        rot_cmd_norm = np.linalg.norm(target_orien_vel)
+
+        lin_meas_norm = np.linalg.norm(current_vel[:3])
+        rot_meas_norm = np.linalg.norm(current_vel[3:])
+        
+        # rot_error = hold_orientation
+
+        not_home = lin_cmd_norm > 7e-5 or rot_cmd_norm > 3e-4
+        not_stopped = lin_meas_norm > 2e-5 or rot_meas_norm > 1e-4
+
+        # print(
+        #     f"[DEBUG]\n"
+        #     # f"  target_vel norm      = {lin_cmd_norm:.8e}  ({lin_cmd_norm > 7e-5})\n"
+        #     f"  target_orien norm    = {rot_cmd_norm:.8e}  ({rot_cmd_norm > 3e-4})\n"
+        #     # f"  current_lin norm     = {lin_meas_norm:.8e}  (>2e-5: {lin_meas_norm > 2e-5})\n"
+        #     f"  rot error    = {rot_meas_norm:.8e}  (>2e-5: {rot_meas_norm > 1e-4})\n"
+        #     # f"  not_home             = {not_home}\n"
+        #     # f"  not_stopped          = {not_stopped}\n"
+        # )
                 
-                
-            # print("[Handler] Orientation Correction: ", target_orien_vel)
+        if not_home or not_stopped:
+            # print("[Handler] Hold pose: not home: ", not_home)
+            # print("[Handler] Hold Pose: not stopped: ", not_stopped)
             self.robot_controller.set_velocity(target_vel, target_orien_vel)
         else:
             # print("holding")
@@ -400,8 +432,7 @@ class Handler:
         # print(f"[Height Diff] {np.abs(height_diff)}")
         
         
-                    
-        if(self._input_downtime() > .12 and np.abs(height_diff) < 0.001): # 1mm
+        if(self._input_downtime() > .12 and np.abs(height_diff) < 0.00025): # 1mm
             # print("[Live Control] Holding Position")
             self._do_hold_pose()
         else:
@@ -429,7 +460,6 @@ class Handler:
                     z = self.working_height)[0]
                 
                 valid_input_position = self.robot_fixtures.is_valid(target_world_point[:2])
-                
                 # print("[Hander] Robot Fixtures: Valid Input: ", valid_input_position, " | Valid Robot", valid_robot_position)
                 if(not valid_input_position and not valid_robot_position):
                     # print("[Hander] Robot Fixtures: Stopping target", target_world_point[:2])
@@ -438,6 +468,7 @@ class Handler:
                     return
                     
                 self.hold_position = None
+                self.hold_pose = None
                 self.laser_obj.set_output(self.desired_state.isLaserOn)
             else:
                 # Holding but change height
@@ -454,10 +485,15 @@ class Handler:
             
             hold_orientation = self.robot_controller.hold_orientation
             if hold_orientation is not None:
-                target_orien_vel =  self.robot_controller.live_orientation_control(hold_orientation, 0.02, KP = 0.5)
+                target_orien_vel = self.robot_controller.live_orientation_control(
+                    hold_orientation, 0.005, KP=0.05
+                )
+
+                if np.linalg.norm(target_orien_vel) < 1e-4:
+                    target_orien_vel = np.zeros(3)
             else:
                 target_orien_vel = np.zeros(3)
-            
+            # print("here 3")
             self.robot_controller.set_velocity(target_vel, target_orien_vel)
 
 ###------------------------ Auto Laser Focus ------------------####
@@ -507,7 +543,7 @@ class Handler:
                 print("[Warning] : Raster path is empty")
                 self._package_path(np.empty((1, 2), dtype=float), -1)
             else: 
-                self.current_traj = self._do_create_path(raster)
+                self.current_traj = self._do_create_path(raster, raster=True)
                 
             if self.recording_data:
                 payload = {"pixel points": raster,
@@ -567,7 +603,8 @@ class Handler:
             if(self.desired_state.fixtures_mask is not None):
                 self._read_fixtures()
                 self.desired_state.fixtures_mask = None
-                
+            
+            
             if(self.current_traj is not None and self.desired_state.executeCommand
                    and not self.robot_controller.is_trajectory_running()):
                 print("Executing Path")
@@ -576,23 +613,24 @@ class Handler:
                     self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
                                             mode = "execute",
                                             payload=payload)
-                    
                 self._do_path(self.current_traj)
                 self.desired_state.executeCommand = None
                 self.current_traj = None
-                
+                self.hold_position = None
+                self.hold_pose = None
+            
             elif(((self.desired_state.x is not None and self.desired_state.y is not None) or height_change)
                    and not self.robot_controller.is_trajectory_running()):
-                
+                # print("here just chaning hiehgt")
                     # print(f"Live controller trigger {self.desired_state.x}, {self.desired_state.y}")
                 self._do_live_control(height_diff)
                 self.desired_state.path = None
+            elif(not self.robot_controller.is_trajectory_running()):
+                self._do_hold_pose()
             # elif(not self.robot_controller.is_trajectory_running())
-            
-                
-                    
-                    
+            # print("here")
         else:
+            # print("here else")
             self._do_hold_pose()
             self.laser_obj.set_output(False)
                 

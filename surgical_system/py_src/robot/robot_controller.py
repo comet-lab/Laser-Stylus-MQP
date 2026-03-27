@@ -240,7 +240,7 @@ class Robot_Controller():
                 command_vel = target_vel + velocity_correction
                 
                 if self.hold_orientation is not None:
-                    target_orien_vel = self.live_orientation_control(self.hold_orientation, 0.02, KP = 0.5)
+                    target_orien_vel = self.live_orientation_control(self.hold_orientation, 0.01, KP = 0.1)
                 else: 
                     target_orien_vel = [0, 0, 0]
                 
@@ -365,10 +365,11 @@ class Robot_Controller():
         return target_vel
     
     
-    def live_orientation_control(self, target_orientation, max_vel, KP = 1.0):
+    def live_orientation_control(self, target_orientation, max_vel, KP = 0.1):
         r_matrix_b = self.get_current_state()[0][:3, :3]
         current_euler = Rotation.from_matrix(r_matrix_b).as_euler('xyz', degrees=True)
         orientation_error = target_orientation - current_euler
+        # print(f"[Robot Controller] Orientation Error: {np.linalg.norm(orientation_error):0.4}" )
         target_vel = orientation_error * KP
         mag = np.linalg.norm(target_vel)
         

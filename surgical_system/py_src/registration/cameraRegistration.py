@@ -128,7 +128,7 @@ class Camera_Registration(System_Calibration):
         #                          saveLocation=self.calibration_folder, debug=debug)
         
         grid_shape = np.array([3, 3])
-        square_size = 0.040/2.0
+        square_size = 0.045/2.0
         
 
         

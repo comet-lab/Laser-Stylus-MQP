@@ -22,3 +22,7 @@ Position_plot.png
 Position(x,y) trajectory.png
 data_collection/
 plots/
+surgical_system/py_src/registration/calibration_full
+surgical_system/py_src/registration/calibration
+surgical_system/py_src/registration/calibration_info/calibration_meta.npz
+surgical_system/py_src/registration/calibration_info/depth_map.npz
