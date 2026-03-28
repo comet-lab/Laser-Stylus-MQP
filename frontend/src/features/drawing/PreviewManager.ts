@@ -34,6 +34,7 @@ export class PreviewManager {
   private readonly DASH_PATTERN = [10, 10];
   
   private dashOffset: number = 0;
+  private requiredConfirmations: number = 0;
 
   constructor(
     private readonly ui: UIRegistry,
@@ -70,6 +71,15 @@ export class PreviewManager {
       btn.classList.remove('locked');
     } else {
       btn.classList.add('locked');
+    }
+  }
+
+  private tryEnableExecute(): void {
+    //Only unlock if we have a real path drawn and the user has acknowledged all warnings
+    if (this.sourcePath.length >= 2 && this.requiredConfirmations <= 0) {
+      this.setExecuteButtonState(true);
+    } else {
+      this.setExecuteButtonState(false);
     }
   }
 
@@ -114,6 +124,8 @@ export class PreviewManager {
     this.stopAnimation();
     ToastManager.clearAll();
 
+    this.requiredConfirmations = 0;
+
     try {
       const response = await cm.previewPath(speed, rasterType, density, isFill);
       const hasValidPath = response.path && response.path.length > 0;
@@ -124,6 +136,7 @@ export class PreviewManager {
 
       //Handle Active Safety Warnings
       if (response.warning === "FIXTURE_OVERLAP") {
+        this.requiredConfirmations++;
         ToastManager.show(
           "SAFETY WARNING: Your planned path crosses into a restricted fixture zone. Please confirm to allow execution.",
           {
@@ -131,20 +144,13 @@ export class PreviewManager {
             requireAck: true,
             ackText: 'CONFIRM',
             onAcknowledge: () => {
-              //Only unlock the button once the user explicitly clicks CONFIRM
-              if (hasValidPath) this.setExecuteButtonState(true);
+              this.requiredConfirmations--;
+              this.tryEnableExecute();
             }
           }
         );
-
-        if (hasValidPath) {
-          //Draw the path to show them the mistake, but do not enable the button
-          this.handlePathData(response.path, response.duration, false);
-        }
-      }
-      //If the previewed path goes outside of the boundaries of the drawn path
-      //THIS IS JUST FOR THE SIMULATED RESPONSE WHEN THE ROBOT IS NOT CONNECTED
-      else if (response.warning === "PATH_ESCAPES_BOUNDS") {
+      } else if (response.warning === "PATH_ESCAPES_BOUNDS") {
+        this.requiredConfirmations++;
         ToastManager.show(
           "PRECISION WARNING: The generated path extends outside your originally drawn boundaries. Please confirm to allow execution.",
           {
@@ -152,16 +158,15 @@ export class PreviewManager {
             requireAck: true,
             ackText: 'CONFIRM',
             onAcknowledge: () => {
-              if (hasValidPath) this.setExecuteButtonState(true);
+              this.requiredConfirmations--;
+              this.tryEnableExecute();
             }
           }
         );
-        //Draw the path to show the mistake, but keep the button locked
-        if (hasValidPath) this.handlePathData(response.path, response.duration, false);
       }
       //Handle Safe Paths
-      else if (hasValidPath) {
-        this.handlePathData(response.path, response.duration, true);
+      if (hasValidPath) {
+        this.handlePathData(response.path, response.duration);
       }
       else {
         this.ui.previewDuration.textContent = 'Waiting...';
@@ -193,9 +198,6 @@ export class PreviewManager {
     }
 
     const newLength = Math.min(previewData.x.length, previewData.y.length);
-
-    //TODO: Get rid of this check, shouldn't be necessary if the data is being sent properly from backend
-    //If we don't get a duration, and the path is the same, drop this message
     if (serverDuration === undefined && this.sourcePath.length === newLength) {
       console.log("Ignored duplicate path from robot.");
       return;
@@ -208,11 +210,10 @@ export class PreviewManager {
     }
 
     const finalDuration = serverDuration || (this.durationSeconds > 0 ? this.durationSeconds : 10);
-
-    //ToastManager.clearAll();
     const cm = this.getCanvasManager();
 
     if (cm && cm.checkIfPathEscapes(path)) {
+      this.requiredConfirmations++;
       ToastManager.show(
         "SAFETY WARNING: The generated path extends outside your originally drawn boundaries. Please confirm to allow execution.",
         {
@@ -220,18 +221,18 @@ export class PreviewManager {
           requireAck: true,
           ackText: 'CONFIRM',
           onAcknowledge: () => {
-            this.setExecuteButtonState(true);
+            this.requiredConfirmations--;
+            this.tryEnableExecute();
           }
         }
       );
-      //Pass false to keep the execute button locked until confirmed
-      this.handlePathData(path, finalDuration, false);
-    } else {
-      this.handlePathData(path, finalDuration, true);
     }
+
+    // Always process the path data, regardless of warnings
+    this.handlePathData(path, finalDuration);
   }
 
-  private handlePathData(videoPath: Position[], duration: number, enableExecute: boolean): void {
+  private handlePathData(videoPath: Position[], duration: number): void {
     //Catch empty or single-point paths before they break the renderer
     if (videoPath.length < 2) {
       this.clearOverlay();
@@ -248,11 +249,10 @@ export class PreviewManager {
 
     this.ui.previewDuration.textContent = `${duration.toFixed(1)}s`;
 
-    //Explicitly apply the boolean state to lock/unlock the button
-    this.setExecuteButtonState(enableExecute);
-
     this.drawPath();
     this.startAnimation();
+
+    this.tryEnableExecute();
   }
 
   /**
@@ -398,6 +398,7 @@ export class PreviewManager {
   }
 
   public resetPreviewState(): void {
+    this.requiredConfirmations = 0;
     this.hasPreviewedCurrentDrawing = false;
     this.ignoreWebsocketPaths = false;
     this.pathData = [];
