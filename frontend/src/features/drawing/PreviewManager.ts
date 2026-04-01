@@ -134,36 +134,40 @@ export class PreviewManager {
         this.ignoreWebsocketPaths = true;
       }
 
-      //Handle Active Safety Warnings
-      if (response.warning === "FIXTURE_OVERLAP") {
-        this.requiredConfirmations++;
-        ToastManager.show(
-          "SAFETY WARNING: Your planned path crosses into a restricted fixture zone. Please confirm to allow execution.",
-          {
-            type: 'warning',
-            requireAck: true,
-            ackText: 'CONFIRM',
-            onAcknowledge: () => {
-              this.requiredConfirmations--;
-              this.tryEnableExecute();
+      //Handle Active Safety Warnings (Now checking the array of warnings)
+      if (response.warnings) {
+        if (response.warnings.includes("FIXTURE_OVERLAP")) {
+          this.requiredConfirmations++;
+          ToastManager.show(
+            "SAFETY WARNING: Your planned path crosses into a restricted fixture zone. Please confirm to allow execution.",
+            {
+              type: 'warning',
+              requireAck: true,
+              ackText: 'CONFIRM',
+              onAcknowledge: () => {
+                this.requiredConfirmations--;
+                this.tryEnableExecute();
+              }
             }
-          }
-        );
-      } else if (response.warning === "PATH_ESCAPES_BOUNDS") {
-        this.requiredConfirmations++;
-        ToastManager.show(
-          "PRECISION WARNING: The generated path extends outside your originally drawn boundaries. Please confirm to allow execution.",
-          {
-            type: 'warning',
-            requireAck: true,
-            ackText: 'CONFIRM',
-            onAcknowledge: () => {
-              this.requiredConfirmations--;
-              this.tryEnableExecute();
+          );
+        }
+        if (response.warnings.includes("PATH_ESCAPES_BOUNDS")) {
+          this.requiredConfirmations++;
+          ToastManager.show(
+            "PRECISION WARNING: The generated path extends outside your originally drawn boundaries. Please confirm to allow execution.",
+            {
+              type: 'warning',
+              requireAck: true,
+              ackText: 'CONFIRM',
+              onAcknowledge: () => {
+                this.requiredConfirmations--;
+                this.tryEnableExecute();
+              }
             }
-          }
-        );
+          );
+        }
       }
+      
       //Handle Safe Paths
       if (hasValidPath) {
         this.handlePathData(response.path, response.duration);
