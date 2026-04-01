@@ -283,11 +283,27 @@ class Handler:
     def _do_create_path(self, path, raster=False):
         pixels = path
         path = None
-        pixels = Motion_Planner.rdp(pixels, epsilon=2)
+        print("Path event?", self.desired_state.pathEvent)
+        
+        #TODO check if the path is wrapped, if not, do not include
         if raster:
-            pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=50, n_arc=20)
+            pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=50, n_arc=20, min_angle=1e-4)
         else:
-            pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=5, n_arc=20)
+            # pixels = Motion_Planner.rdp(pixels, epsilon=30)
+            start_pixel, end_pixel = pixels[0, :], pixels[-1, :]
+            epsilon = 2.0   # tolerance in pixels
+            pixels_cv = np.asarray(pixels, dtype=np.float32).reshape(-1, 1, 2)
+            approx = cv2.approxPolyDP(pixels_cv, epsilon, closed=True)
+            poly_count = approx.shape[0]
+            print("approx corners", approx)
+            if poly_count > 5:
+                print("Circle")
+                pixels = Motion_Planner.smooth_contour(pixels, window=31, poly=3)
+                pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=10, n_arc=20)
+                pixels = np.vstack((np.vstack((start_pixel, pixels)), end_pixel))
+            else: 
+                print("poly")
+                pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=10, n_arc=20)
         
         fig, ax = plt.subplots(figsize=(8,4))
         # ax.imshow(img, cmap='gray')
@@ -306,14 +322,14 @@ class Handler:
                 pixels, 
                 warped_view, 
                 z = self.working_height)
-        # fig, ax = plt.subplots(figsize=(8,4))
+        fig, ax = plt.subplots(figsize=(8,4))
         
-        # if len(robot_path) > 1:
-        #     xs = [p[0] for p in robot_path]
-        #     ys_plot = [p[1] for p in robot_path]
-        #     ax.plot(xs, ys_plot, linewidth=1)  # default color
-        # ax.set_axis_off()
-        # fig.savefig("World Positions after warp path.png")
+        if len(robot_path) > 1:
+            xs = [p[0] for p in robot_path]
+            ys_plot = [p[1] for p in robot_path]
+            ax.plot(xs, ys_plot, linewidth=1)  # default color
+        ax.set_axis_off()
+        fig.savefig("World Positions after warp path.png")
             
         speed = self.desired_state.speed / 1000.0 if self.desired_state.speed != None else 0.01 # m/s
         traj = self.robot_controller.create_custom_trajectory(robot_path, speed)
@@ -598,6 +614,7 @@ class Handler:
                 self.cam_reg.get_path(self.path_display_pixels)
             else:
                 self.cam_reg.display_path = False
+                self.robot_controller.report_live_path()
                 # self.path_display_pixels = None
             
             if(self.desired_state.fixtures_mask is not None):

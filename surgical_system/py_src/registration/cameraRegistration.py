@@ -566,18 +566,6 @@ class Camera_Registration(System_Calibration):
                markerSize=5,
                thickness=2)
         
-           
-        
-        cv2.arrowedLine(
-            overlay,
-            tuple(pts_i[0, 0]),
-            tuple(pts_i[3, 0]),
-            BLACK,
-            1, #  thickness,
-            cv2.LINE_AA,  
-            0, # Shift 
-            0.1 # Tip Length
-        )
     
         # ---- Alpha blend overlay onto original ----
         cv2.addWeighted(overlay, alpha, out, 1 - alpha, 0, out)
