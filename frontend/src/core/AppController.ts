@@ -758,8 +758,9 @@ class AppController {
 
                 //Hard-lock the execute button
                 this.ui.executeBtn.disabled = true;
-                this.ui.executeBtn.style.pointerEvents = 'none';
-                this.ui.executeBtn.style.opacity = '0.3';
+                this.ui.executeBtn.classList.add('locked');
+                this.ui.executeBtn.style.pointerEvents = '';
+                this.ui.executeBtn.style.opacity = '';
 
                 //Lock the preview toggle
                 this.ui.previewToggleOn.style.pointerEvents = 'none';
@@ -785,8 +786,9 @@ class AppController {
                     //Auto-refresh the live preview after they stop typing
                     this.ui.previewDuration.textContent = 'Computing...';
                     this.ui.executeBtn.disabled = true;
-                    this.ui.executeBtn.style.pointerEvents = 'none';
-                    this.ui.executeBtn.style.opacity = '0.3';
+                    this.ui.executeBtn.classList.add('locked');
+                    this.ui.executeBtn.style.pointerEvents = '';
+                    this.ui.executeBtn.style.opacity = '';
 
                     clearTimeout(debounceTimer);
                     debounceTimer = setTimeout(refreshPreview, 500);
