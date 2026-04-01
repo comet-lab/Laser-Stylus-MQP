@@ -539,13 +539,13 @@ class AppController {
 
         //Gate the real-time routing so it only takes the pointer if we are actively on the path tab
         this.ui.viewport.addEventListener('pointerdown', (e) => {
-            if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
+            if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing' && this.ui.realTimePen.classList.contains('selected')) {
                 this.realTime.handleStart(e);
             }
         });
 
         this.ui.viewport.addEventListener('pointermove', (e) => {
-            if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing') {
+            if (this.ui.processingModeSwitch.checked && this.state.currentMode === 'drawing' && this.ui.realTimePen.classList.contains('selected')) {
                 this.realTime.handleMove(e);
             }
         });
@@ -758,8 +758,9 @@ class AppController {
 
                 //Hard-lock the execute button
                 this.ui.executeBtn.disabled = true;
-                this.ui.executeBtn.style.pointerEvents = 'none';
-                this.ui.executeBtn.style.opacity = '0.3';
+                this.ui.executeBtn.classList.add('locked');
+                this.ui.executeBtn.style.pointerEvents = '';
+                this.ui.executeBtn.style.opacity = '';
 
                 //Lock the preview toggle
                 this.ui.previewToggleOn.style.pointerEvents = 'none';
@@ -785,8 +786,9 @@ class AppController {
                     //Auto-refresh the live preview after they stop typing
                     this.ui.previewDuration.textContent = 'Computing...';
                     this.ui.executeBtn.disabled = true;
-                    this.ui.executeBtn.style.pointerEvents = 'none';
-                    this.ui.executeBtn.style.opacity = '0.3';
+                    this.ui.executeBtn.classList.add('locked');
+                    this.ui.executeBtn.style.pointerEvents = '';
+                    this.ui.executeBtn.style.opacity = '';
 
                     clearTimeout(debounceTimer);
                     debounceTimer = setTimeout(refreshPreview, 500);
@@ -1179,6 +1181,18 @@ class AppController {
             (heat === null || heat === undefined || isNaN(heat))
                 ? 'N/A'
                 : `${heat.toFixed(1)}°C`;
+    }
+
+    highlightShapeBtn(shape: string): void {
+        const map: Record<string, HTMLButtonElement> = {
+            freehand: this.ui.penBtn,
+            square:   this.ui.squareBtn,
+            circle:   this.ui.circleBtn,
+            triangle: this.ui.triangleBtn,
+            line:     this.ui.lineBtn,
+            pen:      this.ui.realTimePen // Restores the Real-Time pen selection
+        };
+        map[shape]?.classList.add('selected');
     }
 }
 

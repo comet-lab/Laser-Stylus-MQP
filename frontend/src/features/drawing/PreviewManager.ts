@@ -13,7 +13,7 @@ export class PreviewManager {
   private ctx: CanvasRenderingContext2D;
   private isPreviewActive: boolean = false;
   private ignoreWebsocketPaths: boolean = false;
-  // "Source of Truth": The path in raw video coordinates
+  //sourcePath is the raw pixel data sent from robot
   private sourcePath: Position[] = [];
   private pathData: Position[] = [];
   private durationSeconds: number = 0;
@@ -134,36 +134,40 @@ export class PreviewManager {
         this.ignoreWebsocketPaths = true;
       }
 
-      //Handle Active Safety Warnings
-      if (response.warning === "FIXTURE_OVERLAP") {
-        this.requiredConfirmations++;
-        ToastManager.show(
-          "SAFETY WARNING: Your planned path crosses into a restricted fixture zone. Please confirm to allow execution.",
-          {
-            type: 'warning',
-            requireAck: true,
-            ackText: 'CONFIRM',
-            onAcknowledge: () => {
-              this.requiredConfirmations--;
-              this.tryEnableExecute();
+      //Handle Active Safety Warnings (Now checking the array of warnings)
+      if (response.warnings) {
+        if (response.warnings.includes("FIXTURE_OVERLAP")) {
+          this.requiredConfirmations++;
+          ToastManager.show(
+            "SAFETY WARNING: Your planned path crosses into a restricted fixture zone. Please confirm to allow execution.",
+            {
+              type: 'warning',
+              requireAck: true,
+              ackText: 'CONFIRM',
+              onAcknowledge: () => {
+                this.requiredConfirmations--;
+                this.tryEnableExecute();
+              }
             }
-          }
-        );
-      } else if (response.warning === "PATH_ESCAPES_BOUNDS") {
-        this.requiredConfirmations++;
-        ToastManager.show(
-          "PRECISION WARNING: The generated path extends outside your originally drawn boundaries. Please confirm to allow execution.",
-          {
-            type: 'warning',
-            requireAck: true,
-            ackText: 'CONFIRM',
-            onAcknowledge: () => {
-              this.requiredConfirmations--;
-              this.tryEnableExecute();
+          );
+        }
+        if (response.warnings.includes("PATH_ESCAPES_BOUNDS")) {
+          this.requiredConfirmations++;
+          ToastManager.show(
+            "PRECISION WARNING: The generated path extends outside your originally drawn boundaries. Please confirm to allow execution.",
+            {
+              type: 'warning',
+              requireAck: true,
+              ackText: 'CONFIRM',
+              onAcknowledge: () => {
+                this.requiredConfirmations--;
+                this.tryEnableExecute();
+              }
             }
-          }
-        );
+          );
+        }
       }
+      
       //Handle Safe Paths
       if (hasValidPath) {
         this.handlePathData(response.path, response.duration);
@@ -263,19 +267,48 @@ export class PreviewManager {
     if (this.sourcePath.length === 0) return;
 
     const video = this.ui.video;
-    const canvas = this.ui.previewOverlay;
+    const viewport = this.ui.viewport;
 
-    // Guard against divide by zero if video isn't loaded yet
+    //Guard against divide by zero if video isn't loaded yet
     const vWidth = video.videoWidth || 1;
     const vHeight = video.videoHeight || 1;
 
-    const scaleX = canvas.width / vWidth;
-    const scaleY = canvas.height / vHeight;
+    //Use viewport dimensions (CSS pixels) for calculating scale
+    const scaleX = viewport.offsetWidth / vWidth;
+    const scaleY = viewport.offsetHeight / vHeight;
 
-    this.pathData = this.sourcePath.map(p => ({
-      x: p.x * scaleX,
-      y: p.y * scaleY
-    }));
+    this.pathData = [];
+    let lastX = -9999;
+    let lastY = -9999;
+
+    for (const p of this.sourcePath) {
+      //Snap to half-pixels for crisp canvas stroke rendering
+      const x = Math.floor(p.x * scaleX) + 0.5;
+      const y = Math.floor(p.y * scaleY) + 0.5;
+
+      //Filter points that are extremely close to each other
+      //Dashed lines look terribly noisy if segments are smaller than a pixel
+      const distSq = (x - lastX) * (x - lastX) + (y - lastY) * (y - lastY);
+      
+      if (distSq > 2.0) { //Only record the point if it moved at least ~1.4 pixels
+        this.pathData.push({ x, y });
+        lastX = x;
+        lastY = y;
+      }
+    }
+    
+    //Ensure the absolute last point is always included to match the exact end position
+    if (this.sourcePath.length > 0) {
+      const lastSrc = this.sourcePath[this.sourcePath.length - 1];
+      const finalX = Math.floor(lastSrc.x * scaleX) + 0.5;
+      const finalY = Math.floor(lastSrc.y * scaleY) + 0.5;
+      
+      if (this.pathData.length === 0) {
+        this.pathData.push({ x: finalX, y: finalY });
+      } else {
+        this.pathData[this.pathData.length - 1] = { x: finalX, y: finalY };
+      }
+    }
   }
 
   private drawPath(): void {
@@ -363,13 +396,16 @@ export class PreviewManager {
     //Change offset to modify speed
     this.dashOffset -= 0.1; 
     this.drawPath(); 
-    // ------------------------------------
 
     this.animationFrameId = requestAnimationFrame(() => this.animationLoop());
   }
 
   private clearOverlay(): void {
+    this.ctx.save();
+    //Reset transform to identity to clear the raw physical pixels
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.ui.previewOverlay.width, this.ui.previewOverlay.height);
+    this.ctx.restore();
   }
 
   /**
@@ -378,10 +414,16 @@ export class PreviewManager {
   public updateOverlaySize(): void {
     const canvas = this.ui.previewOverlay;
     const viewport = this.ui.viewport;
+    
+    //Grab the device's pixel ratio (defaults to 1 for standard displays)
+    const dpr = window.devicePixelRatio || 1;
 
-    //Match Canvas to DOM
-    canvas.width = viewport.offsetWidth;
-    canvas.height = viewport.offsetHeight;
+    //Match Canvas bitmap size to DOM, accounting for high-DPI displays
+    canvas.width = viewport.offsetWidth * dpr;
+    canvas.height = viewport.offsetHeight * dpr;
+    
+    //Scale the internal drawing context to match CSS logical pixels
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     //Re-calculate path positions for new size
     if (this.sourcePath.length > 0) {
