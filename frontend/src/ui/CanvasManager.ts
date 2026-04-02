@@ -806,7 +806,6 @@ export class CanvasManager {
         const existingShapes = this.fCanvas.getObjects().filter(o => !(o as any)._isMarker);
         if (existingShapes.length > 0) {
             this.hasPlacedShape = true;
-            this.fCanvas.isDrawingMode = false;
             return;
         }
 
@@ -949,6 +948,10 @@ export class CanvasManager {
         this.activeShape = null;
         this.hasPlacedShape = false;
 
+        if (this.fCanvas.freeDrawingBrush) {
+            (this.fCanvas.freeDrawingBrush as any)._isCurrentlyDrawing = false;
+        }
+
         if (this.currentShapeType === 'freehand') {
             this.fCanvas.isDrawingMode = true;
             this.fCanvas.requestRenderAll();
@@ -1071,12 +1074,19 @@ export class CanvasManager {
             const enlivened = await fabric.util.enlivenObjects(this.backupDrawingState);
 
             enlivened.forEach((obj: any) => {
-                obj.set({ selectable: true, evented: true });
+                //Re-apply all custom control styles and defaults when restoring
+                obj.set({ 
+                    ...this.SHAPE_DEFAULTS,
+                    selectable: true, 
+                    evented: true 
+                });
                 this.fCanvas.add(obj);
             });
 
             this.fCanvas.requestRenderAll();
             this.hasPlacedShape = true;
+            this.fCanvas.isDrawingMode = false;
+            this.fCanvas.defaultCursor = 'default';
             this.onShapeComplete();
 
         } catch (error) {
