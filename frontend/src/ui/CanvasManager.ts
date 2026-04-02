@@ -60,21 +60,23 @@ export class CanvasManager {
         fill: 'transparent',
         stroke: 'rgba(0, 122, 255, 0.7)',
         strokeWidth: 4,
-        strokeUniform: true,
+        strokeUniform: true, //Keeps stroke width constant when scaling
         strokeLineCap: 'round' as const,
         strokeLineJoin: 'round' as const,
         objectCaching: false,
-        cornerColor: 'rgba(0, 122, 255, 0.7)',
-        cornerStrokeColor: '#ffffff',
+        
+        // --- Control Corners (Toggles) ---
+        transparentCorners: true,
+        cornerColor: 'rgba(0, 122, 255, 0.1)',
+        cornerStrokeColor: 'rgba(0, 122, 255, 0.9)',
         borderColor: 'rgba(0, 122, 255, 0.7)',
         cornerStyle: 'circle' as const,
-        cornerSize: 16,
-        touchCornerSize: 44,
-        transparentCorners: false,
+        cornerSize: 18,
+        touchCornerSize: 48,
+        
         padding: 10,
         originX: 'left' as const,
         originY: 'top' as const,
-
     };
 
     // --- CONFIG: Other Constants ---
@@ -158,7 +160,6 @@ export class CanvasManager {
             if (e.path) {
                 e.path.set({
                     ...this.SHAPE_DEFAULTS,
-                    strokeUniform: false
                 });
                 e.path.setCoords();
             }
