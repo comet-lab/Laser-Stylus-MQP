@@ -1,6 +1,6 @@
 import os, subprocess, time, sys, math
 from scipy.spatial.transform import Rotation
-import threading
+import threading, csv
 import numpy as np
 import matplotlib.pyplot as plt
 from laser_control.laser_arduino import Laser_Arduino
@@ -296,83 +296,135 @@ class Robot_Controller():
         #         actual_pos_list,
         #         target_pos_list]
         
+
+
     def report_live_path(self):
         if self.actual_vel_list is None:
-            return 
+            return
+
         print("Create path report")
-        self.actual_vel_list = self.actual_vel_list * 1000
-        self.actual_pos_list = self.actual_pos_list * 1000
-        self.target_pos_list = self.target_pos_list * 1000
-        self.target_vel_list = self.target_vel_list * 1000
+
+        def get_next_plot_path(base_name, folder="plots", ext=".png"):
+            """
+            Returns the next available filename:
+            plots/base_name.png
+            plots/base_name_1.png
+            plots/base_name_2.png
+            ...
+            """
+            os.makedirs(folder, exist_ok=True)
+
+            path = os.path.join(folder, f"{base_name}{ext}")
+            if not os.path.exists(path):
+                return path
+
+            count = 1
+            while True:
+                path = os.path.join(folder, f"{base_name}_{count}{ext}")
+                if not os.path.exists(path):
+                    return path
+                count += 1
+
         
-        plt.figure(figsize=(10,6))
-        plt.plot(self.time_list, self.actual_vel_list[:, 0], label="actual x")
-        plt.plot(self.time_list, self.actual_vel_list[:, 1], label="actual y")
-        plt.plot(self.time_list, self.actual_vel_list[:, 2], label="actual z")
-        plt.plot(self.time_list, self.target_vel_list[:, 0], '--', label="target x")
-        plt.plot(self.time_list, self.target_vel_list[:, 1], '--', label="target y")
-        plt.plot(self.time_list, self.target_vel_list[:, 2], '--', label="target z")
+        def append_rmse_to_csv(csv_path, rmse):
+            file_exists = os.path.exists(csv_path)
+
+            with open(csv_path, mode="a", newline="") as f:
+                writer = csv.writer(f)
+
+                if not file_exists:
+                    writer.writerow(["rmse"])
+
+                writer.writerow([rmse])
+                
+        
+        # Work on local copies so original logged data is not modified in-place
+        actual_vel = self.actual_vel_list * 1000
+        actual_pos = self.actual_pos_list * 1000
+        target_pos = self.target_pos_list * 1000
+        target_vel = self.target_vel_list * 1000
+
+        # ----------------------------
+        # Time vs velocity
+        # ----------------------------
+        plt.figure(figsize=(10, 6))
+        plt.plot(self.time_list, actual_vel[:, 0], label="actual x")
+        plt.plot(self.time_list, actual_vel[:, 1], label="actual y")
+        plt.plot(self.time_list, actual_vel[:, 2], label="actual z")
+        plt.plot(self.time_list, target_vel[:, 0], "--", label="target x")
+        plt.plot(self.time_list, target_vel[:, 1], "--", label="target y")
+        plt.plot(self.time_list, target_vel[:, 2], "--", label="target z")
         plt.xlabel("Time [s]")
-        plt.ylabel("velocity [mm/s]")
-        title = "Time vs velocity "
-        plt.title(title)
+        plt.ylabel("Velocity [mm/s]")
+        plt.title("Time vs Velocity")
         plt.grid(True)
         plt.legend()
         plt.tight_layout()
-        plt.savefig("plots/time_vs_velocity_" + ".png", dpi=400)
+        plt.savefig(get_next_plot_path("time_vs_velocity"), dpi=400)
         plt.close()
 
-        plt.figure(figsize=(10,6))
-        plt.plot(self.time_list, self.actual_pos_list[:, 0], label="actual x")
-        plt.plot(self.time_list, self.actual_pos_list[:, 1], label="actual y")
-        plt.plot(self.time_list, self.actual_pos_list[:, 2], label="actual z")
-        plt.plot(self.time_list, self.target_pos_list[:, 0], '--', label="target x")
-        plt.plot(self.time_list, self.target_pos_list[:, 1], '--', label="target y")
-        plt.plot(self.time_list, self.target_pos_list[:, 2], '--', label="target z")
+        # ----------------------------
+        # Time vs position
+        # ----------------------------
+        plt.figure(figsize=(10, 6))
+        plt.plot(self.time_list, actual_pos[:, 0], label="actual x")
+        plt.plot(self.time_list, actual_pos[:, 1], label="actual y")
+        plt.plot(self.time_list, actual_pos[:, 2], label="actual z")
+        plt.plot(self.time_list, target_pos[:, 0], "--", label="target x")
+        plt.plot(self.time_list, target_pos[:, 1], "--", label="target y")
+        plt.plot(self.time_list, target_pos[:, 2], "--", label="target z")
         plt.xlabel("Time [s]")
-        plt.ylabel("position [mm]")
-        title = "Time vs position " 
-        plt.title(title)
+        plt.ylabel("Position [mm]")
+        plt.title("Time vs Position")
         plt.grid(True)
         plt.legend()
         plt.tight_layout()
-        plt.savefig("plots/time_vs_position_" + ".png", dpi=400)
+        plt.savefig(get_next_plot_path("time_vs_position"), dpi=400)
         plt.close()
-        
-        plt.figure(figsize=(6,6))
 
-        plt.plot(self.actual_pos_list[:, 0],
-                self.actual_pos_list[:, 1],
-                label="actual", linewidth=2)
+        # ----------------------------
+        # XY path + RMSE
+        # ----------------------------
+        plt.figure(figsize=(6, 6))
+        plt.plot(
+            actual_pos[:, 0],
+            actual_pos[:, 1],
+            label="actual",
+            linewidth=2
+        )
+        plt.plot(
+            target_pos[:, 0],
+            target_pos[:, 1],
+            "--",
+            label="target",
+            linewidth=2
+        )
 
-        plt.plot(self.target_pos_list[:, 0],
-                self.target_pos_list[:, 1],
-                '--', label="target", linewidth=2)
-        
-        error = self.actual_pos_list[:, :2] - self.target_pos_list[:, :2]
-        sq_error = np.sum(error**2, axis=1)
+        error = actual_pos[:, :2] - target_pos[:, :2]
+        sq_error = np.sum(error ** 2, axis=1)
         rmse = np.sqrt(np.mean(sq_error))
-        print("[Robot Controller] PATH RMSE: ", rmse)
+        print("[Robot Controller] PATH RMSE:", rmse)
+        
+        append_rmse_to_csv(
+            csv_path="plots/path_rmse.csv",
+            rmse=rmse
+        )
 
         plt.xlabel("X [mm]")
         plt.ylabel("Y [mm]")
-        title = f"Time vs position | RMSE: {rmse:.3f} mm"
-        plt.title(title)
-        plt.axis('equal')  
+        plt.title(f"Position Error | RMSE: {rmse:.3f} mm")
+        plt.axis("equal")
         plt.grid(True)
         plt.legend()
-
         plt.tight_layout()
-        plt.savefig("plots/xy_path.png", dpi=400)
+        plt.savefig(get_next_plot_path("xy_path"), dpi=400)
         plt.close()
-        
-        
-        self.actual_vel_list = None 
+
+        self.actual_vel_list = None
         self.actual_pos_list = None
         self.target_pos_list = None
         self.target_vel_list = None
         self.time_list = None
-        
             
     def run_trajectory(self, traj: TrajectoryController, blocking: bool = True, laser_on = False):
         """

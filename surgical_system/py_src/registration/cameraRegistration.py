@@ -131,22 +131,21 @@ class Camera_Registration(System_Calibration):
         square_size = 0.045/2.0
         
 
-        
         base_homography_data, boundary_pts = self.create_checkerboard(gridShape = grid_shape, 
                                 squareSize=square_size,
-                                 saveLocation=self.calibration_folder, debug=debug)
-        
-        
-        
+                                saveLocation=self.calibration_folder, debug=debug)
+    
+    
+    
         meta_data = {"grid shape": grid_shape,
-                     "square size": square_size,
-                     "boundary": boundary_pts}
+                    "square size": square_size,
+                    "boundary": boundary_pts}
         
         
         np.savez_compressed(self.meta_base_homography_path, meta = meta_data)
         
         self.read_calibration()
-        
+    
         self.laser_controller.set_output(False)
         
         

@@ -168,15 +168,14 @@ class Handler:
         
         # print(f"[Spacing (pixels)]: {spacing}")
         # path = Motion_Planner.raster_pattern(img, pitch = spacing) # pixel spacing
-        #TODO check if raster is valid 
 
-    
-    
         polygon, edge = Motion_Planner._create_polygon(img)
         
         if polygon is None:
             print("No shape found ")
             return []
+        
+        edge_path = self._do_filter_prim_path(edge)
         
         path = Motion_Planner.poly_raster(
             polygon,
@@ -185,17 +184,39 @@ class Handler:
             margin=1.0          # inward offset
         )
         
+        full_path = path.copy()
+
+        if len(path) > 0 and len(edge_path) > 0:
+            end_pt = path[-1]
+            dists = np.linalg.norm(edge_path - end_pt, axis=1)
+            start_idx = np.argmin(dists)
+
+            edge_path_reordered = np.vstack([
+                edge_path[start_idx:],
+                edge_path[:start_idx]
+            ])
+
+            # close loop if needed
+            if not np.allclose(edge_path_reordered[0], edge_path_reordered[-1]):
+                edge_path_reordered = np.vstack([edge_path_reordered, edge_path_reordered[0]])
+
+            # avoid duplicate point at transition
+            if np.allclose(full_path[-1], edge_path_reordered[0]):
+                full_path = np.vstack([full_path, edge_path_reordered[1:]])
+            else:
+                full_path = np.vstack([full_path, edge_path_reordered])
+        
         # print("Raster Path: ", path)
         fig, ax = plt.subplots(figsize=(8,4))
         # ax.imshow(img, cmap='gray')
-        if len(path) > 1:
-            xs = [p[0] for p in path]
-            ys_plot = [p[1] for p in path]
+        if len(full_path) > 1:
+            xs = [p[0] for p in full_path]
+            ys_plot = [p[1] for p in full_path]
             ax.plot(xs, ys_plot, linewidth=1)  # default color
         ax.set_axis_off()
         fig.savefig("plots/raster path.png")
         plt.close(fig)
-        return path
+        return full_path
     
 ###------------------------ Virtual Fixtures -------------------####    
 
@@ -280,6 +301,28 @@ class Handler:
         path = np.array([[d['x'], d['y']] for d in self.desired_state.path])
         return path
     
+    def _do_filter_prim_path(self, pixels):
+        start_pixel, end_pixel = pixels[0, :], pixels[-1, :]
+        epsilon = 2.0   # tolerance in pixels
+        pixels_cv = np.asarray(pixels, dtype=np.float32).reshape(-1, 1, 2)
+        approx = cv2.approxPolyDP(pixels_cv, epsilon, closed=True)
+        poly_count = approx.shape[0]
+        # print("approx corners", approx)
+        if poly_count > 5:
+            print("Circle")
+            pixels = Motion_Planner.smooth_contour(pixels, window=31, poly=3)
+            pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=10, n_arc=20)
+            pixels = np.vstack((np.vstack((start_pixel, pixels)), end_pixel))
+        elif poly_count < 2: 
+            print("line")
+            pixels = np.vstack((start_pixel, end_pixel))
+        else:
+            print("Polygon")
+            # pixels = np.vstack((np.vstack((start_pixel, pixels)), end_pixel))
+            pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=10, n_arc=20)
+            # pixels = Motion_Planner.rdp(pixels, epsilon=4)
+        return pixels
+    
     def _do_create_path(self, path, raster=False):
         pixels = path
         path = None
@@ -289,21 +332,8 @@ class Handler:
         if raster:
             pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=50, n_arc=20, min_angle=1e-4)
         else:
-            # pixels = Motion_Planner.rdp(pixels, epsilon=30)
-            start_pixel, end_pixel = pixels[0, :], pixels[-1, :]
-            epsilon = 2.0   # tolerance in pixels
-            pixels_cv = np.asarray(pixels, dtype=np.float32).reshape(-1, 1, 2)
-            approx = cv2.approxPolyDP(pixels_cv, epsilon, closed=True)
-            poly_count = approx.shape[0]
-            print("approx corners", approx)
-            if poly_count > 5:
-                print("Circle")
-                pixels = Motion_Planner.smooth_contour(pixels, window=31, poly=3)
-                pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=10, n_arc=20)
-                pixels = np.vstack((np.vstack((start_pixel, pixels)), end_pixel))
-            else: 
-                print("poly")
-                pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=10, n_arc=20)
+            # 
+            pixels = self._do_filter_prim_path(pixels)
         
         fig, ax = plt.subplots(figsize=(8,4))
         # ax.imshow(img, cmap='gray')
@@ -329,7 +359,7 @@ class Handler:
             ys_plot = [p[1] for p in robot_path]
             ax.plot(xs, ys_plot, linewidth=1)  # default color
         ax.set_axis_off()
-        fig.savefig("World Positions after warp path.png")
+        # fig.savefig("World Positions after warp path.png")
             
         speed = self.desired_state.speed / 1000.0 if self.desired_state.speed != None else 0.01 # m/s
         traj = self.robot_controller.create_custom_trajectory(robot_path, speed)
