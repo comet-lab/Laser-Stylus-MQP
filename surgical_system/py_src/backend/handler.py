@@ -164,11 +164,7 @@ class Handler:
         spacing = self.desired_state.density
         if spacing is None or math.isnan(spacing):
             return []
-        spacing = int(spacing) # TODO calculate lines per distance 
-        
-        # print(f"[Spacing (pixels)]: {spacing}")
-        # path = Motion_Planner.raster_pattern(img, pitch = spacing) # pixel spacing
-
+        spacing = int(spacing) # TODO 
         polygon, edge = Motion_Planner._create_polygon(img)
         
         if polygon is None:
@@ -185,38 +181,203 @@ class Handler:
         )
         
         full_path = path.copy()
-
+        def unit(v, eps=1e-8):
+                n = np.linalg.norm(v)
+                return v / n if n > eps else np.zeros_like(v)
+            
+        # Connect raster with outer path 
         if len(path) > 0 and len(edge_path) > 0:
+            # raster terminal direction
+            path_dir = unit(path[-1] - path[-2])
             end_pt = path[-1]
-            dists = np.linalg.norm(edge_path - end_pt, axis=1)
-            start_idx = np.argmin(dists)
 
-            edge_path_reordered = np.vstack([
+            vecs = edge_path - end_pt
+            dists = np.linalg.norm(vecs, axis=1)
+
+            # 1) find closest edge point first
+            closest_idx = np.argmin(dists)
+
+            # 2) only consider a local neighborhood around that point
+            window = 10   # tune this
+            n = len(edge_path)
+            candidate_idxs = [((closest_idx + k) % n) for k in range(-window, window + 1)]
+
+            # 3) among local candidates, pick the one best aligned with path direction
+            best_idx = closest_idx
+            best_score = -np.inf
+
+            for idx in candidate_idxs:
+                v = edge_path[idx] - end_pt
+                v_hat = unit(v)
+
+                # favor forward direction, but keep locality through the restricted window
+                score = np.dot(v_hat, path_dir)
+
+                if score > best_score:
+                    best_score = score
+                    best_idx = idx
+
+            start_idx = best_idx      
+            
+            edge_path = np.vstack([
                 edge_path[start_idx:],
                 edge_path[:start_idx]
-            ])
+            ]) 
+            
+            # path end direction
+            path_dir = unit(edge_path[0] - path[-1])
+
+            edge_forward = unit(edge_path[1] - edge_path[0])
+            edge_backward = unit(edge_path[-1] - edge_path[0])
+            
+            # compare alignment
+            forward_score = np.dot(path_dir, edge_forward)
+            backward_score = np.dot(path_dir, edge_backward)
+
+            # if backward matches better, flip traversal direction
+            if backward_score > forward_score:
+                edge_path = np.vstack([
+                    edge_path[:1],
+                    edge_path[:0:-1]
+                ])
+                
 
             # close loop if needed
-            if not np.allclose(edge_path_reordered[0], edge_path_reordered[-1]):
-                edge_path_reordered = np.vstack([edge_path_reordered, edge_path_reordered[0]])
+            if not np.allclose(edge_path[0], edge_path[-1]):
+                edge_path = np.vstack([edge_path, edge_path[0]])
 
             # avoid duplicate point at transition
-            if np.allclose(full_path[-1], edge_path_reordered[0]):
-                full_path = np.vstack([full_path, edge_path_reordered[1:]])
+            if np.allclose(full_path[-1], edge_path[0]):
+                full_path = np.vstack([full_path, edge_path[1:]])
             else:
-                full_path = np.vstack([full_path, edge_path_reordered])
+                full_path = np.vstack([full_path, edge_path])
+                
+            # self.plot_connection_debug(path, edge_path, start_idx, [edge_forward, edge_backward], arrow_scale=0.001)
         
         # print("Raster Path: ", path)
-        fig, ax = plt.subplots(figsize=(8,4))
+        fig, ax = plt.subplots(figsize=(8,4), dpi=300)
         # ax.imshow(img, cmap='gray')
         if len(full_path) > 1:
             xs = [p[0] for p in full_path]
             ys_plot = [p[1] for p in full_path]
             ax.plot(xs, ys_plot, linewidth=1)  # default color
         ax.set_axis_off()
-        fig.savefig("plots/raster path.png")
+        fig.savefig("plots/debug/raster path.png")
         plt.close(fig)
         return full_path
+
+    
+
+
+    def plot_connection_debug(self, path, edge_path, start_idx, direction, arrow_scale=100.0, closed=True):
+        """
+        Visualize:
+        - raster path
+        - edge contour
+        - chosen edge start point
+        - raster terminal direction
+        - edge forward/backward directions
+        - connector vector
+
+        Args:
+            path:      (N,2)
+            edge_path: (M,2)
+            start_idx: chosen index on edge_path
+            arrow_scale: multiplier to make unit vectors visible
+            closed: whether edge_path is a closed contour
+        """
+        
+        def unit(v, eps=1e-8):
+            n = np.linalg.norm(v)
+            return v / n if n > eps else np.zeros_like(v)
+    
+        path = np.asarray(path, dtype=float)
+        edge_path = np.asarray(edge_path, dtype=float)
+
+        if len(path) < 2:
+            raise ValueError("path must have at least 2 points")
+        if len(edge_path) < 3:
+            raise ValueError("edge_path must have at least 3 points")
+
+        end_pt = path[-1]
+        start_pt = edge_path[start_idx]
+
+        # raster terminal direction
+        path_dir = unit(path[-1] - path[-2])
+
+        if closed:
+            prev_idx = (start_idx - 1) % len(edge_path)
+            next_idx = (start_idx + 1) % len(edge_path)
+        else:
+            prev_idx = max(start_idx - 1, 0)
+            next_idx = min(start_idx + 1, len(edge_path) - 1)
+            
+        edge_forward, edge_backward = direction
+
+        connector_dir = unit(start_pt - end_pt)
+
+        forward_score = np.dot(path_dir, edge_forward)
+        backward_score = np.dot(path_dir, edge_backward)
+
+        fig, ax = plt.subplots(figsize=(10, 8), dpi=400)
+
+        # main paths
+        ax.plot(edge_path[:, 0], edge_path[:, 1], label="Edge Path", linewidth=2)
+        ax.plot(path[:, 0], path[:, 1], label="Raster Path", linewidth=2)
+
+        # key points
+        ax.scatter(path[0, 0], path[0, 1], s=120, marker='o', label="Raster Start", zorder=5)
+        ax.scatter(end_pt[0], end_pt[1], s=140, marker='x', label="Raster End", zorder=6)
+        ax.scatter(start_pt[0], start_pt[1], s=140, marker='s', label="Chosen Edge Point", zorder=1)
+
+        # neighbor points on edge
+        ax.scatter(edge_path[prev_idx, 0], edge_path[prev_idx, 1], s=70, marker='^', label="Edge Prev", zorder=5)
+        ax.scatter(edge_path[next_idx, 0], edge_path[next_idx, 1], s=70, marker='v', label="Edge Next", zorder=5)
+
+        # connector line
+        ax.plot([end_pt[0], start_pt[0]], [end_pt[1], start_pt[1]], '--', linewidth=1.5, label="Connector")
+
+        # arrows
+        ax.quiver(
+            end_pt[0], end_pt[1],
+            path_dir[0] * arrow_scale, path_dir[1] * arrow_scale,
+            angles='xy', scale_units='xy', scale=1,
+            width=0.003, label="Path Dir"
+        )
+
+        ax.quiver(
+            start_pt[0], start_pt[1],
+            edge_forward[0] * arrow_scale, edge_forward[1] * arrow_scale,
+            angles='xy', scale_units='xy', scale=1,
+            width=0.003, label="Edge Forward"
+        )
+
+        ax.quiver(
+            start_pt[0], start_pt[1],
+            edge_backward[0] * arrow_scale, edge_backward[1] * arrow_scale,
+            angles='xy', scale_units='xy', scale=1,
+            width=0.003, label="Edge Backward"
+        )
+
+        ax.quiver(
+            end_pt[0], end_pt[1],
+            connector_dir[0] * arrow_scale, connector_dir[1] * arrow_scale,
+            angles='xy', scale_units='xy', scale=1,
+            width=0.002, label="Connector Dir"
+        )
+
+        ax.set_title(
+            f"Connection Debug\n"
+            f"forward_score={forward_score:.3f}, backward_score={backward_score:.3f}"
+        )
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.axis("equal")
+        ax.grid(True)
+        ax.legend()
+        plt.tight_layout()
+        fig.savefig("plots/debug/raster path debug.png")
+        plt.close(fig)
     
 ###------------------------ Virtual Fixtures -------------------####    
 
@@ -342,7 +503,7 @@ class Handler:
             ys_plot = [p[1] for p in pixels]
             ax.plot(xs, ys_plot, linewidth=1)  # default color
         ax.set_axis_off()
-        fig.savefig("plots/pixels path.png")
+        fig.savefig("plots/debug/smoothed pixels path.png")
         plt.close(fig)
         
         warped_view = self.desired_state.isTransformedViewOn
@@ -352,6 +513,7 @@ class Handler:
                 pixels, 
                 warped_view, 
                 z = self.working_height)
+        
         fig, ax = plt.subplots(figsize=(8,4))
         
         if len(robot_path) > 1:
@@ -359,7 +521,8 @@ class Handler:
             ys_plot = [p[1] for p in robot_path]
             ax.plot(xs, ys_plot, linewidth=1)  # default color
         ax.set_axis_off()
-        # fig.savefig("World Positions after warp path.png")
+        fig.savefig("plots/debug/world points path.png")
+        plt.close(fig)
             
         speed = self.desired_state.speed / 1000.0 if self.desired_state.speed != None else 0.01 # m/s
         traj = self.robot_controller.create_custom_trajectory(robot_path, speed)
@@ -381,12 +544,17 @@ class Handler:
         warped = self.desired_state.isTransformedViewOn
         pixels = self.cam_reg.get_world_m_to_UI(self.cam_type, target_positions, warped)
         pixels = np.asarray(pixels, dtype=np.int16)
+        
+        # plot pixels back
+        # fig, ax = plt.subplots(figsize=(8,4), dpi=300)
         # if len(pixels) > 1:
         #     xs = [p[0] for p in pixels]
         #     ys_plot = [p[1] for p in pixels]
-        #     ax.plot(xs, ys_plot, linewidth=1)  # default color
+        #     ax.plot(xs, ys_plot, linewidth=1)  
         # ax.set_axis_off()
         # fig.savefig("pixels path.png")
+        # plt.close()
+        
         self.path_display_pixels = pixels
         return pixels, traj.total_path_time
     
@@ -515,7 +683,9 @@ class Handler:
                     
                 self.hold_position = None
                 self.hold_pose = None
-                self.laser_obj.set_output(self.desired_state.isLaserOn)
+                if  height_diff < 0.0015: # dont fire if the height diff is too much
+                    self.laser_obj.set_output(self.desired_state.isLaserOn)
+                    print("ready to fire height")
             else:
                 # Holding but change height
                 target_world_point = self.robot_controller.current_robot_to_world_position()
@@ -645,6 +815,7 @@ class Handler:
             else:
                 self.cam_reg.display_path = False
                 self.robot_controller.report_live_path()
+                # self._do_hold_pose()
                 # self.path_display_pixels = None
             
             if(self.desired_state.fixtures_mask is not None):

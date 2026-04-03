@@ -72,23 +72,23 @@ class TrajectoryController():
             raise ValueError("Trajectory Controller can not handle pattern above")
         
         diffs = points[1:] - points[:-1]
-        dist = np.linalg.norm(diffs, axis=1)
+        distances = np.linalg.norm(diffs, axis=1)
         
-        distances = np.linalg.norm(points[1:] - points[:-1], axis=1)
-        eps = 1e-6  # if the distances are too small, remove
-        mask = distances > eps
+        # distances = np.linalg.norm(points[1:] - points[:-1], axis=1)
+        # eps = 1e-8  # if the distances are too small, remove
+        # mask = distances > eps
 
-        if not np.any(mask):
-            raise ValueError("Path has no non-trivial segments (all points are identical).")
+        # if not np.any(mask):
+        #     raise ValueError("Path has no non-trivial segments (all points are identical).")
 
-        # rebuild points using only non-zero-length segments
-        points = np.vstack((points[0], points[1:][mask]))
-        distances = dist[mask]
+        # # rebuild points using only non-zero-length segments
+        # points = np.vstack((points[0], points[1:][mask]))
+        # distances = dist[mask]
 
 
         self.total_distance = np.sum(distances)
         if self.durations[0] == -1:
-            self.durations[0] = self.total_distance/float(self.max_velocity)
+            self.durations[0] = (self.total_distance/float(self.max_velocity)) + 0.2 # small buffer
             # print(self.durations[0])
             
         durations = (distances / np.sum(distances)) * self.durations[0]
@@ -120,13 +120,6 @@ class TrajectoryController():
                 raise ValueError("durations must be strictly increasing")
             v_way[i] = (position[i] - position[i-1]) / dt
             
-            # detect corner by angle between segments
-            u = position[i]   - position[i-1]
-            v = position[i+1] - position[i]
-            if np.linalg.norm(u) > 1e-9 and np.linalg.norm(v) > 1e-9:
-                cosang = np.dot(u, v) / (np.linalg.norm(u)*np.linalg.norm(v))
-                if cosang < 0.95:   # corner threshold
-                    v_way[i] = 0.0
         
         a_way = np.zeros_like(position)
         
@@ -158,16 +151,48 @@ class TrajectoryController():
             target_vel= (movement['velocity'])
             target_vel_list[i] = target_vel
             
-        plt.figure(figsize=(6,4))
-        plt.plot(times, target_position_list[:, 0], label="x [m]")
-        plt.plot(times, target_position_list[:, 1], label="y [m]")
+        plt.figure(figsize=(6,4), dpi=300)
+        plt.plot(times, target_vel_list[:, 0], label="x [m/s]")
+        plt.plot(times, target_vel_list[:, 1], label="y [m/s]")
         plt.xlabel("Time [s]")
-        plt.ylabel("Position [m]")
-        plt.title("Time vs Position (Guess)")
+        plt.ylabel("velocity [m/s]")
+        plt.title("Time vs velocity (Guess)")
         plt.grid(True)
         plt.legend()
         plt.tight_layout()
-        plt.savefig("plots/Position(x,y) trajectory.png")
+        plt.savefig("plots/debug/velocity(x,y) trajectory.png")
+        plt.close()
+            
+        plt.figure(figsize=(6,4), dpi=300)
+
+        x = target_position_list[:, 0]
+        y = target_position_list[:, 1]
+
+        # Plot base trajectory
+        plt.plot(x, y, label="trajectory")
+
+        # Compute direction vectors
+        dx = np.diff(x)
+        dy = np.diff(y)
+
+        # Subsample arrows (avoid clutter)
+        step = max(len(x)//20, 1)
+
+        plt.quiver(
+            x[:-1:step], y[:-1:step],
+            dx[::step], dy[::step],
+            angles='xy', scale_units='xy', scale=1,
+            width=0.003
+        )
+
+        plt.xlabel("X [m]")
+        plt.ylabel("Y [m]")
+        plt.title("Trajectory with Direction")
+        plt.grid(True)
+        plt.legend()
+        plt.axis('equal')
+        plt.tight_layout()
+        plt.savefig("plots/debug/position trajectory.png")
         plt.close()
         
         plt.figure(figsize=(6,4))
@@ -205,7 +230,7 @@ class TrajectoryController():
         plt.grid(True)
         plt.legend()
         plt.tight_layout()
-        plt.savefig("plots/position_plot.png", dpi=600)
+        plt.savefig("plots/debug/position_plot.png", dpi=600)
         plt.close()
         
         self.target_position_list = target_position_list 

@@ -112,11 +112,7 @@ class Robot_Controller():
         return self.franka_client.send_velocity(lin_vel, ang_vel)
     
     def robot_stop(self):
-        velocity = self.franka_client.send_velocity(np.array([0, 0, 0]), np.array([0, 0, 0]))
-        time.sleep(1)
-        pose, _ = self.get_current_state()
-        self.go_to_pose(pose)
-        return velocity
+        return self.franka_client.send_velocity(np.array([0, 0, 0]), np.array([0, 0, 0]))
     
     def align_robot_input(self, new_pose):
             
@@ -156,7 +152,7 @@ class Robot_Controller():
         new_pose[0:3, -1], new_pose[:3, :3] = position, Rmat
         current_vel = pose[7:]
         
-        return new_pose, current_vel
+        return new_pose, np.array(current_vel)
 
     def quat_to_Mat(self, pose):
         #raw robot pose [x, y, z, qx, qy, qz, w]
@@ -202,13 +198,11 @@ class Robot_Controller():
         start_pos = traj.start_pos
         start_pose = np.eye(4)
         start_pose[:3, -1] = start_pos
-        print("Heading to starting location")
+        self.robot_stop()
+        time.sleep(0.5)
+        print("[Robot Controller] Trajectory: Heading to starting location")
         current_pose = np.array(self.go_to_pose(start_pose @ self.home_pose))
-        
         time_step = 0.005
-        t_start = time.monotonic()
-        t_prev  = t_start
-
         target_vel = np.zeros(3)
         
         # record data
@@ -221,12 +215,13 @@ class Robot_Controller():
         self.time_list = np.empty(data_num, dtype=float)
 
         i = 0
+        self.laser_obj.set_output(laser_on)
+        time.sleep(0.1)
         t_start = time.monotonic()
-        
         try:
             while (not self._stop_traj.is_set()):
-                # now = time.monotonic()
-                # elapsed = now - t_start
+                now = time.monotonic()
+                elapsed = now - t_start
                 # dt = now - t_prev
                 # if elapsed >= total_time:
                 #     break
@@ -236,17 +231,19 @@ class Robot_Controller():
                 #     continue
                 # t_prev = now
                 
-                desired_time = t_start + i * time_step
-                sleep_time = desired_time - time.monotonic()
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
+                # desired_time = t_start + i * time_step
+                # sleep_time = desired_time - time.monotonic()
+                # if sleep_time > 0:
+                time.sleep(time_step)
 
-                now = time.monotonic()
-                elapsed = i * time_step
+                # now = time.monotonic()
+                # elapsed = i * time_step
 
                 if elapsed >= total_time:
+                    self.robot_stop()
                     break
-                
+
+                elapsed = min(elapsed, total_time) # redundent 
                 self.laser_obj.set_output(laser_on)
                 
                 movement = traj.update(elapsed)
@@ -257,7 +254,7 @@ class Robot_Controller():
                 
                 target_pose = np.eye(4)
                 target_pose[:3, -1] = target_pos
-                velocity_correction = self.live_control(target_pose, 0.2, KP = 2, KD=3.0) #TODO CHANGE MAX SPEED
+                velocity_correction = self.live_control(target_pose, 0.1, KP = 20, KD=0.01) #TODO CHANGE MAX SPEED
                 # print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
                 command_vel = target_vel + velocity_correction
                 
@@ -280,17 +277,21 @@ class Robot_Controller():
                     i += 1
 
             # stop robot on exit (normal or stopped)
+            # self.robot_stop()
+            
             self.laser_obj.set_output(False)
-            self.robot_stop()
+            self.time_list = self.time_list[:i]
+            self.actual_vel_list = self.actual_vel_list[:i]
+            self.target_vel_list = self.target_vel_list[:i]
+            self.actual_pos_list = self.actual_pos_list[:i]
+            self.target_pos_list = self.target_pos_list[:i]
 
-            
-
-            
         finally:
             self._stop_traj.set()
             self._traj_thread = None
-            print("traj done")
             self.robot_stop()
+            print("traj done")
+            
         # return [actual_vel_list,
         #         target_vel_list,
         #         actual_pos_list,
@@ -470,11 +471,12 @@ class Robot_Controller():
         current_pose, _ = self.get_current_state()
         return current_pose[:3, -1] - self.home_pose[:3, -1]
             
-    def live_control(self, target_pose_home, max_vel, KP = 5.0, KD = 0.05):
+    def live_control(self, target_pose_home, max_vel, KP = 5.0, KD = 0.0):
         current_pose, current_velocity = self.get_current_state()
         current_pose = current_pose[:3, -1] - self.home_pose[:3, -1]
         position_error = target_pose_home[:3, -1] - current_pose
-        target_vel = position_error * KP
+        target_vel = position_error * KP - KD * current_velocity[:3]
+        # print("[Robot Controller] KD", KD * current_velocity[:3])
         mag = np.linalg.norm(target_vel)
         
         if mag == 0:

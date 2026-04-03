@@ -110,7 +110,7 @@ class RobotFixtures:
         ax.set_title("Robot Virtual Fixture (Valid Region)")
         ax.grid(True, alpha=0.3)
         # plt.show()
-        fig.savefig("plots/robot fixtures.png")
+        fig.savefig("plots/debug/robot fixtures.png")
         plt.close(fig)
 
         return ax
