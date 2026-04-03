@@ -60,21 +60,23 @@ export class CanvasManager {
         fill: 'transparent',
         stroke: 'rgba(0, 122, 255, 0.7)',
         strokeWidth: 4,
-        strokeUniform: true,
+        strokeUniform: true, //Keeps stroke width constant when scaling
         strokeLineCap: 'round' as const,
         strokeLineJoin: 'round' as const,
         objectCaching: false,
-        cornerColor: 'rgba(0, 122, 255, 0.7)',
-        cornerStrokeColor: '#ffffff',
+        
+        // --- Control Corners (Toggles) ---
+        transparentCorners: true,
+        cornerColor: 'rgba(0, 122, 255, 0.1)',
+        cornerStrokeColor: 'rgba(0, 122, 255, 0.9)',
         borderColor: 'rgba(0, 122, 255, 0.7)',
         cornerStyle: 'circle' as const,
-        cornerSize: 16,
-        touchCornerSize: 44,
-        transparentCorners: false,
+        cornerSize: 18,
+        touchCornerSize: 48,
+        
         padding: 10,
         originX: 'left' as const,
         originY: 'top' as const,
-
     };
 
     // --- CONFIG: Other Constants ---
@@ -158,7 +160,6 @@ export class CanvasManager {
             if (e.path) {
                 e.path.set({
                     ...this.SHAPE_DEFAULTS,
-                    strokeUniform: false
                 });
                 e.path.setCoords();
             }
@@ -805,7 +806,6 @@ export class CanvasManager {
         const existingShapes = this.fCanvas.getObjects().filter(o => !(o as any)._isMarker);
         if (existingShapes.length > 0) {
             this.hasPlacedShape = true;
-            this.fCanvas.isDrawingMode = false;
             return;
         }
 
@@ -948,6 +948,10 @@ export class CanvasManager {
         this.activeShape = null;
         this.hasPlacedShape = false;
 
+        if (this.fCanvas.freeDrawingBrush) {
+            (this.fCanvas.freeDrawingBrush as any)._isCurrentlyDrawing = false;
+        }
+
         if (this.currentShapeType === 'freehand') {
             this.fCanvas.isDrawingMode = true;
             this.fCanvas.requestRenderAll();
@@ -1070,12 +1074,19 @@ export class CanvasManager {
             const enlivened = await fabric.util.enlivenObjects(this.backupDrawingState);
 
             enlivened.forEach((obj: any) => {
-                obj.set({ selectable: true, evented: true });
+                //Re-apply all custom control styles and defaults when restoring
+                obj.set({ 
+                    ...this.SHAPE_DEFAULTS,
+                    selectable: true, 
+                    evented: true 
+                });
                 this.fCanvas.add(obj);
             });
 
             this.fCanvas.requestRenderAll();
             this.hasPlacedShape = true;
+            this.fCanvas.isDrawingMode = false;
+            this.fCanvas.defaultCursor = 'default';
             this.onShapeComplete();
 
         } catch (error) {
@@ -1315,49 +1326,42 @@ export class CanvasManager {
     /**
      * Sends full path data to backend for preview/preparation
      */
-    public async previewPath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<{ duration: number, path: Position[], warning?: string }> {
-        // Generate Pixel Path
+    public async previewPath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<{ duration: number, path: Position[], warnings?: string[] }> {
+        //Generate Pixel Path
         const pixels = this.generatePixelPath();
         const width = this.fCanvas.getWidth();
         const height = this.fCanvas.getHeight();
 
-        //Check if out of bounds. If so, abort.
+        //Check if drawn shape is out of bounds. If so, abort.
         const isOutOfBounds = pixels.some(p => p.x < 0 || p.x > width || p.y < 0 || p.y > height);
         if (isOutOfBounds) {
             throw new Error("OUT_OF_BOUNDS");
         }
 
-        //Check for overlap with virtual fixtures. If there's any overlap, warn user
+        //Check for overlap with virtual fixtures
         let hasFixtureOverlap = false;
         if (this.hasFixtures() && this.fixturesCtx) {
-            // Grab the raw pixel data from the fixtures canvas
             const imgData = this.fixturesCtx.getImageData(0, 0, width, height).data;
-
             for (const p of pixels) {
                 const px = Math.floor(p.x);
                 const py = Math.floor(p.y);
-
-                // Ensure we don't check outside the array bounds
                 if (px >= 0 && px < width && py >= 0 && py < height) {
-                    // Calculate the index for the Alpha channel of this specific (x,y) pixel
                     const alphaIndex = (py * width + px) * 4 + 3;
-
-                    // If the alpha channel is greater than 0, the user drew a fixture here
                     if (imgData[alphaIndex] > 0) {
                         hasFixtureOverlap = true;
-                        break; // Stop checking, we only need one violation to trigger the warning
+                        break; 
                     }
                 }
             }
         }
 
-        // Normalize to video space
+        //Normalize to video space
         const videoPixels = pixels.map(p => ({
             x: (p.x / width) * this.video.videoWidth,
             y: (p.y / height) * this.video.videoHeight
         }));
 
-        //Calculate bounding box of the drawn path in video space
+        //Calculate bounding box of the drawn path
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         for (const p of videoPixels) {
             if (p.x < minX) minX = p.x;
@@ -1377,7 +1381,6 @@ export class CanvasManager {
             formData.append('raster_type', raster_type);
         }
 
-        // Add raster mask if fill is enabled
         if (isFillEnabled) {
             const blob = await this.generateRasterBlob();
             formData.append('file', blob, 'path.png');
@@ -1385,18 +1388,33 @@ export class CanvasManager {
 
         const response = await this.postFormData('/api/preview', formData);
 
-        let warning = hasFixtureOverlap ? "FIXTURE_OVERLAP" : undefined;
+        //Check if the generated path from the robot goes entirely off the screen (Hard Stop)
+        const vWidth = this.video.videoWidth;
+        const vHeight = this.video.videoHeight;
+        const pathEscapesScreen = response.path && response.path.some((p: Position) => 
+            p.x < 0 || p.x > vWidth || p.y < 0 || p.y > vHeight
+        );
+        
+        if (pathEscapesScreen) {
+            throw new Error("OUT_OF_BOUNDS");
+        }
 
-        if (!warning && response.path && response.path.length > 0) {
+        //Build array of all soft warnings
+        let warnings: string[] = [];
+        if (hasFixtureOverlap) {
+            warnings.push("FIXTURE_OVERLAP");
+        }
+
+        if (response.path && response.path.length > 0) {
             if (this.checkIfPathEscapes(response.path)) {
-                warning = "PATH_ESCAPES_BOUNDS";
+                warnings.push("PATH_ESCAPES_BOUNDS");
             }
         }
 
         return {
             duration: response.duration,
             path: response.path,
-            warning: warning
+            warnings: warnings
         };
     }
 
