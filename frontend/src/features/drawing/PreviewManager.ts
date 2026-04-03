@@ -60,23 +60,24 @@ export class PreviewManager {
     return document.getElementById('executeBtn') as HTMLButtonElement | null;
   }
 
-  /**
+    /**
    * Handle the complex state of the execute button (Disabled prop + CSS styles)
    */
   private setExecuteButtonState(isEnabled: boolean): void {
-    const btn = this.getExecuteBtn();
+    const btn = this.ui.executeBtn;
     if (!btn) return;
 
     if (isEnabled) {
       btn.classList.remove('locked');
+      btn.disabled = false;
     } else {
       btn.classList.add('locked');
+      btn.disabled = true;
     }
   }
 
   private tryEnableExecute(): void {
-    //Only unlock if we have a real path drawn and the user has acknowledged all warnings
-    if (this.sourcePath.length >= 2 && this.requiredConfirmations <= 0) {
+    if (this.sourcePath.length >= 2 && this.requiredConfirmations <= 0 && this.hasPreviewedCurrentDrawing) {
       this.setExecuteButtonState(true);
     } else {
       this.setExecuteButtonState(false);
@@ -85,7 +86,6 @@ export class PreviewManager {
 
   public togglePreview(enable: boolean): void {
     this.isPreviewActive = enable;
-
     const btnText = this.ui.executeBtn.querySelector('.btn-text');
 
     if (enable) {
@@ -101,6 +101,8 @@ export class PreviewManager {
       this.ui.previewInfoPanel.classList.remove('open');
       this.clearOverlay();
       this.stopAnimation();
+      
+      this.setExecuteButtonState(false);
     }
   }
 
@@ -269,46 +271,22 @@ export class PreviewManager {
     const video = this.ui.video;
     const viewport = this.ui.viewport;
 
-    //Guard against divide by zero if video isn't loaded yet
     const vWidth = video.videoWidth || 1;
     const vHeight = video.videoHeight || 1;
 
-    //Use viewport dimensions (CSS pixels) for calculating scale
+    // Use logical CSS pixels (offsetWidth) to prevent double-scaling
     const scaleX = viewport.offsetWidth / vWidth;
     const scaleY = viewport.offsetHeight / vHeight;
 
-    this.pathData = [];
-    let lastX = -9999;
-    let lastY = -9999;
+    // 1. Map the raw robot points to screen pixels exactly as they are
+    const rawScreenPoints = this.sourcePath.map(p => ({
+      x: p.x * scaleX,
+      y: p.y * scaleY
+    }));
 
-    for (const p of this.sourcePath) {
-      //Snap to half-pixels for crisp canvas stroke rendering
-      const x = Math.floor(p.x * scaleX) + 0.5;
-      const y = Math.floor(p.y * scaleY) + 0.5;
-
-      //Filter points that are extremely close to each other
-      //Dashed lines look terribly noisy if segments are smaller than a pixel
-      const distSq = (x - lastX) * (x - lastX) + (y - lastY) * (y - lastY);
-      
-      if (distSq > 2.0) { //Only record the point if it moved at least ~1.4 pixels
-        this.pathData.push({ x, y });
-        lastX = x;
-        lastY = y;
-      }
-    }
-    
-    //Ensure the absolute last point is always included to match the exact end position
-    if (this.sourcePath.length > 0) {
-      const lastSrc = this.sourcePath[this.sourcePath.length - 1];
-      const finalX = Math.floor(lastSrc.x * scaleX) + 0.5;
-      const finalY = Math.floor(lastSrc.y * scaleY) + 0.5;
-      
-      if (this.pathData.length === 0) {
-        this.pathData.push({ x: finalX, y: finalY });
-      } else {
-        this.pathData[this.pathData.length - 1] = { x: finalX, y: finalY };
-      }
-    }
+    // 2. Iron out the stair-steps purely for the visual canvas rendering
+    // (Increase iterations from 3 to 5 if it still looks slightly bumpy)
+    this.pathData = this.smoothPreviewPath(rawScreenPoints, 3);
   }
 
   private drawPath(): void {
@@ -343,6 +321,8 @@ export class PreviewManager {
   }
 
   private drawPathLine(ctx: CanvasRenderingContext2D): void {
+    if (this.pathData.length < 2) return;
+    
     ctx.beginPath();
     ctx.moveTo(this.pathData[0].x, this.pathData[0].y);
     for (let i = 1; i < this.pathData.length; i++) {
@@ -458,5 +438,47 @@ export class PreviewManager {
   public dispose(): void {
     this.stopAnimation();
     this.clearOverlay();
+  }
+
+  /**
+   * Visually smooths a grid-snapped path for rendering purposes only.
+   */
+  private smoothPreviewPath(points: Position[], iterations: number = 3): Position[] {
+    if (points.length < 3) return points;
+    let currentPoints = [...points];
+
+    // 1. Laplacian Smoothing (Averages out the 1-pixel stair-steps)
+    for (let iter = 0; iter < iterations; iter++) {
+      const nextPoints: Position[] = [currentPoints[0]];
+      for (let i = 1; i < currentPoints.length - 1; i++) {
+        nextPoints.push({
+          x: (currentPoints[i - 1].x + currentPoints[i].x + currentPoints[i + 1].x) / 3,
+          y: (currentPoints[i - 1].y + currentPoints[i].y + currentPoints[i + 1].y) / 3
+        });
+      }
+      // Keep the final point anchored
+      nextPoints.push(currentPoints[currentPoints.length - 1]);
+      currentPoints = nextPoints;
+    }
+
+    // 2. Micro-segment filtering (Cleans up the dashed line rendering)
+    const finalPoints: Position[] = [currentPoints[0]];
+    let lastX = currentPoints[0].x;
+    let lastY = currentPoints[0].y;
+
+    for (let i = 1; i < currentPoints.length - 1; i++) {
+      const pt = currentPoints[i];
+      const distSq = (pt.x - lastX) * (pt.x - lastX) + (pt.y - lastY) * (pt.y - lastY);
+      
+      // Only keep the point if it's at least ~1.5 pixels away from the last one
+      if (distSq > 2.0) {
+        finalPoints.push(pt);
+        lastX = pt.x;
+        lastY = pt.y;
+      }
+    }
+    finalPoints.push(currentPoints[currentPoints.length - 1]);
+
+    return finalPoints;
   }
 }

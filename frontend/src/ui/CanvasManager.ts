@@ -60,21 +60,23 @@ export class CanvasManager {
         fill: 'transparent',
         stroke: 'rgba(0, 122, 255, 0.7)',
         strokeWidth: 4,
-        strokeUniform: true,
+        strokeUniform: true, //Keeps stroke width constant when scaling
         strokeLineCap: 'round' as const,
         strokeLineJoin: 'round' as const,
         objectCaching: false,
-        cornerColor: 'rgba(0, 122, 255, 0.7)',
-        cornerStrokeColor: '#ffffff',
+        
+        // --- Control Corners (Toggles) ---
+        transparentCorners: true,
+        cornerColor: 'rgba(0, 122, 255, 0.1)',
+        cornerStrokeColor: 'rgba(0, 122, 255, 0.9)',
         borderColor: 'rgba(0, 122, 255, 0.7)',
         cornerStyle: 'circle' as const,
-        cornerSize: 16,
-        touchCornerSize: 44,
-        transparentCorners: false,
+        cornerSize: 18,
+        touchCornerSize: 48,
+        
         padding: 10,
         originX: 'left' as const,
         originY: 'top' as const,
-
     };
 
     // --- CONFIG: Other Constants ---
@@ -158,7 +160,6 @@ export class CanvasManager {
             if (e.path) {
                 e.path.set({
                     ...this.SHAPE_DEFAULTS,
-                    strokeUniform: false
                 });
                 e.path.setCoords();
             }
@@ -805,7 +806,6 @@ export class CanvasManager {
         const existingShapes = this.fCanvas.getObjects().filter(o => !(o as any)._isMarker);
         if (existingShapes.length > 0) {
             this.hasPlacedShape = true;
-            this.fCanvas.isDrawingMode = false;
             return;
         }
 
@@ -948,6 +948,10 @@ export class CanvasManager {
         this.activeShape = null;
         this.hasPlacedShape = false;
 
+        if (this.fCanvas.freeDrawingBrush) {
+            (this.fCanvas.freeDrawingBrush as any)._isCurrentlyDrawing = false;
+        }
+
         if (this.currentShapeType === 'freehand') {
             this.fCanvas.isDrawingMode = true;
             this.fCanvas.requestRenderAll();
@@ -1070,12 +1074,19 @@ export class CanvasManager {
             const enlivened = await fabric.util.enlivenObjects(this.backupDrawingState);
 
             enlivened.forEach((obj: any) => {
-                obj.set({ selectable: true, evented: true });
+                //Re-apply all custom control styles and defaults when restoring
+                obj.set({ 
+                    ...this.SHAPE_DEFAULTS,
+                    selectable: true, 
+                    evented: true 
+                });
                 this.fCanvas.add(obj);
             });
 
             this.fCanvas.requestRenderAll();
             this.hasPlacedShape = true;
+            this.fCanvas.isDrawingMode = false;
+            this.fCanvas.defaultCursor = 'default';
             this.onShapeComplete();
 
         } catch (error) {
