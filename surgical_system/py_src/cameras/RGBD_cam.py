@@ -346,8 +346,10 @@ def main():
     
     while (not rgbd_cam.is_ready()):
         time.sleep(0.5)
-    
-     
+    rgbd_cam.set_default_setting()
+    time.sleep(0.5)
+    image = rgbd_cam.get_latest()
+    cv2.imwrite("step_img.png", image['color'])
     # rgbd_cam.display_depth_stream()
     while(True):
         image = rgbd_cam.get_latest()

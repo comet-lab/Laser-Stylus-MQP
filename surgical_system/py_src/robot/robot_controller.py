@@ -1,6 +1,6 @@
 import os, subprocess, time, sys, math
 from scipy.spatial.transform import Rotation
-import threading
+import threading, csv
 import numpy as np
 import matplotlib.pyplot as plt
 from laser_control.laser_arduino import Laser_Arduino
@@ -26,6 +26,12 @@ class Robot_Controller():
          # Trajectory thread management
         self._traj_thread = None
         self._stop_traj = threading.Event()
+        self.hold_orientation = None
+        self.actual_vel_list = None 
+        self.actual_pos_list = None
+        self.target_pos_list = None
+        self.target_vel_list = None
+        self.time_list = None
 
     def load_home_pose(self, home_pose_path = "surgical_system/py_src/robot/home_pose.csv"):
         if(os.path.exists(home_pose_path)):
@@ -44,6 +50,10 @@ class Robot_Controller():
             homePose = np.concatenate((homePose,[[0,0,0,1]]),axis=0)
             np.savetxt(home_pose_path, homePose, delimiter=",")
             print("Saving new home_pose...")
+            
+        r_matrix_b = homePose[:3, :3]
+        self.hold_orientation = Rotation.from_matrix(r_matrix_b).as_euler('xyz', degrees=True)
+        print("[Robot Controller]: Holding Orientation (xyz): ", self.hold_orientation)
         return homePose
     
     def load_edit_pose(self, filePath = "surgical_system/py_src/robot/home_pose.csv"):
@@ -102,11 +112,7 @@ class Robot_Controller():
         return self.franka_client.send_velocity(lin_vel, ang_vel)
     
     def robot_stop(self):
-        velocity = self.franka_client.send_velocity(np.array([0, 0, 0]), np.array([0, 0, 0]))
-        time.sleep(1)
-        pose, _ = self.get_current_state()
-        self.go_to_pose(pose)
-        return velocity
+        return self.franka_client.send_velocity(np.array([0, 0, 0]), np.array([0, 0, 0]))
     
     def align_robot_input(self, new_pose):
             
@@ -145,7 +151,8 @@ class Robot_Controller():
         new_pose = np.eye(4)
         new_pose[0:3, -1], new_pose[:3, :3] = position, Rmat
         current_vel = pose[7:]
-        return new_pose, current_vel
+        
+        return new_pose, np.array(current_vel)
 
     def quat_to_Mat(self, pose):
         #raw robot pose [x, y, z, qx, qy, qz, w]
@@ -185,39 +192,58 @@ class Robot_Controller():
     
     def _run_trajectory_worker(self, traj: TrajectoryController, laser_on):
         total_time = traj.durations[-1]
+        self.total_time = total_time
         print("Path Duration: ", total_time)
         
         start_pos = traj.start_pos
         start_pose = np.eye(4)
         start_pose[:3, -1] = start_pos
-        print("Heading to starting location")
+        self.robot_stop()
+        time.sleep(0.5)
+        print("[Robot Controller] Trajectory: Heading to starting location")
         current_pose = np.array(self.go_to_pose(start_pose @ self.home_pose))
-        
         time_step = 0.005
-        t_start = time.monotonic()
-        t_prev  = t_start
-
         target_vel = np.zeros(3)
         
         # record data
-        data_num = int(math.ceil(total_time / time_step))
-        actual_vel_list = np.empty((data_num, 3))
-        target_vel_list = np.empty((data_num, 3))
-        actual_pos_list = np.empty((data_num, 3))
-        target_pos_list = np.empty((data_num, 3))
+        data_num = int(math.floor(total_time / time_step)) + 1
+
+        self.actual_vel_list = np.empty((data_num, 3), dtype=float)
+        self.target_vel_list = np.empty((data_num, 3), dtype=float)
+        self.actual_pos_list = np.empty((data_num, 3), dtype=float)
+        self.target_pos_list = np.empty((data_num, 3), dtype=float)
+        self.time_list = np.empty(data_num, dtype=float)
+
         i = 0
+        self.laser_obj.set_output(laser_on)
+        time.sleep(0.1)
+        t_start = time.monotonic()
         try:
             while (not self._stop_traj.is_set()):
                 now = time.monotonic()
                 elapsed = now - t_start
-                dt = now - t_prev
+                # dt = now - t_prev
+                # if elapsed >= total_time:
+                #     break
+
+                # if dt < time_step:
+                #     time.sleep(0.002)
+                #     continue
+                # t_prev = now
+                
+                # desired_time = t_start + i * time_step
+                # sleep_time = desired_time - time.monotonic()
+                # if sleep_time > 0:
+                time.sleep(time_step)
+
+                # now = time.monotonic()
+                # elapsed = i * time_step
+
                 if elapsed >= total_time:
+                    self.robot_stop()
                     break
 
-                if dt < time_step:
-                    continue
-                t_prev = now
-                
+                elapsed = min(elapsed, total_time) # redundent 
                 self.laser_obj.set_output(laser_on)
                 
                 movement = traj.update(elapsed)
@@ -228,72 +254,179 @@ class Robot_Controller():
                 
                 target_pose = np.eye(4)
                 target_pose[:3, -1] = target_pos
-                velocity_correction = self.live_control(target_pose, 0.2, KP = 2, KD=3.0) #TODO CHANGE MAX SPEED
+                velocity_correction = self.live_control(target_pose, 0.1, KP = 20, KD=0.01) #TODO CHANGE MAX SPEED
                 # print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
                 command_vel = target_vel + velocity_correction
-                state = self.set_velocity(command_vel, [0, 0, 0]) 
+                
+                if self.hold_orientation is not None:
+                    target_orien_vel = self.live_orientation_control(self.hold_orientation, 0.005, KP=0.05)
+                else: 
+                    target_orien_vel = [0, 0, 0]
+                
+                state = self.set_velocity(command_vel, target_orien_vel) 
                 
                 
                 pos, vel = state[:3], state[7:10]
 
                 if i < data_num:
-                    actual_vel_list[i, :] = vel[:3] if i != 0 else np.zeros(3)
-                    target_vel_list[i, :] = command_vel
-                    actual_pos_list[i, :] = pos[:3] - self.home_pose[:3, -1]
-                    target_pos_list[i, :] = target_pos
+                    self.time_list[i] = now - t_start
+                    self.actual_vel_list[i, :] = vel[:3] if i != 0 else np.zeros(3)
+                    self.target_vel_list[i, :] = command_vel
+                    self.actual_pos_list[i, :] = pos[:3] - self.home_pose[:3, -1]
+                    self.target_pos_list[i, :] = target_pos
                     i += 1
 
             # stop robot on exit (normal or stopped)
+            # self.robot_stop()
+            
             self.laser_obj.set_output(False)
-            self.robot_stop()
-    
-            # Optional: if you are okay plotting from a thread, keep this.
-            # Otherwise, you can return the data instead and plot in main thread.
-            # time_range = np.arange(0, total_time, time_step)
+            self.time_list = self.time_list[:i]
+            self.actual_vel_list = self.actual_vel_list[:i]
+            self.target_vel_list = self.target_vel_list[:i]
+            self.actual_pos_list = self.actual_pos_list[:i]
+            self.target_pos_list = self.target_pos_list[:i]
 
-            # plt.figure(figsize=(10,6))
-            # plt.plot(time_range, actual_vel_list[:, 0], label="actual x")
-            # plt.plot(time_range, actual_vel_list[:, 1], label="actual y")
-            # plt.plot(time_range, actual_vel_list[:, 2], label="actual z")
-            # plt.plot(time_range, target_vel_list[:, 0], '--', label="target x")
-            # plt.plot(time_range, target_vel_list[:, 1], '--', label="target y")
-            # plt.plot(time_range, target_vel_list[:, 2], '--', label="target z")
-            # plt.xlabel("Time [s]")
-            # plt.ylabel("velocity [m/s]")
-            # title = "Time vs velocity " + traj.pattern
-            # plt.title(title)
-            # plt.grid(True)
-            # plt.legend()
-            # plt.tight_layout()
-            # plt.savefig("time_vs_velocity_" + traj.pattern + ".png", dpi=200)
-            # plt.close()
-
-            # plt.figure(figsize=(10,6))
-            # plt.plot(time_range, actual_pos_list[:, 0], label="actual x")
-            # plt.plot(time_range, actual_pos_list[:, 1], label="actual y")
-            # plt.plot(time_range, actual_pos_list[:, 2], label="actual z")
-            # plt.plot(time_range, target_pos_list[:, 0], '--', label="target x")
-            # plt.plot(time_range, target_pos_list[:, 1], '--', label="target y")
-            # plt.plot(time_range, target_pos_list[:, 2], '--', label="target z")
-            # plt.xlabel("Time [s]")
-            # plt.ylabel("position [m]")
-            # title = "Time vs position " + traj.pattern
-            # plt.title(title)
-            # plt.grid(True)
-            # plt.legend()
-            # plt.tight_layout()
-            # plt.savefig("time_vs_position_" + traj.pattern + ".png", dpi=200)
-            # plt.close()
         finally:
             self._stop_traj.set()
             self._traj_thread = None
-            print("traj done")
             self.robot_stop()
+            print("traj done")
+            
         # return [actual_vel_list,
         #         target_vel_list,
         #         actual_pos_list,
         #         target_pos_list]
-    
+        
+
+
+    def report_live_path(self):
+        if self.actual_vel_list is None:
+            return
+
+        print("Create path report")
+
+        def get_next_plot_path(base_name, folder="plots", ext=".png"):
+            """
+            Returns the next available filename:
+            plots/base_name.png
+            plots/base_name_1.png
+            plots/base_name_2.png
+            ...
+            """
+            os.makedirs(folder, exist_ok=True)
+
+            path = os.path.join(folder, f"{base_name}{ext}")
+            if not os.path.exists(path):
+                return path
+
+            count = 1
+            while True:
+                path = os.path.join(folder, f"{base_name}_{count}{ext}")
+                if not os.path.exists(path):
+                    return path
+                count += 1
+
+        
+        def append_rmse_to_csv(csv_path, rmse):
+            file_exists = os.path.exists(csv_path)
+
+            with open(csv_path, mode="a", newline="") as f:
+                writer = csv.writer(f)
+
+                if not file_exists:
+                    writer.writerow(["rmse"])
+
+                writer.writerow([rmse])
+                
+        
+        # Work on local copies so original logged data is not modified in-place
+        actual_vel = self.actual_vel_list * 1000
+        actual_pos = self.actual_pos_list * 1000
+        target_pos = self.target_pos_list * 1000
+        target_vel = self.target_vel_list * 1000
+
+        # ----------------------------
+        # Time vs velocity
+        # ----------------------------
+        plt.figure(figsize=(10, 6))
+        plt.plot(self.time_list, actual_vel[:, 0], label="actual x")
+        plt.plot(self.time_list, actual_vel[:, 1], label="actual y")
+        plt.plot(self.time_list, actual_vel[:, 2], label="actual z")
+        plt.plot(self.time_list, target_vel[:, 0], "--", label="target x")
+        plt.plot(self.time_list, target_vel[:, 1], "--", label="target y")
+        plt.plot(self.time_list, target_vel[:, 2], "--", label="target z")
+        plt.xlabel("Time [s]")
+        plt.ylabel("Velocity [mm/s]")
+        plt.title("Time vs Velocity")
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(get_next_plot_path("time_vs_velocity"), dpi=400)
+        plt.close()
+
+        # ----------------------------
+        # Time vs position
+        # ----------------------------
+        plt.figure(figsize=(10, 6))
+        plt.plot(self.time_list, actual_pos[:, 0], label="actual x")
+        plt.plot(self.time_list, actual_pos[:, 1], label="actual y")
+        plt.plot(self.time_list, actual_pos[:, 2], label="actual z")
+        plt.plot(self.time_list, target_pos[:, 0], "--", label="target x")
+        plt.plot(self.time_list, target_pos[:, 1], "--", label="target y")
+        plt.plot(self.time_list, target_pos[:, 2], "--", label="target z")
+        plt.xlabel("Time [s]")
+        plt.ylabel("Position [mm]")
+        plt.title("Time vs Position")
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(get_next_plot_path("time_vs_position"), dpi=400)
+        plt.close()
+
+        # ----------------------------
+        # XY path + RMSE
+        # ----------------------------
+        plt.figure(figsize=(6, 6))
+        plt.plot(
+            actual_pos[:, 0],
+            actual_pos[:, 1],
+            label="actual",
+            linewidth=2
+        )
+        plt.plot(
+            target_pos[:, 0],
+            target_pos[:, 1],
+            "--",
+            label="target",
+            linewidth=2
+        )
+
+        error = actual_pos[:, :2] - target_pos[:, :2]
+        sq_error = np.sum(error ** 2, axis=1)
+        rmse = np.sqrt(np.mean(sq_error))
+        print("[Robot Controller] PATH RMSE:", rmse)
+        
+        append_rmse_to_csv(
+            csv_path="plots/path_rmse.csv",
+            rmse=rmse
+        )
+
+        plt.xlabel("X [mm]")
+        plt.ylabel("Y [mm]")
+        plt.title(f"Position Error | RMSE: {rmse:.3f} mm")
+        plt.axis("equal")
+        plt.grid(True)
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(get_next_plot_path("xy_path"), dpi=400)
+        plt.close()
+
+        self.actual_vel_list = None
+        self.actual_pos_list = None
+        self.target_pos_list = None
+        self.target_vel_list = None
+        self.time_list = None
+            
     def run_trajectory(self, traj: TrajectoryController, blocking: bool = True, laser_on = False):
         """
         Run trajectory either blocking or in a background thread.
@@ -338,13 +471,12 @@ class Robot_Controller():
         current_pose, _ = self.get_current_state()
         return current_pose[:3, -1] - self.home_pose[:3, -1]
             
-    def live_control(self, target_pose_home, max_vel, KP = 5.0, KD = 0.05):
+    def live_control(self, target_pose_home, max_vel, KP = 5.0, KD = 0.0):
         current_pose, current_velocity = self.get_current_state()
         current_pose = current_pose[:3, -1] - self.home_pose[:3, -1]
         position_error = target_pose_home[:3, -1] - current_pose
-        vel_vector = np.array(current_velocity[:3])
-        # print("[Live Controller] KD Control : ", vel_vector * KD)
-        target_vel = position_error * KP #- vel_vector * KD
+        target_vel = position_error * KP - KD * current_velocity[:3]
+        # print("[Robot Controller] KD", KD * current_velocity[:3])
         mag = np.linalg.norm(target_vel)
         
         if mag == 0:
@@ -352,7 +484,21 @@ class Robot_Controller():
         elif mag > max_vel:
             target_vel = target_vel * (max_vel / mag)
         return target_vel
-            
+    
+    
+    def live_orientation_control(self, target_orientation, max_vel, KP = 0.1):
+        r_matrix_b = self.get_current_state()[0][:3, :3]
+        current_euler = Rotation.from_matrix(r_matrix_b).as_euler('xyz', degrees=True)
+        orientation_error = target_orientation - current_euler
+        # print(f"[Robot Controller] Orientation Error: {np.linalg.norm(orientation_error):0.4}" )
+        target_vel = orientation_error * KP
+        mag = np.linalg.norm(target_vel)
+        
+        if mag == 0:
+            target_vel = np.zeros(3) 
+        elif mag > max_vel:
+            target_vel = target_vel * (max_vel / mag)
+        return target_vel
     
     
 if __name__=='__main__':
@@ -362,7 +508,7 @@ if __name__=='__main__':
     home_pose = robot_controller.get_home_pose()
     
     mode = 1
-    height = 0.05 # m
+    height = 0.00 # m
     x = 0
     y = 0
     target_pose = np.array([[1,0,0,x],[0,1,0,y],[0,0,1,height],[0,0,0,1]])
