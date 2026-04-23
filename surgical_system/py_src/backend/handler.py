@@ -9,6 +9,7 @@ from robot.robot_fixtures import RobotFixtures, GridBoundary
 from backend.datastorage import SystemDataStore, CameraFrame, RobotState, UserCommand
 from dataclasses import asdict
 from typing import Dict, Any, Tuple
+from scipy.spatial.transform import Rotation
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -56,6 +57,7 @@ class Handler:
         self.data_storage = data_storage
         self.desired_state.isRecordingOn = None
         
+        
         boundary = self.cam_reg.meta_base_homography_data["boundary"] 
         if boundary is not None:
             print("[Handler] Loading Robot Fixtures")
@@ -73,6 +75,10 @@ class Handler:
         
         self.virtual_fixture, self.dx, self.dy, self.distance_field = self.generate_virtual_fixture()
         self.vf_valid_flag = None
+        
+        self.hold_pose_flag = False
+        self.hold_position = None
+        self.hold_pose = None
         
         
         initial_pose, _ = robot_controller.get_current_state()
@@ -158,38 +164,220 @@ class Handler:
         spacing = self.desired_state.density
         if spacing is None or math.isnan(spacing):
             return []
-        spacing = int(spacing) # TODO calculate lines per distance 
-        
-        # print(f"[Spacing (pixels)]: {spacing}")
-        # path = Motion_Planner.raster_pattern(img, pitch = spacing) # pixel spacing
-        #TODO check if raster is valid 
-
-    
-    
+        spacing = int(spacing) # TODO 
         polygon, edge = Motion_Planner._create_polygon(img)
         
         if polygon is None:
             print("No shape found ")
             return []
         
+        edge_path = self._do_filter_prim_path(edge)
+        
         path = Motion_Planner.poly_raster(
             polygon,
             spacing=spacing,        # pixels
             theta_deg=45.0,      # angle
-            margin=5.0          # inward offset
+            margin=1.0          # inward offset
         )
         
+        full_path = path.copy()
+        def unit(v, eps=1e-8):
+                n = np.linalg.norm(v)
+                return v / n if n > eps else np.zeros_like(v)
+            
+        # Connect raster with outer path 
+        if len(path) > 0 and len(edge_path) > 0:
+            # raster terminal direction
+            path_dir = unit(path[-1] - path[-2])
+            end_pt = path[-1]
+
+            vecs = edge_path - end_pt
+            dists = np.linalg.norm(vecs, axis=1)
+
+            # 1) find closest edge point first
+            closest_idx = np.argmin(dists)
+
+            # 2) only consider a local neighborhood around that point
+            window = 10   # tune this
+            n = len(edge_path)
+            candidate_idxs = [((closest_idx + k) % n) for k in range(-window, window + 1)]
+
+            # 3) among local candidates, pick the one best aligned with path direction
+            best_idx = closest_idx
+            best_score = -np.inf
+
+            for idx in candidate_idxs:
+                v = edge_path[idx] - end_pt
+                v_hat = unit(v)
+
+                # favor forward direction, but keep locality through the restricted window
+                score = np.dot(v_hat, path_dir)
+
+                if score > best_score:
+                    best_score = score
+                    best_idx = idx
+
+            start_idx = best_idx      
+            
+            edge_path = np.vstack([
+                edge_path[start_idx:],
+                edge_path[:start_idx]
+            ]) 
+            
+            # path end direction
+            path_dir = unit(edge_path[0] - path[-1])
+
+            edge_forward = unit(edge_path[1] - edge_path[0])
+            edge_backward = unit(edge_path[-1] - edge_path[0])
+            
+            # compare alignment
+            forward_score = np.dot(path_dir, edge_forward)
+            backward_score = np.dot(path_dir, edge_backward)
+
+            # if backward matches better, flip traversal direction
+            if backward_score > forward_score:
+                edge_path = np.vstack([
+                    edge_path[:1],
+                    edge_path[:0:-1]
+                ])
+                
+
+            # close loop if needed
+            if not np.allclose(edge_path[0], edge_path[-1]):
+                edge_path = np.vstack([edge_path, edge_path[0]])
+
+            # avoid duplicate point at transition
+            if np.allclose(full_path[-1], edge_path[0]):
+                full_path = np.vstack([full_path, edge_path[1:]])
+            else:
+                full_path = np.vstack([full_path, edge_path])
+                
+            # self.plot_connection_debug(path, edge_path, start_idx, [edge_forward, edge_backward], arrow_scale=0.001)
+        
         # print("Raster Path: ", path)
-        fig, ax = plt.subplots(figsize=(8,4))
+        fig, ax = plt.subplots(figsize=(8,4), dpi=300)
         # ax.imshow(img, cmap='gray')
-        if len(path) > 1:
-            xs = [p[0] for p in path]
-            ys_plot = [p[1] for p in path]
+        if len(full_path) > 1:
+            xs = [p[0] for p in full_path]
+            ys_plot = [p[1] for p in full_path]
             ax.plot(xs, ys_plot, linewidth=1)  # default color
         ax.set_axis_off()
-        fig.savefig("plots/raster path.png")
+        fig.savefig("plots/debug/raster path.png")
         plt.close(fig)
-        return path
+        return full_path
+
+    
+
+
+    def plot_connection_debug(self, path, edge_path, start_idx, direction, arrow_scale=100.0, closed=True):
+        """
+        Visualize:
+        - raster path
+        - edge contour
+        - chosen edge start point
+        - raster terminal direction
+        - edge forward/backward directions
+        - connector vector
+
+        Args:
+            path:      (N,2)
+            edge_path: (M,2)
+            start_idx: chosen index on edge_path
+            arrow_scale: multiplier to make unit vectors visible
+            closed: whether edge_path is a closed contour
+        """
+        
+        def unit(v, eps=1e-8):
+            n = np.linalg.norm(v)
+            return v / n if n > eps else np.zeros_like(v)
+    
+        path = np.asarray(path, dtype=float)
+        edge_path = np.asarray(edge_path, dtype=float)
+
+        if len(path) < 2:
+            raise ValueError("path must have at least 2 points")
+        if len(edge_path) < 3:
+            raise ValueError("edge_path must have at least 3 points")
+
+        end_pt = path[-1]
+        start_pt = edge_path[start_idx]
+
+        # raster terminal direction
+        path_dir = unit(path[-1] - path[-2])
+
+        if closed:
+            prev_idx = (start_idx - 1) % len(edge_path)
+            next_idx = (start_idx + 1) % len(edge_path)
+        else:
+            prev_idx = max(start_idx - 1, 0)
+            next_idx = min(start_idx + 1, len(edge_path) - 1)
+            
+        edge_forward, edge_backward = direction
+
+        connector_dir = unit(start_pt - end_pt)
+
+        forward_score = np.dot(path_dir, edge_forward)
+        backward_score = np.dot(path_dir, edge_backward)
+
+        fig, ax = plt.subplots(figsize=(10, 8), dpi=400)
+
+        # main paths
+        ax.plot(edge_path[:, 0], edge_path[:, 1], label="Edge Path", linewidth=2)
+        ax.plot(path[:, 0], path[:, 1], label="Raster Path", linewidth=2)
+
+        # key points
+        ax.scatter(path[0, 0], path[0, 1], s=120, marker='o', label="Raster Start", zorder=5)
+        ax.scatter(end_pt[0], end_pt[1], s=140, marker='x', label="Raster End", zorder=6)
+        ax.scatter(start_pt[0], start_pt[1], s=140, marker='s', label="Chosen Edge Point", zorder=1)
+
+        # neighbor points on edge
+        ax.scatter(edge_path[prev_idx, 0], edge_path[prev_idx, 1], s=70, marker='^', label="Edge Prev", zorder=5)
+        ax.scatter(edge_path[next_idx, 0], edge_path[next_idx, 1], s=70, marker='v', label="Edge Next", zorder=5)
+
+        # connector line
+        ax.plot([end_pt[0], start_pt[0]], [end_pt[1], start_pt[1]], '--', linewidth=1.5, label="Connector")
+
+        # arrows
+        ax.quiver(
+            end_pt[0], end_pt[1],
+            path_dir[0] * arrow_scale, path_dir[1] * arrow_scale,
+            angles='xy', scale_units='xy', scale=1,
+            width=0.003, label="Path Dir"
+        )
+
+        ax.quiver(
+            start_pt[0], start_pt[1],
+            edge_forward[0] * arrow_scale, edge_forward[1] * arrow_scale,
+            angles='xy', scale_units='xy', scale=1,
+            width=0.003, label="Edge Forward"
+        )
+
+        ax.quiver(
+            start_pt[0], start_pt[1],
+            edge_backward[0] * arrow_scale, edge_backward[1] * arrow_scale,
+            angles='xy', scale_units='xy', scale=1,
+            width=0.003, label="Edge Backward"
+        )
+
+        ax.quiver(
+            end_pt[0], end_pt[1],
+            connector_dir[0] * arrow_scale, connector_dir[1] * arrow_scale,
+            angles='xy', scale_units='xy', scale=1,
+            width=0.002, label="Connector Dir"
+        )
+
+        ax.set_title(
+            f"Connection Debug\n"
+            f"forward_score={forward_score:.3f}, backward_score={backward_score:.3f}"
+        )
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.axis("equal")
+        ax.grid(True)
+        ax.legend()
+        plt.tight_layout()
+        fig.savefig("plots/debug/raster path debug.png")
+        plt.close(fig)
     
 ###------------------------ Virtual Fixtures -------------------####    
 
@@ -274,11 +462,39 @@ class Handler:
         path = np.array([[d['x'], d['y']] for d in self.desired_state.path])
         return path
     
-    def _do_create_path(self, path):
+    def _do_filter_prim_path(self, pixels):
+        start_pixel, end_pixel = pixels[0, :], pixels[-1, :]
+        epsilon = 2.0   # tolerance in pixels
+        pixels_cv = np.asarray(pixels, dtype=np.float32).reshape(-1, 1, 2)
+        approx = cv2.approxPolyDP(pixels_cv, epsilon, closed=True)
+        poly_count = approx.shape[0]
+        # print("approx corners", approx)
+        if poly_count > 5:
+            print("Circle")
+            pixels = Motion_Planner.smooth_contour(pixels, window=31, poly=3)
+            pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=10, n_arc=20)
+            pixels = np.vstack((np.vstack((start_pixel, pixels)), end_pixel))
+        elif poly_count < 2: 
+            print("line")
+            pixels = np.vstack((start_pixel, end_pixel))
+        else:
+            print("Polygon")
+            # pixels = np.vstack((np.vstack((start_pixel, pixels)), end_pixel))
+            pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=10, n_arc=20)
+            # pixels = Motion_Planner.rdp(pixels, epsilon=4)
+        return pixels
+    
+    def _do_create_path(self, path, raster=False):
         pixels = path
         path = None
-        pixels = Motion_Planner.rdp(pixels, epsilon=1)
-        pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=3, n_arc=20)
+        print("Path event?", self.desired_state.pathEvent)
+        
+        #TODO check if the path is wrapped, if not, do not include
+        if raster:
+            pixels = Motion_Planner.smooth_corners_fillet(pixels, radius=50, n_arc=20, min_angle=1e-4)
+        else:
+            # 
+            pixels = self._do_filter_prim_path(pixels)
         
         fig, ax = plt.subplots(figsize=(8,4))
         # ax.imshow(img, cmap='gray')
@@ -287,7 +503,7 @@ class Handler:
             ys_plot = [p[1] for p in pixels]
             ax.plot(xs, ys_plot, linewidth=1)  # default color
         ax.set_axis_off()
-        fig.savefig("plots/pixels path.png")
+        fig.savefig("plots/debug/smoothed pixels path.png")
         plt.close(fig)
         
         warped_view = self.desired_state.isTransformedViewOn
@@ -297,14 +513,16 @@ class Handler:
                 pixels, 
                 warped_view, 
                 z = self.working_height)
-        # fig, ax = plt.subplots(figsize=(8,4))
         
-        # if len(robot_path) > 1:
-        #     xs = [p[0] for p in robot_path]
-        #     ys_plot = [p[1] for p in robot_path]
-        #     ax.plot(xs, ys_plot, linewidth=1)  # default color
-        # ax.set_axis_off()
-        # fig.savefig("World Positions after warp path.png")
+        fig, ax = plt.subplots(figsize=(8,4))
+        
+        if len(robot_path) > 1:
+            xs = [p[0] for p in robot_path]
+            ys_plot = [p[1] for p in robot_path]
+            ax.plot(xs, ys_plot, linewidth=1)  # default color
+        ax.set_axis_off()
+        fig.savefig("plots/debug/world points path.png")
+        plt.close(fig)
             
         speed = self.desired_state.speed / 1000.0 if self.desired_state.speed != None else 0.01 # m/s
         traj = self.robot_controller.create_custom_trajectory(robot_path, speed)
@@ -326,12 +544,17 @@ class Handler:
         warped = self.desired_state.isTransformedViewOn
         pixels = self.cam_reg.get_world_m_to_UI(self.cam_type, target_positions, warped)
         pixels = np.asarray(pixels, dtype=np.int16)
+        
+        # plot pixels back
+        # fig, ax = plt.subplots(figsize=(8,4), dpi=300)
         # if len(pixels) > 1:
         #     xs = [p[0] for p in pixels]
         #     ys_plot = [p[1] for p in pixels]
-        #     ax.plot(xs, ys_plot, linewidth=1)  # default color
+        #     ax.plot(xs, ys_plot, linewidth=1)  
         # ax.set_axis_off()
         # fig.savefig("pixels path.png")
+        # plt.close()
+        
         self.path_display_pixels = pixels
         return pixels, traj.total_path_time
     
@@ -354,19 +577,60 @@ class Handler:
 ###------------------------ Live Control ------------------####
         
     def _do_hold_pose(self):
+        if self.hold_position is None:
+            self.hold_position = self.robot_controller.current_robot_to_world_position()
+            self.hold_pose, current_vel = self.robot_controller.get_current_state()
+            # print("[Handler] Holding Pose: ", self.hold_position)
+                
         current_pose, current_vel = self.robot_controller.get_current_state()
         # Stop robot, no drift
-        # print(np.linalg.norm(current_vel[:3]))
-        if np.linalg.norm(current_vel[:3]) > 2e-5:
-            # print("Setting speed 0")
-            # self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
-            target_world_point = self.robot_controller.current_robot_to_world_position()
-            target_world_point[-1] = self.working_height
+        # print(f"lin Norm: {np.linalg.norm(current_vel[:3]):0.4f}, rot Norm: {np.linalg.norm(current_vel[3:]):0.4f},")
+        hold_orientation = self.robot_controller.hold_orientation
+        if hold_orientation is not None:
+            target_orien_vel = self.robot_controller.live_orientation_control(
+                hold_orientation, 0.005, KP=0.05
+            )
+
+            if np.linalg.norm(target_orien_vel) < 1e-5:
+                target_orien_vel = np.zeros(3)
+        else:
+            target_orien_vel = np.zeros(3)
+            
+        target_world_point = self.hold_position
+        target_world_point[-1] = self.working_height
+            
+        target_pose = np.eye(4)
+        target_pose[:3, -1] = target_world_point
+        target_vel = self.robot_controller.live_control(target_pose, 0.01, KP = 0.1)
+        
+        if np.linalg.norm(target_vel) < 1e-4:
+                target_vel = np.zeros(3)
+            
+        lin_cmd_norm = np.linalg.norm(target_vel)
+        rot_cmd_norm = np.linalg.norm(target_orien_vel)
+
+        lin_meas_norm = np.linalg.norm(current_vel[:3])
+        rot_meas_norm = np.linalg.norm(current_vel[3:])
+        
+        # rot_error = hold_orientation
+
+        not_home = lin_cmd_norm > 7e-5 or rot_cmd_norm > 3e-4
+        not_stopped = lin_meas_norm > 2e-5 or rot_meas_norm > 1e-4
+
+        # print(
+        #     f"[DEBUG]\n"
+        #     # f"  target_vel norm      = {lin_cmd_norm:.8e}  ({lin_cmd_norm > 7e-5})\n"
+        #     f"  target_orien norm    = {rot_cmd_norm:.8e}  ({rot_cmd_norm > 3e-4})\n"
+        #     # f"  current_lin norm     = {lin_meas_norm:.8e}  (>2e-5: {lin_meas_norm > 2e-5})\n"
+        #     f"  rot error    = {rot_meas_norm:.8e}  (>2e-5: {rot_meas_norm > 1e-4})\n"
+        #     # f"  not_home             = {not_home}\n"
+        #     # f"  not_stopped          = {not_stopped}\n"
+        # )
                 
-            target_pose = np.eye(4)
-            target_pose[:3, -1] = target_world_point
-            target_vel = self.robot_controller.live_control(target_pose, 0.05, KP = 0.5)
-            self.robot_controller.set_velocity(target_vel, np.zeros(3))
+        if not_home or not_stopped:
+            # print("[Handler] Hold pose: not home: ", not_home)
+            # print("[Handler] Hold Pose: not stopped: ", not_stopped)
+            self.robot_controller.set_velocity(target_vel, target_orien_vel)
         else:
             # print("holding")
             self.robot_controller.go_to_pose(current_pose, blocking=False)
@@ -382,8 +646,7 @@ class Handler:
         # print(f"[Height Diff] {np.abs(height_diff)}")
         
         
-                    
-        if(self._input_downtime() > .12 and np.abs(height_diff) < 0.001): # 1mm
+        if(self._input_downtime() > .12 and np.abs(height_diff) < 0.00025): # 1mm
             # print("[Live Control] Holding Position")
             self._do_hold_pose()
         else:
@@ -411,7 +674,6 @@ class Handler:
                     z = self.working_height)[0]
                 
                 valid_input_position = self.robot_fixtures.is_valid(target_world_point[:2])
-                
                 # print("[Hander] Robot Fixtures: Valid Input: ", valid_input_position, " | Valid Robot", valid_robot_position)
                 if(not valid_input_position and not valid_robot_position):
                     # print("[Hander] Robot Fixtures: Stopping target", target_world_point[:2])
@@ -419,25 +681,36 @@ class Handler:
                     self._do_hold_pose()
                     return
                     
-                    
-                self.laser_obj.set_output(self.desired_state.isLaserOn)
+                self.hold_position = None
+                self.hold_pose = None
+                if  height_diff < 0.0015: # dont fire if the height diff is too much
+                    self.laser_obj.set_output(self.desired_state.isLaserOn)
+                    # print("ready to fire height")
             else:
                 # Holding but change height
                 target_world_point = self.robot_controller.current_robot_to_world_position()
                 target_world_point[-1] = self.working_height
-            
-            
             
                 
             target_pose = np.eye(4)
             target_pose[:3, -1] = target_world_point
             live_control_speed = self.desired_state.speed / 1000.0 if self.desired_state.speed != None else 0.01
             # print(f"[Handler Live Control] Speed: {self.desired_state.speed}")
-            target_vel = self.robot_controller.live_control(target_pose, live_control_speed, KP = 5.0)
+            target_vel = self.robot_controller.live_control(target_pose, live_control_speed, KP = 5.0, KD=0.1)
             # TODO Multiply velocity controller in unit component direction * max(min_speed, min(1, (distance / max_distance)))
             
-            
-            self.robot_controller.set_velocity(target_vel, np.zeros(3))
+            hold_orientation = self.robot_controller.hold_orientation
+            if hold_orientation is not None:
+                target_orien_vel = self.robot_controller.live_orientation_control(
+                    hold_orientation, 0.005, KP=0.05
+                )
+
+                if np.linalg.norm(target_orien_vel) < 1e-4:
+                    target_orien_vel = np.zeros(3)
+            else:
+                target_orien_vel = np.zeros(3)
+            # print("here 3")
+            self.robot_controller.set_velocity(target_vel, target_orien_vel)
 
 ###------------------------ Auto Laser Focus ------------------####
 
@@ -486,7 +759,7 @@ class Handler:
                 print("[Warning] : Raster path is empty")
                 self._package_path(np.empty((1, 2), dtype=float), -1)
             else: 
-                self.current_traj = self._do_create_path(raster)
+                self.current_traj = self._do_create_path(raster, raster=True)
                 
             if self.recording_data:
                 payload = {"pixel points": raster,
@@ -525,7 +798,7 @@ class Handler:
 
         if(self.desired_state.isRobotOn):          
             self.working_height = self.desired_state.height / 100.0 if self.desired_state.height else  0 # cm to m
-            self._do_auto_focus(world_pos)
+            # self._do_auto_focus(world_pos)
             # print(f"[Robot Height] {self.working_height} m")
                 
             # print("loop",
@@ -541,12 +814,15 @@ class Handler:
                 self.cam_reg.get_path(self.path_display_pixels)
             else:
                 self.cam_reg.display_path = False
+                # self.robot_controller.report_live_path()
+                # self._do_hold_pose()
                 # self.path_display_pixels = None
             
             if(self.desired_state.fixtures_mask is not None):
                 self._read_fixtures()
                 self.desired_state.fixtures_mask = None
-                
+            
+            
             if(self.current_traj is not None and self.desired_state.executeCommand
                    and not self.robot_controller.is_trajectory_running()):
                 print("Executing Path")
@@ -555,23 +831,24 @@ class Handler:
                     self.data_storage.put_user(t=self._current_recording_time - self._start_recording_time,
                                             mode = "execute",
                                             payload=payload)
-                    
                 self._do_path(self.current_traj)
                 self.desired_state.executeCommand = None
                 self.current_traj = None
-                
+                self.hold_position = None
+                self.hold_pose = None
+            
             elif(((self.desired_state.x is not None and self.desired_state.y is not None) or height_change)
                    and not self.robot_controller.is_trajectory_running()):
-                
+                # print("here just chaning hiehgt")
                     # print(f"Live controller trigger {self.desired_state.x}, {self.desired_state.y}")
                 self._do_live_control(height_diff)
                 self.desired_state.path = None
+            elif(not self.robot_controller.is_trajectory_running()):
+                self._do_hold_pose()
             # elif(not self.robot_controller.is_trajectory_running())
-            
-                
-                    
-                    
+            # print("here")
         else:
+            # print("here else")
             self._do_hold_pose()
             self.laser_obj.set_output(False)
                 

@@ -20,6 +20,7 @@ if __name__=='__main__':
 else:
     from registration.transformations.system_calibration import System_Calibration
     
+from backend.datastorage import SystemDataStore
 from robot.robot_controller import Robot_Controller
 from cameras.thermal_cam import ThermalCam
 from cameras.RGBD_cam import RGBD_Cam
@@ -61,6 +62,52 @@ class Camera_Registration(System_Calibration):
             ys = cy + r * np.sin(theta)
             return np.stack([xs, ys], axis=1).astype(np.float16)
         
+    def multi_checkerboard(self, grid_shape = np.array([3, 3]), square_size = 0.040/2.0):
+
+        local_home_pose = self.robot_controller.get_home_pose()
+        system_calibration_storage = SystemDataStore(local_home_pose, {})
+        
+        heights = np.array([2.08, 3.05, 4.08, 5.09, 6.04, 7.06, 8.04, 9.05, 10.05]) # mm 
+        
+        heights = heights / 1000.0
+        
+        # homography_stack = {}
+        for z in heights:
+            print("Height [mm]: ", z*1000)
+            
+            base_homography_data, boundary_pts = self.create_checkerboard(gridShape = grid_shape, 
+                                squareSize=square_size,
+                                saveLocation="", debug=True)
+            
+            meta_data = {"grid shape": grid_shape,
+                     "square size": square_size,
+                     "boundary": boundary_pts}
+            
+            # obj_points = base_homography_data["obj_Points"]
+            # therm_img_points = base_homography_data["therm_img_points"]
+            # rgb_img_points = base_homography_data["rgb_img_points"]
+            
+            # if obj_points.shape[1] == 2:
+            #     obj_points = np.hstack((obj_points, np.zeros((obj_points.shape[0], 1))))
+                
+            # _imgpts = np.array(self.imgpts, np.float32) # already is [2xn]
+            # _objpts = np.array(self.objpts[:,0:2],np.float32) # need this to be [2 x n] 
+            # # findHomography is the same as getPerspectiveTransform but it can take more than 4 points, 
+            # # and they don't have to be a quadrilateral. 
+
+            # self.M,_ = cv2.findHomography(_imgpts,_objpts)
+            
+            # homograpy = {"rgb_w": self.cam_M['color'],
+            #          "therm_w" : self.cam_M['thermal'],
+            #          "rgb_therm": self.rgbd_therm_M}
+        
+            base_homography_data = {**base_homography_data, **meta_data}
+            system_calibration_storage.put_cali(f"{z}", base_homography_data)
+            # homography_stack[z] = H
+            
+        system_calibration_storage.save_data_storage(os.path.join(self.directory, "calibration_full"), reset=True)
+        
+
     def run(self): 
         debug = True
         self.homography_stack = None
@@ -81,34 +128,48 @@ class Camera_Registration(System_Calibration):
         #                          saveLocation=self.calibration_folder, debug=debug)
         
         grid_shape = np.array([3, 3])
-        square_size = 0.043/2.0
+        square_size = 0.045/2.0
         
-        _, boundary_pts = self.create_checkerboard(gridShape = grid_shape, 
+
+        base_homography_data, boundary_pts = self.create_checkerboard(gridShape = grid_shape, 
                                 squareSize=square_size,
-                                 saveLocation=self.calibration_folder, debug=debug)
-        
+                                saveLocation=self.calibration_folder, debug=debug)
+    
+    
+    
         meta_data = {"grid shape": grid_shape,
-                     "square size": square_size,
-                     "boundary": boundary_pts}
+                    "square size": square_size,
+                    "boundary": boundary_pts}
         
         
         np.savez_compressed(self.meta_base_homography_path, meta = meta_data)
         
         self.read_calibration()
-        
+    
         self.laser_controller.set_output(False)
         
         
-        self.reprojection_test('color', self.cam_M['color'], gridShape = np.array([2, 2]), laserDuration = .15, \
-                        debug=debug, height=0)
+        # self.reprojection_test('color', self.cam_M['color'], gridShape = np.array([2, 2]), laserDuration = .15, \
+        #                 debug=debug, height=0)
         
-        self.reprojection_test('thermal', self.cam_M['thermal'], gridShape = np.array([2, 2]), laserDuration = .15, \
-                        debug=debug, height=0)
+        # self.reprojection_test('thermal', self.cam_M['thermal'], gridShape = np.array([2, 2]), laserDuration = .15, \
+        #                 debug=debug, height=0)
         
         self.laser_alignment()
         
-        # heights = np.array([2.08, 2.65, 3.15, 3.65, 4.18, 4.73, 5.15, 5.62, 6.15, 6.64,
-        #                 7.26, 7.77, 8.11, 8.67, 9.24, 9.77, 10.14]) # mm 
+        
+        # homograpy = {"rgb_w": self.cam_M['color'],
+        #              "therm_w" : self.cam_M['thermal'],
+        #              "rgb_therm": self.rgbd_therm_M}
+        
+        # local_home_pose = self.robot_controller.get_home_pose()
+        # system_calibration_storage = SystemDataStore(local_home_pose, homograpy)
+        
+        # base_homography_data = {**base_homography_data, **meta_data}
+        # system_calibration_storage.put_cali("base_homography", base_homography_data)
+        # system_calibration_storage.save_data_storage(os.path.join(self.directory, "calibration"), reset=True)
+        
+        
     
         # heights = heights / 1000.0 # mm
         # depth_path = "homography_stack.npz"
@@ -364,22 +425,31 @@ class Camera_Registration(System_Calibration):
             cv2.waitKey(1000)
             cv2.destroyAllWindows()
         
-        
-        therm_saveLocation = self.directory + saveLocation + "/thermal_cali/"
-        therm_save_dir = Path(therm_saveLocation)      
-        therm_save_dir.mkdir(parents=True, exist_ok=True) 
-        
-        rgb_saveLocation = self.directory + saveLocation + "/rgb_cali/"
-        rgb_saveLocation = Path(rgb_saveLocation)      
-        rgb_saveLocation.mkdir(parents=True, exist_ok=True) 
+        if saveLocation != "":
+            therm_saveLocation = self.directory + saveLocation + "/thermal_cali/"
+            therm_save_dir = Path(therm_saveLocation)      
+            therm_save_dir.mkdir(parents=True, exist_ok=True) 
+            
+            rgb_saveLocation = self.directory + saveLocation + "/rgb_cali/"
+            rgb_saveLocation = Path(rgb_saveLocation)      
+            rgb_saveLocation.mkdir(parents=True, exist_ok=True) 
 
-        np.savetxt(therm_save_dir / "laser_spots.csv",        therm_img_points.T, delimiter=",")
-        np.savetxt(therm_save_dir / "laser_world_points.csv", obj_Points,          delimiter=",")
-        
-        np.savetxt(rgb_saveLocation / "laser_spots.csv",        rgb_img_points.T, delimiter=",")
-        np.savetxt(rgb_saveLocation / "laser_world_points.csv", obj_Points,          delimiter=",")
+            np.savetxt(therm_save_dir / "laser_spots.csv",        therm_img_points.T, delimiter=",")
+            np.savetxt(therm_save_dir / "laser_world_points.csv", obj_Points,          delimiter=",")
+            
+            np.savetxt(rgb_saveLocation / "laser_spots.csv",        rgb_img_points.T, delimiter=",")
+            np.savetxt(rgb_saveLocation / "laser_world_points.csv", obj_Points,          delimiter=",")
         # np.save    (save_dir / "laser_spots.npy",       therm_image_set)
-        return [combinedImg, therm_img_points, rgb_img_points, obj_Points], boundary_pts
+        data = {
+            "combinedImg": combinedImg,
+            "therm_img_points": therm_img_points,
+            "rgb_img_points": rgb_img_points,
+            "obj_Points": obj_Points
+        }
+        
+        return data, boundary_pts
+    
+    
     
     def rgb_multi_layer_scan(self, heights, file_name = "homography_stack.npz"):
         homography_stack = {}
@@ -495,18 +565,6 @@ class Camera_Registration(System_Calibration):
                markerSize=5,
                thickness=2)
         
-           
-        
-        cv2.arrowedLine(
-            overlay,
-            tuple(pts_i[0, 0]),
-            tuple(pts_i[3, 0]),
-            BLACK,
-            1, #  thickness,
-            cv2.LINE_AA,  
-            0, # Shift 
-            0.1 # Tip Length
-        )
     
         # ---- Alpha blend overlay onto original ----
         cv2.addWeighted(overlay, alpha, out, 1 - alpha, 0, out)
@@ -644,6 +702,8 @@ class Camera_Registration(System_Calibration):
         self.robot_controller.run_trajectory(traj, blocking=False)
         points = np.zeros((0, 3))
         depths = []
+        cmd_list = []
+        obs_list = []
         
         print("[Camera Reg] Scanning Features")
         while(self.robot_controller.is_trajectory_running()):
@@ -652,18 +712,25 @@ class Camera_Registration(System_Calibration):
                     
             u_obs, v_obs = map(float, self.get_hot_pixel(color_img, method="Centroid")[:2])
             X_cmd, Y_cmd = map(float, curr_position[:2])
+            cmd_list.append((X_cmd, Y_cmd))
+            obs_list.append((u_obs, v_obs))
+            
             z_best, err_best, uv_best, conf = DepthEstimation.estimate_depth_from_dense_stack(
                 self.dense_stack,
                 (u_obs, v_obs),
                 (X_cmd, Y_cmd),
                 refine=True) 
-            
             point = np.append(curr_position, z_best)
             points = np.vstack((points, point))
             # print("[Camera Reg scan_region] Points Scanned: ", point)
             # print("World Pos: ", world_pos, " Pixel: ", rgb_laser_pixel)
             # time.sleep(1/30.0)
-            
+        cmd_list = np.array(cmd_list)
+        obs_list = np.array(obs_list)
+        # np.savez("scan_points.npz",
+        #  cmd_points=cmd_list,
+        #  obs_pixels=obs_list)
+        
         depth, meta = DepthEstimation.generate_depth_mapping(points, cell_size=0.001)
         
         return depth, meta

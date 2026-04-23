@@ -28,6 +28,12 @@ class UserCommand:
     mode: str                     # "draw", "live_control", 
     payload: Dict[str, Any]       # markers, path, etc.
     
+    
+@dataclass(frozen=True)
+class CaliState:
+    cali_type: str                     # "draw", "live_control", 
+    payload: Dict[str, Any]       # markers, path, etc.
+    
 class SystemDataStore:
     """
     Central in-memory data store:
@@ -45,15 +51,21 @@ class SystemDataStore:
         self.robot_history: list[RobotState] = []
         self.user_history:list[UserCommand] = []
         
-        self.transforms : Dict[str, np.ndarray] = {"home": home_pose,
-                                           "rgb_w": homography["rgb_w"],
-                                           "therm_w": homography["therm_w"],
-                                           "rgb_therm": homography["rgb_therm"]}
+        self.cali_history:list[CaliState] = []
+        
+        self.transforms: Dict[str, np.ndarray] = {
+            "home": home_pose,
+            "rgb_w": homography.get("rgb_w"),
+            "therm_w": homography.get("therm_w"),
+            "rgb_therm": homography.get("rgb_therm")
+        }
 
         # calibration artifacts (homography stacks, intrinsics, etc.)
-        self.homography_stack: Dict[str, Any] = {"rgb_w_stack": homography["rgb_w_stack"],
-                                           "therm_w_stack": homography["therm_w_stack"],
-                                           "rgb_therm_stack": homography["rgb_therm_stack"]}
+        self.homography_stack: Dict[str, Any] = {
+            "rgb_w_stack": homography.get("rgb_w_stack", {}),
+            "therm_w_stack": homography.get("therm_w_stack", {}),
+            "rgb_therm_stack": homography.get("rgb_therm_stack", {})
+        }
         
 
 
@@ -81,7 +93,13 @@ class SystemDataStore:
             t = t,
             mode = mode, # "draw", "live_control", 
             payload = payload))
-
+        
+    # --- calibration --- 
+    def put_cali(self, cali_type: str, payload: Dict[str, Any]):
+        self.cali_history.append(CaliState(
+            cali_type = cali_type, # "draw", "live_control", 
+            payload = payload))
+    
 
     # --- Save and Load ---
     def to_state(self) -> dict:
@@ -90,6 +108,7 @@ class SystemDataStore:
             "camera_history": self.camera_history,
             "robot_history": self.robot_history,
             "user_history": self.user_history,
+            "cali_history": self.cali_history, 
             "transforms": self.transforms,
             "homography_stack": self.homography_stack,
         }
@@ -130,6 +149,7 @@ class SystemDataStore:
                 "thermal": len(self.camera_history.get("thermal", [])),
                 "robot": len(self.robot_history),
                 "user": len(self.user_history),
+                "cali": len(self.cali_history),
             },
         }
         with open(os.path.join(run_folder, "meta.json"), "w") as f:
@@ -153,6 +173,9 @@ class SystemDataStore:
         # User history can remain pickle unless you want strict JSON
         with open(os.path.join(run_folder, "user.pkl"), "wb") as f:
             pickle.dump(self.user_history, f)
+            
+        with open(os.path.join(run_folder, "cali.pkl"), "wb") as f:
+            pickle.dump(self.cali_history, f)
 
         # Camera history:
         with open(os.path.join(run_folder, "camera.pkl"), "wb") as f:
@@ -164,6 +187,7 @@ class SystemDataStore:
             self.camera_history = {"rgb": [], "depth": [], "thermal": []}
             self.robot_history = []
             self.user_history = []
+            self.cali_history = []
 
         return run_folder
     

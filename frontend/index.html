@@ -167,8 +167,8 @@
             <div class="setting-item"
               style="background: rgba(250, 133, 0, 0.1); border: 1px solid #fa8500; border-radius: 8px; padding: 12px; margin-bottom: 20px;">
               <span class="setting-label" style="color: #fa8500; font-weight: bold;">Processing Mode</span>
-              <div class="segment-control" style="width: 180px; border-color: #fa8500;">
-                <button id="mode-batch" class="segment-btn active">Batch</button>
+              <div class="segment-control" style="border-color: #fa8500;">
+                <button id="mode-batch" class="segment-btn active">Prepared</button>
                 <button id="mode-realtime" class="segment-btn" style="color: #fa8500;">Real-Time</button>
               </div>
             </div>
@@ -414,10 +414,11 @@
             </button>
             <div id="slider-controls" class="tool-group" style="margin-top: 15px;">
 
-              <div class="popout-control real-time-ui hidden-mode" id="speedControlGroup">
+              <div class="popout-control" id="speedControlGroup">
                 <button class="popout-trigger" id="speedTrigger">
                   <span class="popout-label">SPEED</span>
                   <span class="popout-value" id="speedDisplay">10</span>
+                  <span class="popout-label" style="margin-bottom: 0; " id="speedUnits">mm/s</span>
                 </button>
                 <div class="popout-panel" id="speedFlyout">
                   <div class="popout-slider-container">
@@ -431,6 +432,7 @@
                 <button class="popout-trigger" id="heightTrigger">
                   <span class="popout-label">HEIGHT</span>
                   <span class="popout-value" id="heightDisplay">...</span>
+                  <span class="popout-label" style="margin-bottom: 0; " id="speedUnits">cm</span>
                 </button>
                 <div class="popout-panel" id="heightFlyout">
                   <div class="popout-slider-container">
