@@ -97,7 +97,7 @@ if __name__=='__main__':
     rotM = rot.as_matrix()
     
     # Default robot starting location 
-    home_position = np.array([[0.4425],[0.1043],[0.1985]])
+    home_position = np.array([[0.51602],[0.082704],[0.1985]])
     home_pose = np.concatenate((rotM,home_position),axis=1)
     home_pose = np.concatenate((home_pose,[[0,0,0,1]]),axis=0)
     
