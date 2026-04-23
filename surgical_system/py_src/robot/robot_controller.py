@@ -45,7 +45,7 @@ class Robot_Controller():
             
             #-75
             # Default robot starting location 
-            homePosition = np.array([[0.5275],[0.0893],[0.3085]])
+            homePosition = np.array([[0.51802],[0.081204],[0.1985]])
             homePose = np.concatenate((rotM,homePosition),axis=1)
             homePose = np.concatenate((homePose,[[0,0,0,1]]),axis=0)
             np.savetxt(home_pose_path, homePose, delimiter=",")
@@ -222,23 +222,7 @@ class Robot_Controller():
             while (not self._stop_traj.is_set()):
                 now = time.monotonic()
                 elapsed = now - t_start
-                # dt = now - t_prev
-                # if elapsed >= total_time:
-                #     break
-
-                # if dt < time_step:
-                #     time.sleep(0.002)
-                #     continue
-                # t_prev = now
-                
-                # desired_time = t_start + i * time_step
-                # sleep_time = desired_time - time.monotonic()
-                # if sleep_time > 0:
                 time.sleep(time_step)
-
-                # now = time.monotonic()
-                # elapsed = i * time_step
-
                 if elapsed >= total_time:
                     self.robot_stop()
                     break
@@ -254,7 +238,7 @@ class Robot_Controller():
                 
                 target_pose = np.eye(4)
                 target_pose[:3, -1] = target_pos
-                velocity_correction = self.live_control(target_pose, 0.1, KP = 20, KD=0.01) #TODO CHANGE MAX SPEED
+                velocity_correction = self.live_control(target_pose, 0.3, KP = 20) #TODO CHANGE MAX SPEED
                 # print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
                 command_vel = target_vel + velocity_correction
                 
@@ -299,7 +283,14 @@ class Robot_Controller():
         
 
 
-    def report_live_path(self):
+    def report_live_path(self, save=False):
+        if not save:
+            self.actual_vel_list = None
+            self.actual_pos_list = None
+            self.target_pos_list = None
+            self.target_vel_list = None
+            self.time_list = None
+            
         if self.actual_vel_list is None:
             return
 

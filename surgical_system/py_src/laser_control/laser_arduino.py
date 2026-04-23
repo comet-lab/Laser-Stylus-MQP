@@ -55,6 +55,9 @@ class Laser_Arduino:
         # print("[Laser State]: ", on)
         self._write(1, on)
         
+    def set_output_no_flag(self, laser_on): 
+        self._write(1, laser_on)
+        
     def is_firing(self):
         return self.laser_on and self.vf_valid_flag
     
@@ -83,7 +86,7 @@ if __name__=='__main__':
     print("Laser Firing in 2 seconds")
     time.sleep(2)
     print("Laser Firing")
-    laser_obj.set_output(0)
+    laser_obj.set_output_no_flag(0)
     # time.sleep(.15)
     # laser_obj.set_output(0)
     # print("Laser Off")

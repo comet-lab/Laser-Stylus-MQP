@@ -685,7 +685,7 @@ class Handler:
                 self.hold_pose = None
                 if  height_diff < 0.0015: # dont fire if the height diff is too much
                     self.laser_obj.set_output(self.desired_state.isLaserOn)
-                    print("ready to fire height")
+                    # print("ready to fire height")
             else:
                 # Holding but change height
                 target_world_point = self.robot_controller.current_robot_to_world_position()
@@ -696,7 +696,7 @@ class Handler:
             target_pose[:3, -1] = target_world_point
             live_control_speed = self.desired_state.speed / 1000.0 if self.desired_state.speed != None else 0.01
             # print(f"[Handler Live Control] Speed: {self.desired_state.speed}")
-            target_vel = self.robot_controller.live_control(target_pose, live_control_speed, KP = 5.0)
+            target_vel = self.robot_controller.live_control(target_pose, live_control_speed, KP = 5.0, KD=0.1)
             # TODO Multiply velocity controller in unit component direction * max(min_speed, min(1, (distance / max_distance)))
             
             hold_orientation = self.robot_controller.hold_orientation
@@ -814,7 +814,7 @@ class Handler:
                 self.cam_reg.get_path(self.path_display_pixels)
             else:
                 self.cam_reg.display_path = False
-                self.robot_controller.report_live_path()
+                # self.robot_controller.report_live_path()
                 # self._do_hold_pose()
                 # self.path_display_pixels = None
             
