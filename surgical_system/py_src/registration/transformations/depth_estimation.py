@@ -580,7 +580,7 @@ class DepthEstimation():
         # Mask invalids (plot_surface handles masked arrays well)
         Zm = np.ma.masked_invalid(Z)
 
-        fig = plt.figure()
+        fig = plt.figure(dpi=300)
         ax = fig.add_subplot(111, projection="3d")
 
         ax.plot_surface(X, Y, Zm, rstride=1, cstride=1, linewidth=0, antialiased=True)
