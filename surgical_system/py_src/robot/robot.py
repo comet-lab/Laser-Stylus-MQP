@@ -23,6 +23,8 @@ class RobotSchema:
     
     isTransformedViewOn: bool = None
     isThermalViewOn: bool = None
+    isAutoHeightAdjustOn: bool = None
+    isRecordingOn: bool = None
     
     pathEvent: str = None
     raster_mask: str = None

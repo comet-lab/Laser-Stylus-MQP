@@ -1,11 +1,14 @@
 from PIL import Image
 import numpy as np
-import cv2
+import cv2, math
 import matplotlib.pyplot as plt
 from shapely.geometry import Polygon, LineString, MultiLineString, GeometryCollection
 from shapely.ops import unary_union
 from shapely.validation import make_valid
 from shapely.affinity import rotate, translate
+from scipy.ndimage import gaussian_filter1d
+from scipy.signal import savgol_filter
+
 
 
 class Motion_Planner():
@@ -253,7 +256,7 @@ class Motion_Planner():
         return a0, a1
     
     @staticmethod
-    def smooth_corners_fillet(points, radius, n_arc=8, closed=False, max_frac=0.45):
+    def smooth_corners_fillet(points, radius, n_arc=8, closed=False, max_frac=0.45, min_angle = math.radians(5.0)):
         """
         Replace sharp corners with circular fillets.
 
@@ -323,7 +326,7 @@ class Motion_Planner():
             phi = np.arccos(dot)
 
             # If nearly straight or nearly 180, keep point
-            if phi < 1e-4 or abs(np.pi - phi) < 1e-4:
+            if phi < min_angle or abs(np.pi - phi) < min_angle:
                 if not closed:
                     out.append(p.copy())
                 continue
@@ -427,6 +430,15 @@ class Motion_Planner():
             return np.vstack([left[:-1], right])
         else:
             return np.vstack([a, b])
+        
+
+    def smooth_contour(points, window=31, poly=2):
+        # x = gaussian_filter1d(points[:,0], sigma, mode = 'nearest')
+        # y = gaussian_filter1d(points[:,1], sigma, mode = 'nearest')
+        
+        x = savgol_filter(points[:,0], window, poly, mode = 'nearest')
+        y = savgol_filter(points[:,1], window, poly, mode = 'nearest')
+        return np.stack([x,y], axis=1)
     
 def plot_polygon(poly, ax=None, color='blue', alpha=0.4, show_vertices=False):
     if ax is None:

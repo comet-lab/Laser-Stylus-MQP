@@ -11,6 +11,7 @@ class MockRobotController():
         self.laser_obj = laser_obj
         self.last_update_time = time.time()
         self._is_trajectory_running = False
+        self.home_pose = np.eye(4)
 
     def is_trajectory_running(self):
         return self._is_trajectory_running
