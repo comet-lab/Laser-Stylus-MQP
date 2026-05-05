@@ -278,15 +278,14 @@ export class PreviewManager {
     const scaleX = viewport.offsetWidth / vWidth;
     const scaleY = viewport.offsetHeight / vHeight;
 
-    // 1. Map the raw robot points to screen pixels exactly as they are
+    // Map the raw robot points to screen pixels with no smoothing
+    // Deduplication removes coincident points that would cause rendering artifacts but never moves any coordinate value.
     const rawScreenPoints = this.sourcePath.map(p => ({
       x: p.x * scaleX,
       y: p.y * scaleY
     }));
 
-    // 2. Iron out the stair-steps purely for the visual canvas rendering
-    // (Increase iterations from 3 to 5 if it still looks slightly bumpy)
-    this.pathData = this.smoothPreviewPath(rawScreenPoints, 3);
+    this.pathData = this.deduplicatePath(rawScreenPoints);
   }
 
   private drawPath(): void {
@@ -322,12 +321,29 @@ export class PreviewManager {
 
   private drawPathLine(ctx: CanvasRenderingContext2D): void {
     if (this.pathData.length < 2) return;
-    
+
     ctx.beginPath();
     ctx.moveTo(this.pathData[0].x, this.pathData[0].y);
-    for (let i = 1; i < this.pathData.length; i++) {
-      ctx.lineTo(this.pathData[i].x, this.pathData[i].y);
+
+    if (this.pathData.length === 2) {
+      // If only two points, then a straight line which is all good
+      ctx.lineTo(this.pathData[1].x, this.pathData[1].y);
+    } else {
+      // Midpoint quadratic Bézier: each data point is used as the curve's control point
+      // The curve itself passes through the midpoints between consecutive points. 
+      // No coordinate is moved, the data drives the curve shape exactly.
+      for (let i = 1; i < this.pathData.length - 1; i++) {
+        const curr = this.pathData[i];
+        const next = this.pathData[i + 1];
+        const midX = (curr.x + next.x) / 2;
+        const midY = (curr.y + next.y) / 2;
+        ctx.quadraticCurveTo(curr.x, curr.y, midX, midY);
+      }
+      // Final segment: land exactly on the last point.
+      const last = this.pathData[this.pathData.length - 1];
+      ctx.lineTo(last.x, last.y);
     }
+
     ctx.stroke();
   }
 
@@ -441,44 +457,29 @@ export class PreviewManager {
   }
 
   /**
-   * Visually smooths a grid-snapped path for rendering purposes only.
+   * Removes points that are so close together they would produce zero-length segments and cause rendering glitches
+   * Does not move or average any coordinate, identical to backend shape
    */
-  private smoothPreviewPath(points: Position[], iterations: number = 3): Position[] {
-    if (points.length < 3) return points;
-    let currentPoints = [...points];
+  private deduplicatePath(points: Position[]): Position[] {
+    if (points.length < 2) return points;
 
-    // 1. Laplacian Smoothing (Averages out the 1-pixel stair-steps)
-    for (let iter = 0; iter < iterations; iter++) {
-      const nextPoints: Position[] = [currentPoints[0]];
-      for (let i = 1; i < currentPoints.length - 1; i++) {
-        nextPoints.push({
-          x: (currentPoints[i - 1].x + currentPoints[i].x + currentPoints[i + 1].x) / 3,
-          y: (currentPoints[i - 1].y + currentPoints[i].y + currentPoints[i + 1].y) / 3
-        });
-      }
-      // Keep the final point anchored
-      nextPoints.push(currentPoints[currentPoints.length - 1]);
-      currentPoints = nextPoints;
-    }
+    const result: Position[] = [points[0]];
+    let lastX = points[0].x;
+    let lastY = points[0].y;
 
-    // 2. Micro-segment filtering (Cleans up the dashed line rendering)
-    const finalPoints: Position[] = [currentPoints[0]];
-    let lastX = currentPoints[0].x;
-    let lastY = currentPoints[0].y;
-
-    for (let i = 1; i < currentPoints.length - 1; i++) {
-      const pt = currentPoints[i];
-      const distSq = (pt.x - lastX) * (pt.x - lastX) + (pt.y - lastY) * (pt.y - lastY);
-      
-      // Only keep the point if it's at least ~1.5 pixels away from the last one
+    for (let i = 1; i < points.length - 1; i++) {
+      const pt = points[i];
+      const distSq = (pt.x - lastX) ** 2 + (pt.y - lastY) ** 2;
+      // Keep the point only if it's meaningfully displaced (~1.5 px threshold).
       if (distSq > 2.0) {
-        finalPoints.push(pt);
+        result.push(pt);
         lastX = pt.x;
         lastY = pt.y;
       }
     }
-    finalPoints.push(currentPoints[currentPoints.length - 1]);
 
-    return finalPoints;
+    // Always anchor the final point.
+    result.push(points[points.length - 1]);
+    return result;
   }
 }
