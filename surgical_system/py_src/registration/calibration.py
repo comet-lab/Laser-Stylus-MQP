@@ -49,6 +49,27 @@ def exp_depth_scan(cam_reg, gridShape = np.array([15, 15]), squareSize = 0.002):
     save_location = cam_reg.directory + cam_reg.calibration_folder + "/depth_map.npz"
     DepthEstimation.save_depth_npz(save_location, depth, meta)
     return depth, meta
+
+def fire_therm_scan(cam_reg, gridShape = np.array([3, 3]), squareSize = 0.03/2, height=0):
+    input(f"Press Enter to continue thermal scan.")
+    
+    xPoints = (np.arange(gridShape[1]) - (gridShape[1] - 1) / 2) * squareSize
+    yPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
+    xValues, yValues = np.meshgrid(xPoints, yPoints)
+    
+    
+    robot_path = np.hstack((xValues.reshape((-1, 1)), 
+                            yValues.reshape((-1, 1)), 
+                            np.full((xValues.size, 1), height)))
+    
+    start_pos = robot_path[0, :]
+    start_pose = np.eye(4)
+    start_pose[:3, -1] = start_pos
+    print("Heading to starting location")
+    cam_reg.robot_controller.go_to_pose(start_pose @ cam_reg.robot_controller.home_pose)
+    
+    traj = cam_reg.robot_controller.create_custom_trajectory(robot_path, 0.01)
+    cam_reg.scan_fire(traj)
             
     
 def transformed_view(cam_reg, cam_type = "color"):
@@ -524,21 +545,22 @@ if __name__ == '__main__':
     camera_reg = Camera_Registration(therm_cam, rgbd_cam, robot_controller, laser_controller)
     
     ### -------------------- Run calibration ---------------- ####
-    camera_reg.run() 
+    # camera_reg.run() 
     # camera_reg.multi_checkerboard()
+    # exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.03/24)
+    fire_therm_scan(camera_reg, height=0.2)
     
     
     # base 2.23 
     # heights = np.array([2.08, 2.65, 3.15, 3.65, 4.18, 4.73, 5.15, 5.62, 6.15, 6.64,
     #                     7.26, 7.77, 8.11, 8.67, 9.24, 9.77, 10.14]) # mm 
     
-    heights = np.array([2.08, 3.05, 4.08, 5.09, 6.04, 7.06, 8.04, 9.05, 10.05]) # mm 
+    # heights = np.array([2.08, 10.05]) # mm 
 
     
-    heights = heights / 1000.0 # mm
-    depth_path = "homography_stack.npz"
+    # heights = heights / 1000.0 # mm
+    # depth_path = "homography_stack.npz"
     # stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
-    # stack = 
     # print(stack)
     # rgbd_cam.set_default_setting()
     # robot_controller.load_edit_pose()
@@ -548,7 +570,6 @@ if __name__ == '__main__':
         
     # live_control_view(camera_reg, 'color', warped=True, tracking=True, depth_path= depth_path) 
     
-    # exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.04/24)
     path = "surgical_system/py_src/registration/calibration_info/depth_map.npz"
     path_filter = "surgical_system/py_src/registration/calibration_info/depth_map_filter.npz"
     # depth, meta = DepthEstimation.load_depth_npz(path)    

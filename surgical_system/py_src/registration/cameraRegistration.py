@@ -67,7 +67,7 @@ class Camera_Registration(System_Calibration):
         local_home_pose = self.robot_controller.get_home_pose()
         system_calibration_storage = SystemDataStore(local_home_pose, {})
         
-        heights = np.array([2.08, 3.05, 4.08, 5.09, 6.04, 7.06, 8.04, 9.05, 10.05]) # mm 
+        heights = np.array([2.04, 10.05]) # mm 
         
         heights = heights / 1000.0
         
@@ -170,16 +170,6 @@ class Camera_Registration(System_Calibration):
         # system_calibration_storage.save_data_storage(os.path.join(self.directory, "calibration"), reset=True)
         
         
-    
-        # heights = heights / 1000.0 # mm
-        # depth_path = "homography_stack.npz"
-        # self.rgb_multi_layer_scan(heights, file_name= depth_path)
-        
-        # self.homography_stack = DepthEstimation.load_homography_stack_npz(self.stack_path)
-        # self.dense_stack = DepthEstimation.create_dense_stack(self.homography_stack, dz=0.00025)
-    
-        # self.therm_cam.deinitialize_cam()
-        # pass
     
     
     def laser_alignment(self):
@@ -376,6 +366,7 @@ class Camera_Registration(System_Calibration):
             print(f"\nMoving to position: {targetPose[0:3,3]}")
             self.robot_controller.go_to_pose(targetPose@self.robot_controller.home_pose)
             print("Firing...")
+            input("Press Enter to Fire.") ## REMOVE THISSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS
             self.laser_controller.set_output(True)
             time.sleep(laserDuration)
             self.laser_controller.set_output(False)
@@ -697,7 +688,25 @@ class Camera_Registration(System_Calibration):
         return disp
     
     
+    def scan_fire(self, traj):
+        self.robot_controller.run_trajectory(traj, blocking=False, laser_on=True)
+        therm_imgs = []
+        current_poses = []
         
+        print("[Camera Reg] Scanning Features")
+        while(self.robot_controller.is_trajectory_running()):
+            curr_position = self.robot_controller.current_robot_to_world_position()[:2]
+            therm_img = self.therm_cam.get_latest()['thermal']    
+            therm_imgs.append(therm_img)
+            current_poses.append(curr_position)
+            time.sleep(0.033)
+
+        therm_imgs = np.array(therm_imgs)
+        current_poses = np.array(current_poses)
+        np.savez("therm_imgs.npz",
+         therm_imgs=therm_imgs,
+         current_poses=current_poses)
+                
     def scan_region_for_depth(self, traj):
         self.robot_controller.run_trajectory(traj, blocking=False)
         points = np.zeros((0, 3))
@@ -727,9 +736,9 @@ class Camera_Registration(System_Calibration):
             # time.sleep(1/30.0)
         cmd_list = np.array(cmd_list)
         obs_list = np.array(obs_list)
-        # np.savez("scan_points.npz",
-        #  cmd_points=cmd_list,
-        #  obs_pixels=obs_list)
+        np.savez("scan_points.npz",
+         cmd_points=cmd_list,
+         obs_pixels=obs_list)
         
         depth, meta = DepthEstimation.generate_depth_mapping(points, cell_size=0.001)
         
