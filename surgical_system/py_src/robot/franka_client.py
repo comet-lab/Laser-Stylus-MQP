@@ -52,6 +52,7 @@ class FrankaClient:
         def request_state(self, message):
             return_message = self.client.requestMessage(message)  # send return information
             self.last_received = struct.unpack_from('@ddddddddddddd', return_message[0])
+            #self.last_received = struct.unpack_from('@ddddddd', return_message[0])
             return self.last_received
         
         def stop_control(self):
@@ -102,7 +103,7 @@ if __name__=='__main__':
     home_pose = np.concatenate((home_pose,[[0,0,0,1]]),axis=0)
     
     mode = 1
-    height = 0.3 # m
+    height = 0.2 # m
     x = 0
     y = 0
     target_pose = np.array([[1,0,0,x],[0,1,0,y],[0,0,1,height],[0,0,0,1]])

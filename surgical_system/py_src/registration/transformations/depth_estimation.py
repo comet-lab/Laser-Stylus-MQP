@@ -479,6 +479,11 @@ class DepthEstimation():
         ys = float(meta["ymin"]) + (np.arange(H) + 0.5) * cs
         X, Y = np.meshgrid(xs, ys)
 
+        print("X: ", X.shape)
+        print(Y)
+        print("Y: ", Y.shape) 
+        print("Z: ", Z.shape)  
+
         # Mask invalids (plot_surface handles masked arrays well)
         Zm = np.ma.masked_invalid(Z)
 

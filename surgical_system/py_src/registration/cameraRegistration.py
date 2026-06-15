@@ -38,6 +38,7 @@ class Camera_Registration(System_Calibration):
         while not self.therm_cam.get_latest() or not self.rgbd_cam.get_latest():
             print("Waiting for camera response...")
             time.sleep(0.5)
+
             
         self.traj_points = None
         self.display_path = False
@@ -111,42 +112,46 @@ class Camera_Registration(System_Calibration):
     def run(self): 
         debug = True
         self.homography_stack = None
-       
-        self.therm_cam.start_stream()
-        self.rgbd_cam.start_stream()
-        
-        while not self.therm_cam.get_latest() or not self.rgbd_cam.get_latest():
+
+        # # Commented out to avoid thermal camera use 
+        # self.therm_cam.start_stream()
+        # self.rgbd_cam.start_stream()
+        # while not self.therm_cam.get_latest() or not self.rgbd_cam.get_latest():
+        #     print("Waiting for camera response...")
+        #     time.sleep(0.5)
+
+        while not self.rgbd_cam.get_latest():
             print("Waiting for camera response...")
             time.sleep(0.5)
         
         # pathToCWD = os.getcwd()        
         
-        # Create checkerboard
+        # Define home pose 
         self.robot_controller.load_edit_pose()
         
         # self.create_checkerboard(gridShape = np.array([9, 8]), \
         #                          saveLocation=self.calibration_folder, debug=debug)
         
-        grid_shape = np.array([3, 3])
-        square_size = 0.045/2.0
+        # grid_shape = np.array([3, 3])
+        # square_size = 0.045/2.0
         
 
-        base_homography_data, boundary_pts = self.create_checkerboard(gridShape = grid_shape, 
-                                squareSize=square_size,
-                                saveLocation=self.calibration_folder, debug=debug)
+        # base_homography_data, boundary_pts = self.create_checkerboard(gridShape = grid_shape, 
+        #                         squareSize=square_size,
+        #                         saveLocation=self.calibration_folder, debug=debug)
     
     
     
-        meta_data = {"grid shape": grid_shape,
-                    "square size": square_size,
-                    "boundary": boundary_pts}
+        # meta_data = {"grid shape": grid_shape,
+        #             "square size": square_size,
+        #             "boundary": boundary_pts}
         
         
-        np.savez_compressed(self.meta_base_homography_path, meta = meta_data)
+        # np.savez_compressed(self.meta_base_homography_path, meta = meta_data)
         
-        self.read_calibration()
+        # self.read_calibration()
     
-        self.laser_controller.set_output(False)
+        # self.laser_controller.set_output(False)
         
         
         # self.reprojection_test('color', self.cam_M['color'], gridShape = np.array([2, 2]), laserDuration = .15, \
@@ -155,7 +160,7 @@ class Camera_Registration(System_Calibration):
         # self.reprojection_test('thermal', self.cam_M['thermal'], gridShape = np.array([2, 2]), laserDuration = .15, \
         #                 debug=debug, height=0)
         
-        self.laser_alignment()
+        # self.laser_alignment()
         
         
         # homograpy = {"rgb_w": self.cam_M['color'],
@@ -194,7 +199,7 @@ class Camera_Registration(System_Calibration):
         self.robot_controller.home_pose = new_home_pose
         self.robot_controller.home_pose = new_home_pose
 
-        self.repeat_reprojection_test()
+        # self.repeat_reprojection_test()
         if input("Enter to save new home pose") == "":
             saveLocation = "surgical_system/py_src/robot/"
             save_dir = Path(saveLocation)      
@@ -500,7 +505,10 @@ class Camera_Registration(System_Calibration):
         self.robot_controller.go_to_pose(start_pose @ self.robot_controller.home_pose)
         
         traj = self.robot_controller.create_custom_trajectory(robot_path, 0.025)
+        
+        # TODO/FIXME: Trajectory is behaving strangely
         self.robot_controller.run_trajectory(traj, blocking=False)
+
         
         # time.sleep(1)
         while(self.robot_controller.is_trajectory_running()):
@@ -514,6 +522,7 @@ class Camera_Registration(System_Calibration):
         # self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
             
         _imgpts = np.array(pixel_points, np.float32) # already is [2xn]
+
         _objpts = np.array(robot_positions, np.float32) # need this to be [2 x n] 
 
         # print(_objpts.shape, _imgpts.shape)

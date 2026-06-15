@@ -1,3 +1,0 @@
-PySpin
-matplotlib.pyplot
-numpy
