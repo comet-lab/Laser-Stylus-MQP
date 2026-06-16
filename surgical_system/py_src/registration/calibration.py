@@ -537,11 +537,10 @@ if __name__ == '__main__':
     robot_controller.load_edit_pose()
     
     # Create "base" homography stack for interpolation in dense stack creation
-    heights = np.array([2, 12])
+    heights = np.array([2, 10])
     heights = heights / 1000.0 # mm
     depth_path = "homography_stack.npz"
     stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
-    
     
     # TODO: This should not be in a file called calibration.py, move to depth estimation?
     # Scan surface of desired object and save required data for surface reconstruction

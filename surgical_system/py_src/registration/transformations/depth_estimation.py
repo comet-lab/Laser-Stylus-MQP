@@ -3,6 +3,10 @@ import cv2
 from typing import Dict, Tuple, Optional
 import matplotlib.pyplot as plt
 from scipy import ndimage
+import trimesh
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+
 class DepthEstimation():
     @staticmethod
     def project_xy(H: np.ndarray,
@@ -469,41 +473,31 @@ class DepthEstimation():
         nan_ratio = np.isnan(depth).mean()
         print("NaN ratio:", nan_ratio)
         return depth, meta
-    
-    def plot_depth_surface(depth_map: np.ndarray, meta: dict, title="Surface Mapping"):
-        Z = np.asarray(depth_map, dtype=float)
-        H, W = Z.shape
-        cs = float(meta["cell_size"])
 
-        xs = float(meta["xmin"]) + (np.arange(W) + 0.5) * cs
-        ys = float(meta["ymin"]) + (np.arange(H) + 0.5) * cs
-        X, Y = np.meshgrid(xs, ys)
+    def plot_depth_surface(ax, depth_map: np.ndarray, meta: dict, title="Surface Mapping"):
+            Z = np.asarray(depth_map, dtype=float)
+            H, W = Z.shape
+            cs = float(meta["cell_size"])
 
-        print("X: ", X.shape)
-        print(Y)
-        print("Y: ", Y.shape) 
-        print("Z: ", Z.shape)  
+            xs = float(meta["xmin"]) + (np.arange(W) + 0.5) * cs
+            ys = float(meta["ymin"]) + (np.arange(H) + 0.5) * cs
+            X, Y = np.meshgrid(xs, ys)
 
-        # Mask invalids (plot_surface handles masked arrays well)
-        Zm = np.ma.masked_invalid(Z)
+            # Mask invalids (plot_surface handles masked arrays well)
+            Zm = np.ma.masked_invalid(Z)
 
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection="3d")
+            ax.plot_surface(X, Y, Zm, rstride=1, cstride=1, linewidth=0, antialiased=True, alpha=1.0)
 
-        ax.plot_surface(X, Y, Zm, rstride=1, cstride=1, linewidth=0, antialiased=True)
+            ax.set_title(title)
+            ax.set_xlabel("x [m]")
+            ax.set_ylabel("y [m]")
+            ax.set_zlabel("z [m]")
 
-        ax.set_title(title)
-        ax.set_xlabel("x [m]")
-        ax.set_ylabel("y [m]")
-        ax.set_zlabel("z [m]")
-
-        # Make sure the z-range isn't collapsing visually
-        zmin = float(np.nanmin(0))
-        zmax = float(np.nanmax(11 / 1000))
-        if np.isfinite(zmin) and np.isfinite(zmax) and zmax > zmin:
-            ax.set_zlim(zmin, zmax)
-
-        plt.show()
+            # Make sure the z-range isn't collapsing visually
+            zmin = float(np.nanmin(0))
+            zmax = float(np.nanmax(11 / 1000))
+            if np.isfinite(zmin) and np.isfinite(zmax) and zmax > zmin:
+                ax.set_zlim(zmin, zmax)
 
     @staticmethod
     def current_height(
@@ -599,6 +593,67 @@ class DepthEstimation():
         k = int(np.argmin(di * di + dj * dj))
 
         return float(Z[pi_full[k], pj_full[k]])
+    
+    def calc_recon_error(ax, depth_map: np.ndarray, meta: dict):
+        # Extract X,Y,Z coordinates of points in reconstruction
+        Z = np.asarray(depth_map, dtype=float)
+        H, W = Z.shape
+        cs = float(meta["cell_size"])
+
+        xs = float(meta["xmin"]) + (np.arange(W) + 0.5) * cs
+        ys = float(meta["ymin"]) + (np.arange(H) + 0.5) * cs
+        X, Y = np.meshgrid(xs, ys) 
+        # Alters dimensions to have N x 3 recon_points
+        recon_points = np.stack([X, Y, Z], axis=-1).reshape(-1, 3)
+
+        # Extract X,Y,Z coordinates of points in STL file 
+        # TODO: point to CAD model stl file to compare to 
+        mesh = trimesh.load("surgical_system/py_src/image_development/nine_peaks_1.stl")
+        mesh.apply_scale(0.001)  # scale from mm to m 
+        # Rotate STL file about z axis -90 degrees to align with recon
+        angle = -np.pi/2
+        T = np.array([
+            [np.cos(angle), -np.sin(angle), 0, 0],
+            [np.sin(angle),  np.cos(angle), 0, 0],
+            [0,              0,             1, 0],
+            [0,              0,             0, 1]
+        ])
+        mesh.apply_transform(T)
+
+        # Perform ray casting to ensure x,y coordinates we compare are identical (considered with z error)
+        # Define ray origins and directions above the mesh, pointing downwards
+        z_start = mesh.bounds[1,2] + 10 
+        origins = np.column_stack([
+            recon_points[:,0],
+            recon_points[:,1],
+            np.full(recon_points.shape[0], z_start)
+        ])
+        directions = np.tile([0.0, 0.0, -1.0], (recon_points.shape[0], 1))
+        # Perform ray casting
+        locations, ray_ids, tri_ids = mesh.ray.intersects_location(
+            ray_origins=origins,
+            ray_directions=directions
+        )
+        # Ensure that the ray casting worked (if not, put NaN for those points)
+        z_mesh = np.full(recon_points.shape[0], np.nan)
+        z_mesh[ray_ids] = locations[:, 2]
+
+        # Compute error between reconstructed points and STL intersection points (z values)
+        recon_z = recon_points[:,2]
+        stl_z = z_mesh
+        err_z = recon_z - stl_z
+        mean_err = np.nanmean(err_z)
+        median_err = np.nanmedian(err_z)
+        std_dev_err = np.nanstd(err_z)
+        print("Error Mean: ", mean_err, " | Error Median: ", median_err , " | Error Std Dev: ", std_dev_err)
+
+        # Plot original STL against reconstructed surface  
+        mesh_triangles = mesh.triangles
+        poly = Poly3DCollection(mesh_triangles, alpha=0.25)
+        poly.set_edgecolor('k')
+        poly.set_facecolor('gray')
+        ax.add_collection3d(poly)
+        ax.auto_scale_xyz(mesh.vertices[:,0], mesh.vertices[:,1], mesh.vertices[:,2])
 
 
 def main():
@@ -619,7 +674,20 @@ def main():
     path = "surgical_system/py_src/registration/calibration_info/depth_map.npz"
     depth, meta = DepthEstimation.load_depth_npz(path)
     depth_map = DepthEstimation.patch_depth(depth)
-    DepthEstimation.plot_depth_surface(depth_map, meta)
+
+    # Ensure stl and recon overlay their plots
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+    
+    # Plot surface
+    DepthEstimation.plot_depth_surface(ax, depth_map, meta)
+
+    # Calculate reconstruction error
+    DepthEstimation.calc_recon_error(ax, depth_map, meta)
+
+    plt.show()
+
+
     
 if __name__ == "__main__":
     main()
