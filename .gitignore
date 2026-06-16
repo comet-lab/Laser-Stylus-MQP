@@ -14,3 +14,15 @@ surgical_system/cpp_src/main
 surgical_system/cpp_src/main.o
 surgical_system/cpp_src/PandaController.o
 
+pixels path.png
+Position_plot.png
+Position(x,y) trajectory.png
+raster path.png
+Position_plot.png
+Position(x,y) trajectory.png
+data_collection/
+plots/
+surgical_system/py_src/registration/calibration_full
+surgical_system/py_src/registration/calibration
+surgical_system/py_src/registration/calibration_info/calibration_meta.npz
+surgical_system/py_src/registration/calibration_info/depth_map.npz

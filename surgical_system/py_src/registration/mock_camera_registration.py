@@ -10,6 +10,11 @@ class MockCameraRegistration():
         self.robot_controller = robot_controller
         self.laser_obj = laser_obj
         self.display_path = False
+        self.meta_base_homography_data = {}
+        self.meta_base_homography_data["boundary"] = [[-0.0215, -0.0215],
+                        [ 0.0215, -0.0215],
+                        [ 0.0215,  0.0215],
+                        [-0.0215,  0.0215]] 
 
     def pixel_to_world(self, img_points, cam_type, z = 0.0):
         if(isinstance(img_points, np.ndarray) and len(img_points.shape) > 1):

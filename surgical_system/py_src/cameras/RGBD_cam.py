@@ -343,27 +343,67 @@ class RGBD_Cam(Camera):
 def main():
     rgbd_cam = RGBD_Cam()
     rgbd_cam.start_stream()
-    
-    while (not rgbd_cam.is_ready()):
+
+    while not rgbd_cam.is_ready():
         time.sleep(0.5)
-    
-     
-    # rgbd_cam.display_depth_stream()
-    while(True):
+
+    # rgbd_cam.set_default_setting()
+    time.sleep(0.5)
+
+    image = rgbd_cam.get_latest()
+    cv2.imwrite("step_img.png", image["color"])
+
+    # store detected laser positions
+    laser_positions = []
+
+    while True:
         image = rgbd_cam.get_latest()
-        color_image = image['color']
+        color_image = image["color"]
+
         if color_image is None:
-            return
-        pixel = rgbd_cam.get_beam_pixel(color_image)
-        rounded_pixel = np.rint(pixel).astype(int)  
-        img = cv2.circle(color_image, rounded_pixel, radius=2, color=(0, 255, 0), thickness=-1)
-
-        cv2.imshow('Color Stream', img)
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'):
             break
-    
 
-if __name__=='__main__':
+        pixel = rgbd_cam.get_beam_pixel(color_image)
+
+        # skip invalid detections
+        if pixel is not None and np.all(np.isfinite(pixel)):
+            laser_positions.append(np.array(pixel, dtype=float))
+
+            rounded_pixel = np.rint(pixel).astype(int)
+            img = cv2.circle(
+                color_image.copy(),
+                tuple(rounded_pixel),
+                radius=2,
+                color=(0, 255, 0),
+                thickness=-1
+            )
+        else:
+            img = color_image.copy()
+
+        cv2.imshow("Color Stream", img)
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("q"):
+            break
+
+    cv2.destroyAllWindows()
+
+    # compute stats
+    if len(laser_positions) == 0:
+        print("No valid laser positions recorded.")
+        return
+
+    laser_positions = np.array(laser_positions)   # shape: (N, 2)
+
+    mean_pos = np.mean(laser_positions, axis=0)
+    std_pos = np.std(laser_positions, axis=0)
+    std_total = np.std(np.linalg.norm(laser_positions - mean_pos, axis=1))
+
+    print(f"Recorded {len(laser_positions)} samples")
+    print(f"Mean laser position [u, v]: {mean_pos}")
+    print(f"STD in u,v [pixels]: {std_pos}")
+    print(f"STD of radial distance from mean [pixels]: {std_total}")
+
+
+if __name__ == "__main__":
     main()
     

@@ -55,7 +55,7 @@ export class ExecutionManager {
 
         const previewMgr = this.getPreviewManager();
         if (!previewMgr.hasPreviewedCurrent()) {
-            ToastManager.show('Please preview the path first', { type: 'warning' });
+            ToastManager.show('SAFETY WARNING: Preview the path before attempting to execute', { type: 'warning' });
             return;
         }
 
@@ -198,7 +198,7 @@ export class ExecutionManager {
         const previewMgr = this.getPreviewManager();
         const hasPreview = previewMgr.hasPreviewedCurrent();
 
-        // Also clean up the warning if the execute button state is forcibly updated 
+        //Also clean up the warning if the execute button state is forcibly updated 
         const warningDiv = document.getElementById('inline-robot-warning');
         if (warningDiv) {
             warningDiv.remove();
@@ -206,13 +206,9 @@ export class ExecutionManager {
         }
 
         if (hasPreview) {
-            this.ui.executeBtn.disabled = false;
-            this.ui.executeBtn.style.pointerEvents = 'auto';
-            this.ui.executeBtn.style.opacity = '1';
+            this.ui.executeBtn.classList.remove('locked');
         } else {
-            this.ui.executeBtn.disabled = true;
-            this.ui.executeBtn.style.pointerEvents = 'none';
-            this.ui.executeBtn.style.opacity = '0.3';
+            this.ui.executeBtn.classList.add('locked');
         }
     }
 }

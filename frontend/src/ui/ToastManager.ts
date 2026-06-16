@@ -135,11 +135,20 @@ export class ToastManager {
     private static dismiss(toast: HTMLElement) {
         toast.style.opacity = '0';
         toast.style.transform = 'translateY(-10px) scale(0.95)';
-        toast.addEventListener('transitionend', () => {
-            if (toast.parentNode) {
-                toast.remove();
-            }
+        
+        let isRemoved = false;
+        
+        const removeToast = () => {
+            if (isRemoved) return;
+            isRemoved = true;
+            if (toast.parentNode) toast.remove();
             this.activeToasts = this.activeToasts.filter(t => t !== toast);
-        });
+        };
+
+        //Try to remove cleanly after animation
+        toast.addEventListener('transitionend', removeToast, { once: true });
+        
+        //Guarantee removal after 500ms even if animation hangs
+        setTimeout(removeToast, 500); 
     }
 }

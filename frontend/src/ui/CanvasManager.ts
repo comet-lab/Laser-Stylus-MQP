@@ -6,6 +6,9 @@ import * as Utils from '../utils/math_utils';
 
 export class CanvasManager {
     private fCanvas: fabric.Canvas;
+    private fMarkerCanvas: fabric.StaticCanvas;
+    private offscreenCanvas: HTMLCanvasElement;
+    private offscreenCtx: CanvasRenderingContext2D;
     private video: HTMLVideoElement;
     private apiBaseUrl: string;
     private onShapeComplete: () => void;
@@ -56,28 +59,30 @@ export class CanvasManager {
     private readonly SHAPE_DEFAULTS = {
         fill: 'transparent',
         stroke: 'rgba(0, 122, 255, 0.7)',
-        strokeWidth: 6,
-        strokeUniform: true,
+        strokeWidth: 4,
+        strokeUniform: true, //Keeps stroke width constant when scaling
         strokeLineCap: 'round' as const,
         strokeLineJoin: 'round' as const,
         objectCaching: false,
-        cornerColor: 'rgba(0, 122, 255, 0.7)',
-        cornerStrokeColor: '#ffffff',
+        
+        // --- Control Corners (Toggles) ---
+        transparentCorners: true,
+        cornerColor: 'rgba(0, 122, 255, 0.1)',
+        cornerStrokeColor: 'rgba(0, 122, 255, 0.9)',
         borderColor: 'rgba(0, 122, 255, 0.7)',
         cornerStyle: 'circle' as const,
-        cornerSize: 12,
-        touchCornerSize: 24,
-        transparentCorners: false,
+        cornerSize: 18,
+        touchCornerSize: 48,
+        
         padding: 10,
         originX: 'left' as const,
         originY: 'top' as const,
-
     };
 
     // --- CONFIG: Other Constants ---
     private readonly BORDER_THICKNESS = 4;
 
-    public onShapeModified: () => void = () => {};
+    public onShapeModified: () => void = () => { };
 
     constructor(
         canvas: HTMLCanvasElement,
@@ -101,6 +106,9 @@ export class CanvasManager {
             el.__canvas = undefined;
         }
 
+        this.offscreenCanvas = document.createElement('canvas');
+        this.offscreenCtx = this.offscreenCanvas.getContext('2d', { willReadFrequently: true })!;
+
         this.fCanvas = new fabric.Canvas(canvas, {
             selection: false,
             preserveObjectStacking: true,
@@ -118,7 +126,7 @@ export class CanvasManager {
         };
 
         const brush = new fabric.PencilBrush(this.fCanvas);
-        brush.width = 6;
+        brush.width = 4;
         brush.color = 'rgba(0, 122, 255, 0.7)';
 
         this.fCanvas.freeDrawingBrush = brush;
@@ -141,10 +149,17 @@ export class CanvasManager {
             }
         });
         this.fCanvas.on('path:created', (e: any) => {
+            //Strict one-shape enforcement for freehand strokes
+            const shapes = this.fCanvas.getObjects().filter(o => !(o as any)._isMarker);
+            if (shapes.length > 1) {
+                this.fCanvas.remove(e.path);
+                this.fCanvas.isDrawingMode = false;
+                return; //Abort processing this duplicate
+            }
+
             if (e.path) {
                 e.path.set({
                     ...this.SHAPE_DEFAULTS,
-                    strokeUniform: false
                 });
                 e.path.setCoords();
             }
@@ -155,6 +170,21 @@ export class CanvasManager {
             this.onShapeComplete();
         });
 
+        const markerCanvasEl = document.createElement('canvas');
+        markerCanvasEl.id = 'markerCanvas';
+        markerCanvasEl.width = canvas.width;
+        markerCanvasEl.height = canvas.height;
+        markerCanvasEl.style.position = 'absolute';
+        markerCanvasEl.style.top = '0';
+        markerCanvasEl.style.left = '0';
+        //We set pointer-events to none so clicks fall through to the drawing/fixture canvas below it
+        markerCanvasEl.style.pointerEvents = 'none';
+        document.getElementById('zoom-wrapper')?.appendChild(markerCanvasEl);
+
+        this.fMarkerCanvas = new fabric.StaticCanvas(markerCanvasEl, {
+            preserveObjectStacking: true
+        });
+
         this.createFixturesCanvas(canvas);
     }
 
@@ -163,9 +193,12 @@ export class CanvasManager {
         this.fixturesCanvas.id = 'fixturesCanvas';
         this.fixturesCanvas.width = mainCanvas.width;
         this.fixturesCanvas.height = mainCanvas.height;
+        this.fixturesCanvas.style.position = 'absolute';
+        this.fixturesCanvas.style.top = '0';
+        this.fixturesCanvas.style.left = '0';
         this.fixturesCanvas.style.opacity = '0.6';
         this.fixturesCtx = this.fixturesCanvas.getContext('2d', { willReadFrequently: true });
-        mainCanvas.parentElement?.prepend(this.fixturesCanvas);
+        document.getElementById('zoom-wrapper')?.appendChild(this.fixturesCanvas);
     }
 
     // =========================================================================
@@ -175,6 +208,10 @@ export class CanvasManager {
     public dispose(): void {
         if (this.fCanvas) {
             this.fCanvas.dispose();
+        }
+        if (this.fMarkerCanvas) {
+            this.fMarkerCanvas.dispose();
+            document.getElementById('markerCanvas')?.remove();
         }
         if (this.fixturesCanvas) {
             this.fixturesCanvas.remove();
@@ -192,21 +229,28 @@ export class CanvasManager {
 
     public getVideoSnapshotDataURL(): string {
         //Create a temp canvas at the exact video resolution
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = this.video.videoWidth;
-        tempCanvas.height = this.video.videoHeight;
-        const ctx = tempCanvas.getContext('2d');
+        const width = this.fCanvas.getWidth();
+        const height = this.fCanvas.getHeight();
 
-        if (ctx) {
+        if (width === 0 || height === 0 || this.video.videoWidth === 0) return '';
+        
+        this.offscreenCanvas.width = width;
+        this.offscreenCanvas.height = height;
+        
+        this.offscreenCtx.fillStyle = "#ffffff";
+        this.offscreenCtx.fillRect(0, 0, width, height);
+
+        if (this.offscreenCtx) {
             //Draw the video frame first (background)
-            ctx.drawImage(this.video, 0, 0, tempCanvas.width, tempCanvas.height);
+            this.offscreenCtx.drawImage(this.video, 0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
 
             //Draw the Fabric canvas on top (foreground)
             //We use the raw canvas element from Fabric
-            ctx.drawImage(this.fCanvas.toCanvasElement(), 0, 0, tempCanvas.width, tempCanvas.height);
+            this.offscreenCtx.drawImage(this.fCanvas.toCanvasElement(), 0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
+            this.offscreenCtx.drawImage(this.fMarkerCanvas.toCanvasElement(), 0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
         }
 
-        return tempCanvas.toDataURL('image/jpeg', 0.8); // JPEG is faster/smaller for video frames
+        return this.offscreenCanvas.toDataURL('image/jpeg', 0.8); // JPEG is faster/smaller for video frames
     }
 
     public async getPreviewPath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<{ duration: number, path: Position[] }> {
@@ -244,14 +288,12 @@ export class CanvasManager {
     private async generateRasterBlob(): Promise<Blob> {
         const width = this.fCanvas.getWidth();
         const height = this.fCanvas.getHeight();
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = width;
-        tempCanvas.height = height;
-        const ctx = tempCanvas.getContext('2d', { willReadFrequently: true, alpha: false });
-        if (!ctx) throw new Error("Ctx error");
 
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, width, height);
+        this.offscreenCanvas.width = width;
+        this.offscreenCanvas.height = height;
+        
+        this.offscreenCtx.fillStyle = "#ffffff";
+        this.offscreenCtx.fillRect(0, 0, width, height);
 
         this.fCanvas.getObjects().forEach(obj => {
             if ((obj as any)._isMarker) return;
@@ -267,12 +309,12 @@ export class CanvasManager {
                 obj.fill = '#000000';
                 obj.stroke = 'transparent';
             }
-            obj.render(ctx);
+            obj.render(this.offscreenCtx);
             obj.fill = originalFill;
             obj.stroke = originalStroke;
         });
 
-        const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+        const blob = await new Promise<Blob | null>(resolve => this.offscreenCanvas.toBlob(resolve, 'image/png'));
         if (!blob) throw new Error("Blob error");
         return blob;
     }
@@ -365,8 +407,9 @@ export class CanvasManager {
     }
 
     private onFixturesPointerDown(e: PointerEvent): void {
+        if (e.pointerType === 'touch') return; //Ensure no fingers draw fixtures
         if (!this.currentBrushType || !this.fixturesCanvas || !this.fixturesCtx) return;
-        
+
         const { x, y } = this.getCanvasCoordinates(e, this.fixturesCanvas);
 
         // --- GLOBAL MARKER DELETION ---
@@ -377,7 +420,7 @@ export class CanvasManager {
         if (this.fixturesApplied) {
             this.restoreDrawingState();
         }
-        
+
         this.isFixturesDrawing = true;
         this.fixturesCanvas.setPointerCapture(e.pointerId);
         this.lastFixturesPoint = { x, y };
@@ -387,6 +430,7 @@ export class CanvasManager {
     }
 
     private onFixturesPointerMove(e: PointerEvent): void {
+        if (e.pointerType === 'touch') return; //Ensure no fingers draw fixtures
         if (!this.isFixturesDrawing || !this.fixturesCanvas) return;
         const { x, y } = this.getCanvasCoordinates(e, this.fixturesCanvas);
         this.drawFixturesBrush(x, y);
@@ -394,6 +438,7 @@ export class CanvasManager {
     }
 
     private onFixturesPointerUp(e: PointerEvent): void {
+        if (e.pointerType === 'touch') return; //Ensure no fingers draw fixtures
         if (!this.fixturesCanvas) return;
         this.isFixturesDrawing = false;
         this.lastFixturesPoint = null;
@@ -712,26 +757,22 @@ export class CanvasManager {
         const width = this.fCanvas.getWidth();
         const height = this.fCanvas.getHeight();
 
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = width;
-        tempCanvas.height = height;
-        const ctx = tempCanvas.getContext('2d');
-        if (!ctx) return;
+        this.offscreenCanvas.width = width;
+        this.offscreenCanvas.height = height;
+        
+        this.offscreenCtx.fillStyle = "#ffffff";
+        this.offscreenCtx.fillRect(0, 0, width, height);
 
-        // Background: Black (No Heat)
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, width, height);
-
-        // Foreground: White (Heat Active) - Only if a rect is provided
+        //Foreground: White (Heat Active) - Only if a rect is provided
         if (rect) {
-            ctx.fillStyle = '#000000';
-            // We must account for scale if Fabric applied any, though we created it raw
+            this.offscreenCtx.fillStyle = '#000000';
+            //We must account for scale if Fabric applied any, though we created it raw
             const w = rect.width * (rect.scaleX || 1);
             const h = rect.height * (rect.scaleY || 1);
-            ctx.fillRect(rect.left, rect.top, w, h);
+            this.offscreenCtx.fillRect(rect.left, rect.top, w, h);
         }
 
-        const blob = await new Promise<Blob | null>(resolve => tempCanvas.toBlob(resolve, 'image/png'));
+        const blob = await new Promise<Blob | null>(resolve => this.offscreenCanvas.toBlob(resolve, 'image/png'));
         if (!blob) return;
 
         await this.uploadHeatMask(blob);
@@ -761,7 +802,14 @@ export class CanvasManager {
         }
 
         // --- DRAWING MODE (Shapes) ---
-        if (this.hasPlacedShape) return;
+        //Hard lock against multiple shapes
+        const existingShapes = this.fCanvas.getObjects().filter(o => !(o as any)._isMarker);
+        if (existingShapes.length > 0) {
+            this.hasPlacedShape = true;
+            return;
+        }
+
+        if (this.hasPlacedShape || this.isCreatingShape) return;
         if (!this.currentShapeType || this.currentShapeType === 'freehand') return;
         if (opt.target) return;
 
@@ -860,11 +908,11 @@ export class CanvasManager {
                 Math.pow(clickRelY - (closeBoxObj.top || 0), 2)
             );
 
-            if (distToX < 15) {
+            if (distToX < 24) {
                 this.removeMarker(group);
                 // Fire and forget network call
                 this.submitHeatMarkers(this.getHeatMarkersInVideoSpace()).catch(console.error);
-                return true; 
+                return true;
             }
         }
         return false;
@@ -899,6 +947,10 @@ export class CanvasManager {
 
         this.activeShape = null;
         this.hasPlacedShape = false;
+
+        if (this.fCanvas.freeDrawingBrush) {
+            (this.fCanvas.freeDrawingBrush as any)._isCurrentlyDrawing = false;
+        }
 
         if (this.currentShapeType === 'freehand') {
             this.fCanvas.isDrawingMode = true;
@@ -945,33 +997,36 @@ export class CanvasManager {
         this.fCanvas.setDimensions({ width, height });
 
         this.fCanvas.getObjects().forEach(obj => {
-            //Scale Position
-            const newLeft = obj.left * scaleX;
-            const newTop = obj.top * scaleY;
+            this.fMarkerCanvas.setDimensions({ width, height });
 
-            //Scale Dimensions
-            //We multiply the existing scale factor by the new resize ratio
-            const newScaleX = obj.scaleX * scaleX;
-            const newScaleY = obj.scaleY * scaleY;
+            const scaleObjects = (obj: any) => {
+                const newLeft = obj.left * scaleX;
+                const newTop = obj.top * scaleY;
+                const newScaleX = obj.scaleX * scaleX;
+                const newScaleY = obj.scaleY * scaleY;
 
-            obj.set({
-                left: newLeft,
-                top: newTop,
-                scaleX: newScaleX,
-                scaleY: newScaleY
-            });
+                obj.set({
+                    left: newLeft,
+                    top: newTop,
+                    scaleX: newScaleX,
+                    scaleY: newScaleY
+                });
 
-            //Marker Handling
-            if ((obj as any)._isMarker) {
-                (obj as any)._tipX = (obj as any)._tipX * scaleX;
-                (obj as any)._tipY = (obj as any)._tipY * scaleY;
-            }
+                if (obj._isMarker) {
+                    obj._tipX = obj._tipX * scaleX;
+                    obj._tipY = obj._tipY * scaleY;
+                }
+                obj.setCoords();
+            };
 
-            obj.setCoords();
+            this.fCanvas.getObjects().forEach(scaleObjects);
+            this.fMarkerCanvas.getObjects().forEach(scaleObjects);
+
+            this.fMarkerCanvas.requestRenderAll();
         });
 
-        // 4. Handle Fixtures (Raster) Canvas Scaling
-        // We scale the bitmap image to fit the new size
+        //Handle Fixtures (Raster) Canvas Scaling
+        //We scale the bitmap image to fit the new size
         if (this.fixturesCanvas && this.fixturesCtx) {
             // Create a temporary copy of the current fixtures
             const tempCanvas = document.createElement('canvas');
@@ -1005,28 +1060,35 @@ export class CanvasManager {
     public backupDrawing(): void {
         // Grab all objects that aren't thermal markers
         const objects = this.fCanvas.getObjects().filter(o => !(o as any)._isMarker);
-        
+
         // Serialize them to JSON objects (ignoring custom marker properties)
         this.backupDrawingState = objects.map(o => o.toObject(['_isMarker']));
     }
 
     public async restoreDrawing(): Promise<void> {
         if (this.backupDrawingState.length === 0) return;
-        
+
         this.clearDrawing();
-        
+
         try {
             const enlivened = await fabric.util.enlivenObjects(this.backupDrawingState);
-            
+
             enlivened.forEach((obj: any) => {
-                obj.set({ selectable: true, evented: true });
+                //Re-apply all custom control styles and defaults when restoring
+                obj.set({ 
+                    ...this.SHAPE_DEFAULTS,
+                    selectable: true, 
+                    evented: true 
+                });
                 this.fCanvas.add(obj);
             });
-            
+
             this.fCanvas.requestRenderAll();
             this.hasPlacedShape = true;
+            this.fCanvas.isDrawingMode = false;
+            this.fCanvas.defaultCursor = 'default';
             this.onShapeComplete();
-            
+
         } catch (error) {
             console.error("Failed to restore drawing backup:", error);
         }
@@ -1041,42 +1103,32 @@ export class CanvasManager {
         this.disableDrawing();
         this.isMarkerMode = true;
         this.fCanvas.defaultCursor = 'crosshair';
-
-        this.markerObjects.forEach(m => {
-            m.selectable = true;
-            m.evented = true;
-            m.hoverCursor = 'pointer';
-        });
     }
 
     public disableMarkerMode(): void {
         this.isMarkerMode = false;
         this.fCanvas.defaultCursor = 'default';
-        this.markerObjects.forEach(m => {
-            m.selectable = false;
-            m.evented = false;
-        });
     }
 
     private ensureMarkersOnTop(): void {
         this.markerObjects.forEach(markerGroup => {
-            this.fCanvas.bringObjectToFront(markerGroup);
+            this.fMarkerCanvas.bringObjectToFront(markerGroup);
         });
-        this.fCanvas.requestRenderAll();
+        this.fMarkerCanvas.requestRenderAll();
     }
 
     public showMarkers(): void {
         this.markerObjects.forEach(m => {
             m.visible = true;
         });
-        this.fCanvas.requestRenderAll();
+        this.fMarkerCanvas.requestRenderAll();
     }
 
     public hideMarkers(): void {
         this.markerObjects.forEach(m => {
             m.visible = false;
         });
-        this.fCanvas.requestRenderAll();
+        this.fMarkerCanvas.requestRenderAll();
     }
 
     public hasMarkers(): boolean {
@@ -1166,27 +1218,26 @@ export class CanvasManager {
         (group as any)._tipX = x;
         (group as any)._tipY = y;
 
-        this.fCanvas.add(group);
+        this.fMarkerCanvas.add(group);
         this.markerObjects.push(group);
-        this.fCanvas.requestRenderAll();
-        this.ensureMarkersOnTop();
+        this.fMarkerCanvas.requestRenderAll();
 
         // Notify UI
         this.onMarkersChange();
     }
 
     private removeMarker(markerGroup: fabric.Group): void {
-        this.fCanvas.remove(markerGroup);
+        this.fMarkerCanvas.remove(markerGroup);
         this.markerObjects = this.markerObjects.filter(m => m !== markerGroup);
-        this.fCanvas.requestRenderAll();
+        this.fMarkerCanvas.requestRenderAll();
         // Notify UI
         this.onMarkersChange();
     }
 
     public clearMarkers(): void {
-        this.markerObjects.forEach(m => this.fCanvas.remove(m));
+        this.markerObjects.forEach(m => this.fMarkerCanvas.remove(m));
         this.markerObjects = [];
-        this.fCanvas.requestRenderAll();
+        this.fMarkerCanvas.requestRenderAll();
         // Notify UI
         this.onMarkersChange();
     }
@@ -1247,7 +1298,7 @@ export class CanvasManager {
             }
         });
 
-        this.fCanvas.requestRenderAll();
+        this.fMarkerCanvas.requestRenderAll();
     }
 
     public async submitHeatMarkers(markers: Position[]): Promise<any> {
@@ -1275,49 +1326,42 @@ export class CanvasManager {
     /**
      * Sends full path data to backend for preview/preparation
      */
-    public async previewPath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<{ duration: number, path: Position[], warning?: string }> {
-        // Generate Pixel Path
+    public async previewPath(speed: number, raster_type: string, density: number, isFillEnabled: boolean): Promise<{ duration: number, path: Position[], warnings?: string[] }> {
+        //Generate Pixel Path
         const pixels = this.generatePixelPath();
         const width = this.fCanvas.getWidth();
         const height = this.fCanvas.getHeight();
 
-        //Check if out of bounds. If so, abort.
+        //Check if drawn shape is out of bounds. If so, abort.
         const isOutOfBounds = pixels.some(p => p.x < 0 || p.x > width || p.y < 0 || p.y > height);
         if (isOutOfBounds) {
             throw new Error("OUT_OF_BOUNDS");
         }
 
-        //Check for overlap with virtual fixtures. If there's any overlap, warn user
+        //Check for overlap with virtual fixtures
         let hasFixtureOverlap = false;
         if (this.hasFixtures() && this.fixturesCtx) {
-            // Grab the raw pixel data from the fixtures canvas
             const imgData = this.fixturesCtx.getImageData(0, 0, width, height).data;
-            
             for (const p of pixels) {
                 const px = Math.floor(p.x);
                 const py = Math.floor(p.y);
-                
-                // Ensure we don't check outside the array bounds
                 if (px >= 0 && px < width && py >= 0 && py < height) {
-                    // Calculate the index for the Alpha channel of this specific (x,y) pixel
                     const alphaIndex = (py * width + px) * 4 + 3;
-                    
-                    // If the alpha channel is greater than 0, the user drew a fixture here
                     if (imgData[alphaIndex] > 0) {
                         hasFixtureOverlap = true;
-                        break; // Stop checking, we only need one violation to trigger the warning
+                        break; 
                     }
                 }
             }
         }
 
-        // Normalize to video space
+        //Normalize to video space
         const videoPixels = pixels.map(p => ({
             x: (p.x / width) * this.video.videoWidth,
             y: (p.y / height) * this.video.videoHeight
         }));
 
-        //Calculate bounding box of the drawn path in video space
+        //Calculate bounding box of the drawn path
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         for (const p of videoPixels) {
             if (p.x < minX) minX = p.x;
@@ -1337,7 +1381,6 @@ export class CanvasManager {
             formData.append('raster_type', raster_type);
         }
 
-        // Add raster mask if fill is enabled
         if (isFillEnabled) {
             const blob = await this.generateRasterBlob();
             formData.append('file', blob, 'path.png');
@@ -1345,18 +1388,33 @@ export class CanvasManager {
 
         const response = await this.postFormData('/api/preview', formData);
 
-        let warning = hasFixtureOverlap ? "FIXTURE_OVERLAP" : undefined;
+        //Check if the generated path from the robot goes entirely off the screen (Hard Stop)
+        const vWidth = this.video.videoWidth;
+        const vHeight = this.video.videoHeight;
+        const pathEscapesScreen = response.path && response.path.some((p: Position) => 
+            p.x < 0 || p.x > vWidth || p.y < 0 || p.y > vHeight
+        );
+        
+        if (pathEscapesScreen) {
+            throw new Error("OUT_OF_BOUNDS");
+        }
 
-        if (!warning && response.path && response.path.length > 0) {
+        //Build array of all soft warnings
+        let warnings: string[] = [];
+        if (hasFixtureOverlap) {
+            warnings.push("FIXTURE_OVERLAP");
+        }
+
+        if (response.path && response.path.length > 0) {
             if (this.checkIfPathEscapes(response.path)) {
-                warning = "PATH_ESCAPES_BOUNDS";
+                warnings.push("PATH_ESCAPES_BOUNDS");
             }
         }
 
         return {
             duration: response.duration,
             path: response.path,
-            warning: warning
+            warnings: warnings
         };
     }
 
@@ -1570,10 +1628,10 @@ export class CanvasManager {
         formData.append('speed', '10');
         formData.append('density', '0');
         formData.append('pixels', '[]');
-        
+
         //Force the backend to process the file by faking that fill is enabled
-        formData.append('is_fill', 'true'); 
-        
+        formData.append('is_fill', 'true');
+
         try {
             //Borrow fixture blob generator to make a clean white image
             const blob = await this.generateBlankFixtureBlob();

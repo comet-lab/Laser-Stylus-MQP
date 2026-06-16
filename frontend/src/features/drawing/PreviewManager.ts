@@ -13,7 +13,7 @@ export class PreviewManager {
   private ctx: CanvasRenderingContext2D;
   private isPreviewActive: boolean = false;
   private ignoreWebsocketPaths: boolean = false;
-  // "Source of Truth": The path in raw video coordinates
+  //sourcePath is the raw pixel data sent from robot
   private sourcePath: Position[] = [];
   private pathData: Position[] = [];
   private durationSeconds: number = 0;
@@ -25,12 +25,16 @@ export class PreviewManager {
   private animationFrameId: number | null = null;
 
   // Visual styling
-  private readonly PATH_COLOR = '#002B4C'; // Neon Yellow
-  private readonly PATH_ARROW_COLOR = '#002B4C';
-  private readonly PATH_WIDTH = 4;
-  private readonly DASH_PATTERN = [12, 6];
-  private readonly GLOW_COLOR = 'rgba(255, 255, 0, 0.4)';
-  private readonly GLOW_WIDTH = 10;
+  private readonly PATH_GLOW_COLOR = 'rgba(255, 215, 0, 0.4)';
+  private readonly PATH_GLOW_WIDTH = 8;
+  private readonly PATH_OUTLINE_COLOR = '#00000080';
+  private readonly PATH_OUTLINE_WIDTH = 5;
+  private readonly PATH_COLOR = '#FFFF00';
+  private readonly PATH_WIDTH = 2;         
+  private readonly DASH_PATTERN = [10, 10];
+  
+  private dashOffset: number = 0;
+  private requiredConfirmations: number = 0;
 
   constructor(
     private readonly ui: UIRegistry,
@@ -43,7 +47,7 @@ export class PreviewManager {
 
     this.updateOverlaySize();
 
-    // Disable execute button immediately when clicked
+    //Disable execute button immediately when clicked
     const executeBtn = this.getExecuteBtn();
     if (executeBtn) {
       executeBtn.addEventListener('click', () => {
@@ -56,27 +60,33 @@ export class PreviewManager {
     return document.getElementById('executeBtn') as HTMLButtonElement | null;
   }
 
-  /**
+    /**
    * Handle the complex state of the execute button (Disabled prop + CSS styles)
    */
   private setExecuteButtonState(isEnabled: boolean): void {
-    const btn = this.getExecuteBtn();
+    const btn = this.ui.executeBtn;
     if (!btn) return;
 
     if (isEnabled) {
+      btn.classList.remove('locked');
       btn.disabled = false;
-      // MUST override the inline styles set by ExecutionManager
-      btn.style.pointerEvents = 'auto';
-      btn.style.opacity = '1';
     } else {
+      btn.classList.add('locked');
       btn.disabled = true;
-      btn.style.pointerEvents = 'none';
-      btn.style.opacity = '0.3';
+    }
+  }
+
+  private tryEnableExecute(): void {
+    if (this.sourcePath.length >= 2 && this.requiredConfirmations <= 0 && this.hasPreviewedCurrentDrawing) {
+      this.setExecuteButtonState(true);
+    } else {
+      this.setExecuteButtonState(false);
     }
   }
 
   public togglePreview(enable: boolean): void {
     this.isPreviewActive = enable;
+    const btnText = this.ui.executeBtn.querySelector('.btn-text');
 
     if (enable) {
       this.ui.previewToggleOn.classList.add('active');
@@ -84,12 +94,15 @@ export class PreviewManager {
       this.ui.previewInfoPanel.classList.add('open');
       this.updateOverlaySize();
       this.refreshPreview();
+      if (btnText) btnText.textContent = 'EXECUTE';
     } else {
       this.ui.previewToggleOn.classList.remove('active');
       this.ui.previewToggleOff.classList.add('active');
       this.ui.previewInfoPanel.classList.remove('open');
       this.clearOverlay();
       this.stopAnimation();
+      
+      this.setExecuteButtonState(false);
     }
   }
 
@@ -108,10 +121,12 @@ export class PreviewManager {
 
     this.ui.previewDuration.textContent = 'Computing...';
 
-    // Disable execute while computing new path
+    //Disable execute while computing new path
     this.setExecuteButtonState(false);
     this.stopAnimation();
     ToastManager.clearAll();
+
+    this.requiredConfirmations = 0;
 
     try {
       const response = await cm.previewPath(speed, rasterType, density, isFill);
@@ -121,46 +136,43 @@ export class PreviewManager {
         this.ignoreWebsocketPaths = true;
       }
 
-      //Handle Active Safety Warnings
-      if (response.warning === "FIXTURE_OVERLAP") {
-        ToastManager.show(
-          "SAFETY WARNING: Your planned path crosses into a restricted fixture zone. Please confirm to allow execution.",
-          {
-            type: 'warning',
-            requireAck: true,
-            ackText: 'CONFIRM',
-            onAcknowledge: () => {
-              //Only unlock the button once the user explicitly clicks CONFIRM
-              if (hasValidPath) this.setExecuteButtonState(true);
+      //Handle Active Safety Warnings (Now checking the array of warnings)
+      if (response.warnings) {
+        if (response.warnings.includes("FIXTURE_OVERLAP")) {
+          this.requiredConfirmations++;
+          ToastManager.show(
+            "SAFETY WARNING: Your planned path crosses into a restricted fixture zone. Please confirm to allow execution.",
+            {
+              type: 'warning',
+              requireAck: true,
+              ackText: 'CONFIRM',
+              onAcknowledge: () => {
+                this.requiredConfirmations--;
+                this.tryEnableExecute();
+              }
             }
-          }
-        );
-
-        if (hasValidPath) {
-          //Draw the path to show them the mistake, but do not enable the button
-          this.handlePathData(response.path, response.duration, false);
+          );
+        }
+        if (response.warnings.includes("PATH_ESCAPES_BOUNDS")) {
+          this.requiredConfirmations++;
+          ToastManager.show(
+            "PRECISION WARNING: The generated path extends outside your originally drawn boundaries. Please confirm to allow execution.",
+            {
+              type: 'warning',
+              requireAck: true,
+              ackText: 'CONFIRM',
+              onAcknowledge: () => {
+                this.requiredConfirmations--;
+                this.tryEnableExecute();
+              }
+            }
+          );
         }
       }
-      //If the previewed path goes outside of the boundaries of the drawn path
-      //THIS IS JUST FOR THE SIMULATED RESPONSE WHEN THE ROBOT IS NOT CONNECTED
-      else if (response.warning === "PATH_ESCAPES_BOUNDS") {
-        ToastManager.show(
-          "PRECISION WARNING: The generated path extends outside your originally drawn boundaries. Please confirm to allow execution.",
-          {
-            type: 'warning', // Uses your high-vis Amber styling
-            requireAck: true,
-            ackText: 'CONFIRM',
-            onAcknowledge: () => {
-              if (hasValidPath) this.setExecuteButtonState(true);
-            }
-          }
-        );
-        // Draw the path to show them the mistake, but keep the button locked
-        if (hasValidPath) this.handlePathData(response.path, response.duration, false);
-      }
+      
       //Handle Safe Paths
-      else if (hasValidPath) {
-        this.handlePathData(response.path, response.duration, true);
+      if (hasValidPath) {
+        this.handlePathData(response.path, response.duration);
       }
       else {
         this.ui.previewDuration.textContent = 'Waiting...';
@@ -192,9 +204,6 @@ export class PreviewManager {
     }
 
     const newLength = Math.min(previewData.x.length, previewData.y.length);
-
-    //TODO: Get rid of this check, shouldn't be necessary if the data is being sent properly from backend
-    //If we don't get a duration, and the path is the same, drop this message
     if (serverDuration === undefined && this.sourcePath.length === newLength) {
       console.log("Ignored duplicate path from robot.");
       return;
@@ -207,11 +216,10 @@ export class PreviewManager {
     }
 
     const finalDuration = serverDuration || (this.durationSeconds > 0 ? this.durationSeconds : 10);
-
-    ToastManager.clearAll();
     const cm = this.getCanvasManager();
 
     if (cm && cm.checkIfPathEscapes(path)) {
+      this.requiredConfirmations++;
       ToastManager.show(
         "SAFETY WARNING: The generated path extends outside your originally drawn boundaries. Please confirm to allow execution.",
         {
@@ -219,22 +227,22 @@ export class PreviewManager {
           requireAck: true,
           ackText: 'CONFIRM',
           onAcknowledge: () => {
-            this.setExecuteButtonState(true);
+            this.requiredConfirmations--;
+            this.tryEnableExecute();
           }
         }
       );
-      // Pass false to keep the execute button locked until confirmed
-      this.handlePathData(path, finalDuration, false);
-    } else {
-      this.handlePathData(path, finalDuration, true);
     }
+
+    // Always process the path data, regardless of warnings
+    this.handlePathData(path, finalDuration);
   }
 
-  private handlePathData(videoPath: Position[], duration: number, enableExecute: boolean): void {
+  private handlePathData(videoPath: Position[], duration: number): void {
     //Catch empty or single-point paths before they break the renderer
     if (videoPath.length < 2) {
       this.clearOverlay();
-      this.setExecuteButtonState(false); // Force lock the execute button
+      this.setExecuteButtonState(false); //Force lock the execute button
       this.ui.previewDuration.textContent = '--';
       return;
     }
@@ -247,11 +255,10 @@ export class PreviewManager {
 
     this.ui.previewDuration.textContent = `${duration.toFixed(1)}s`;
 
-    // Explicitly apply the boolean state to lock/unlock the button
-    this.setExecuteButtonState(enableExecute);
-
     this.drawPath();
     this.startAnimation();
+
+    this.tryEnableExecute();
   }
 
   /**
@@ -262,19 +269,23 @@ export class PreviewManager {
     if (this.sourcePath.length === 0) return;
 
     const video = this.ui.video;
-    const canvas = this.ui.previewOverlay;
+    const viewport = this.ui.viewport;
 
-    // Guard against divide by zero if video isn't loaded yet
     const vWidth = video.videoWidth || 1;
     const vHeight = video.videoHeight || 1;
 
-    const scaleX = canvas.width / vWidth;
-    const scaleY = canvas.height / vHeight;
+    // Use logical CSS pixels (offsetWidth) to prevent double-scaling
+    const scaleX = viewport.offsetWidth / vWidth;
+    const scaleY = viewport.offsetHeight / vHeight;
 
-    this.pathData = this.sourcePath.map(p => ({
+    // Map the raw robot points to screen pixels with no smoothing
+    // Deduplication removes coincident points that would cause rendering artifacts but never moves any coordinate value.
+    const rawScreenPoints = this.sourcePath.map(p => ({
       x: p.x * scaleX,
       y: p.y * scaleY
     }));
+
+    this.pathData = this.deduplicatePath(rawScreenPoints);
   }
 
   private drawPath(): void {
@@ -285,73 +296,55 @@ export class PreviewManager {
     const ctx = this.ctx;
     ctx.save();
 
-    // Draw glow
-    ctx.strokeStyle = this.GLOW_COLOR;
-    ctx.lineWidth = this.GLOW_WIDTH;
+    //Draw glow
+    ctx.strokeStyle = this.PATH_GLOW_COLOR;
+    ctx.lineWidth = this.PATH_GLOW_WIDTH;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.setLineDash([]);
     this.drawPathLine(ctx);
 
-    // Draw main path
-    ctx.strokeStyle = this.PATH_COLOR;
-    ctx.lineWidth = this.PATH_WIDTH;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.setLineDash(this.DASH_PATTERN);
+    //Draw translucent background line
+    ctx.strokeStyle = this.PATH_OUTLINE_COLOR;
+    ctx.lineWidth = this.PATH_OUTLINE_WIDTH;
     this.drawPathLine(ctx);
 
-    this.drawDirectionArrows(ctx);
+    //Draw dashed bright foreground line
+    ctx.strokeStyle = this.PATH_COLOR;
+    ctx.lineWidth = this.PATH_WIDTH;
+    ctx.setLineDash(this.DASH_PATTERN);
+    ctx.lineDashOffset = this.dashOffset;
+    this.drawPathLine(ctx);
 
     ctx.restore();
   }
 
   private drawPathLine(ctx: CanvasRenderingContext2D): void {
+    if (this.pathData.length < 2) return;
+
     ctx.beginPath();
     ctx.moveTo(this.pathData[0].x, this.pathData[0].y);
-    for (let i = 1; i < this.pathData.length; i++) {
-      ctx.lineTo(this.pathData[i].x, this.pathData[i].y);
-    }
-    ctx.stroke();
-  }
 
-  private drawDirectionArrows(ctx: CanvasRenderingContext2D): void {
-    const arrowSpacing = 200;
-    let accumulatedDist = 0;
-
-    ctx.fillStyle = this.PATH_ARROW_COLOR;
-    ctx.setLineDash([]);
-
-    for (let i = 1; i < this.pathData.length; i++) {
-      const p1 = this.pathData[i - 1];
-      const p2 = this.pathData[i];
-
-      const dx = p2.x - p1.x;
-      const dy = p2.y - p1.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      accumulatedDist += dist;
-
-      if (accumulatedDist >= arrowSpacing) {
-        accumulatedDist = 0;
-
-        const angle = Math.atan2(dy, dx);
-        const arrowSize = 10;
-
-        ctx.save();
-        ctx.translate(p2.x, p2.y);
-        ctx.rotate(angle);
-
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(-arrowSize, -arrowSize / 2);
-        ctx.lineTo(-arrowSize, arrowSize / 2);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.restore();
+    if (this.pathData.length === 2) {
+      // If only two points, then a straight line which is all good
+      ctx.lineTo(this.pathData[1].x, this.pathData[1].y);
+    } else {
+      // Midpoint quadratic Bézier: each data point is used as the curve's control point
+      // The curve itself passes through the midpoints between consecutive points. 
+      // No coordinate is moved, the data drives the curve shape exactly.
+      for (let i = 1; i < this.pathData.length - 1; i++) {
+        const curr = this.pathData[i];
+        const next = this.pathData[i + 1];
+        const midX = (curr.x + next.x) / 2;
+        const midY = (curr.y + next.y) / 2;
+        ctx.quadraticCurveTo(curr.x, curr.y, midX, midY);
       }
+      // Final segment: land exactly on the last point.
+      const last = this.pathData[this.pathData.length - 1];
+      ctx.lineTo(last.x, last.y);
     }
+
+    ctx.stroke();
   }
 
   private startAnimation(): void {
@@ -391,18 +384,24 @@ export class PreviewManager {
       totalPoints - 1
     );
 
-    // Grab the current point (already in correct local viewport coordinates)
+    //Update the DOM marker
     const point = this.pathData[index];
-
-    // Apply directly. The browser's #app-scaler will handle the zoom automatically!
     this.ui.previewMarker.style.left = `${point.x}px`;
     this.ui.previewMarker.style.top = `${point.y}px`;
+
+    //Change offset to modify speed
+    this.dashOffset -= 0.1; 
+    this.drawPath(); 
 
     this.animationFrameId = requestAnimationFrame(() => this.animationLoop());
   }
 
   private clearOverlay(): void {
+    this.ctx.save();
+    //Reset transform to identity to clear the raw physical pixels
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.ui.previewOverlay.width, this.ui.previewOverlay.height);
+    this.ctx.restore();
   }
 
   /**
@@ -411,10 +410,16 @@ export class PreviewManager {
   public updateOverlaySize(): void {
     const canvas = this.ui.previewOverlay;
     const viewport = this.ui.viewport;
+    
+    //Grab the device's pixel ratio (defaults to 1 for standard displays)
+    const dpr = window.devicePixelRatio || 1;
 
-    //Match Canvas to DOM
-    canvas.width = viewport.offsetWidth;
-    canvas.height = viewport.offsetHeight;
+    //Match Canvas bitmap size to DOM, accounting for high-DPI displays
+    canvas.width = viewport.offsetWidth * dpr;
+    canvas.height = viewport.offsetHeight * dpr;
+    
+    //Scale the internal drawing context to match CSS logical pixels
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     //Re-calculate path positions for new size
     if (this.sourcePath.length > 0) {
@@ -431,6 +436,7 @@ export class PreviewManager {
   }
 
   public resetPreviewState(): void {
+    this.requiredConfirmations = 0;
     this.hasPreviewedCurrentDrawing = false;
     this.ignoreWebsocketPaths = false;
     this.pathData = [];
@@ -448,5 +454,32 @@ export class PreviewManager {
   public dispose(): void {
     this.stopAnimation();
     this.clearOverlay();
+  }
+
+  /**
+   * Removes points that are so close together they would produce zero-length segments and cause rendering glitches
+   * Does not move or average any coordinate, identical to backend shape
+   */
+  private deduplicatePath(points: Position[]): Position[] {
+    if (points.length < 2) return points;
+
+    const result: Position[] = [points[0]];
+    let lastX = points[0].x;
+    let lastY = points[0].y;
+
+    for (let i = 1; i < points.length - 1; i++) {
+      const pt = points[i];
+      const distSq = (pt.x - lastX) ** 2 + (pt.y - lastY) ** 2;
+      // Keep the point only if it's meaningfully displaced (~1.5 px threshold).
+      if (distSq > 2.0) {
+        result.push(pt);
+        lastX = pt.x;
+        lastY = pt.y;
+      }
+    }
+
+    // Always anchor the final point.
+    result.push(points[points.length - 1]);
+    return result;
   }
 }
