@@ -2,6 +2,10 @@ import time, cv2, subprocess, os
 from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation
+
+import matplotlib
+matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 import warnings
 
@@ -385,35 +389,67 @@ class System_Calibration():
             return self.therm_cali
         raise ValueError(f"Incorrect camera type: {cam_type}")
     
-    def get_hot_pixel(self, img, method="Centroid", thresholdScale= 0.8):
+    # def get_hot_pixel(self, img, method="Centroid", thresholdScale= 0.8):
         
-        if img.ndim == 3 and img.shape[-1] >= 3:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        else:
-            img = img
+    #     if img.ndim == 3 and img.shape[-1] >= 3:
+    #         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    #     else:
+    #         img = img
             
-        if method == "Centroid":
-            peak = np.max(img)
-            threshold = thresholdScale * peak
-            mask = img >= threshold
+    #     if method == "Centroid":
+    #         peak = np.max(img)
+    #         threshold = thresholdScale * peak
+    #         mask = img >= threshold
 
-            y, x = np.indices(img.shape)
-            maskedImg = img * mask 
-            x_center = np.sum(x * maskedImg) / np.sum(maskedImg)
-            y_center = np.sum(y * maskedImg) / np.sum(maskedImg)
+    #         y, x = np.indices(img.shape)
+    #         maskedImg = img * mask 
+    #         x_center = np.sum(x * maskedImg) / np.sum(maskedImg)
+    #         y_center = np.sum(y * maskedImg) / np.sum(maskedImg)
             
             
-            # plt.imshow(maskedImg)
-            # plt.show()
-            center = np.array([x_center, y_center])
+    #         # plt.imshow(maskedImg)
+    #         # plt.show()
+    #         center = np.array([x_center, y_center])
             
-        else:
-            center = np.flip(np.asarray((np.unravel_index(np.argmax(img), img.shape))))
-        # print("Raw Image Peak Temp Loc: ",np.flip(np.asarray((np.unravel_index(np.argmax(img), img.shape)))))
-        # print("Raw Image Center of centroid: ",center)
+    #     else:
+    #         center = np.flip(np.asarray((np.unravel_index(np.argmax(img), img.shape))))
+    #     # print("Raw Image Peak Temp Loc: ",np.flip(np.asarray((np.unravel_index(np.argmax(img), img.shape)))))
+    #     # print("Raw Image Center of centroid: ",center)
         
-        return center
-    
+    #     return center
+    def get_hot_pixel(self, img, method="Centroid"):
+
+
+        #reduces noise with gaussian filter; blurs image slightly
+        img_blur = cv2.GaussianBlur(img, (5, 5), 0)
+
+        if method == "Centroid":
+            #converts image from BGR to HSV color space
+            hsv = cv2.cvtColor(img_blur, cv2.COLOR_BGR2HSV)
+
+            # keeps only bright pixels and everything else becomes black
+            mask = cv2.inRange(hsv, (0, 0, 200), (179, 60, 255))
+
+            # finds all separate blobs in the binary image
+            num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask)
+
+            #returns nothing if no blob is found
+            if num_labels <= 1:
+                return np.array([np.nan, np.nan])
+
+            # creates a list of blob IDs
+            valid = np.arange(1, num_labels)
+
+            #finds blob with biggest area
+            largest_blob = max(valid, key=lambda i: stats[i, cv2.CC_STAT_AREA])
+
+            #returns middle coordinates of laser
+            cx, cy = centroids[largest_blob]
+            return np.array([cx, cy])
+
+        else:
+            #finds brightest pixel and returns its x,y coords
+            return np.flip(np.asarray(np.unravel_index(np.argmax(img_blur), img_blur.shape[:2])))
 
     
 if __name__=='__main__':

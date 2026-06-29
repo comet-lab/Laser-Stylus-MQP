@@ -608,7 +608,7 @@ class DepthEstimation():
 
         # Extract X,Y,Z coordinates of points in STL file 
         # TODO: point to CAD model stl file to compare to 
-        mesh = trimesh.load("surgical_system/py_src/image_development/nine_peaks_1.stl")
+        mesh = trimesh.load("surgical_system/py_src/image_development/nine_peaks_2.stl")
         mesh.apply_scale(0.001)  # scale from mm to m 
         # Rotate STL file about z axis -90 degrees to align with recon
         angle = -np.pi/2
@@ -662,15 +662,6 @@ def main():
     homography_stack = DepthEstimation.load_homography_stack_npz(stack_path)
     dense_stack = DepthEstimation.create_dense_stack(homography_stack)
     
-    
-    # z_best, err_best, uv_best, conf = DepthEstimation.estimate_depth_from_dense_stack(
-    #     dense_stack,
-    #     (608.52271995, 238.49790525), # reference 6.16 - 2.23 mm 
-    #     (0, 0),
-    #     refine=True) 
-    
-    # print("Actual Height [mm]: ", 6.16 - 2.23)
-    # print("Predicted Z [mm]: ", z_best * 1000, "| Error: ", err_best, "| Best Prediction: ", uv_best, "| Confidence: ", conf)
     path = "surgical_system/py_src/registration/calibration_info/depth_map.npz"
     depth, meta = DepthEstimation.load_depth_npz(path)
     depth_map = DepthEstimation.patch_depth(depth)

@@ -1,7 +1,12 @@
 import os, subprocess, time, sys, math
+import traceback
 from scipy.spatial.transform import Rotation
 import threading, csv
 import numpy as np
+
+import matplotlib
+matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 from laser_control.laser_arduino import Laser_Arduino
 
@@ -238,14 +243,17 @@ class Robot_Controller():
                 
                 target_pose = np.eye(4)
                 target_pose[:3, -1] = target_pos
+
                 velocity_correction = self.live_control(target_pose, 0.3, KP = 20) #TODO CHANGE MAX SPEED
                 # print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
                 command_vel = target_vel + velocity_correction
-                
+
+                print("3a")
                 if self.hold_orientation is not None:
                     target_orien_vel = self.live_orientation_control(self.hold_orientation, 0.005, KP=0.05)
                 else: 
                     target_orien_vel = [0, 0, 0]
+                print("3d")
                 
                 state = self.set_velocity(command_vel, target_orien_vel) 
                 
@@ -259,6 +267,7 @@ class Robot_Controller():
                     self.actual_pos_list[i, :] = pos[:3] - self.home_pose[:3, -1]
                     self.target_pos_list[i, :] = target_pos
                     i += 1
+            
 
             # stop robot on exit (normal or stopped)
             # self.robot_stop()
@@ -475,22 +484,40 @@ class Robot_Controller():
         elif mag > max_vel:
             target_vel = target_vel * (max_vel / mag)
         return target_vel
-    
-    
+
     def live_orientation_control(self, target_orientation, max_vel, KP = 0.1):
-        r_matrix_b = self.get_current_state()[0][:3, :3]
-        current_euler = Rotation.from_matrix(r_matrix_b).as_euler('xyz', degrees=True)
-        orientation_error = target_orientation - current_euler
-        # print(f"[Robot Controller] Orientation Error: {np.linalg.norm(orientation_error):0.4}" )
-        target_vel = orientation_error * KP
-        mag = np.linalg.norm(target_vel)
+
+        try:
+            r_matrix_b = self.get_current_state()[0][:3, :3]
+            print("3b")
+
+            #print(r_matrix_b)
+
+            current_euler = Rotation.from_matrix(r_matrix_b).as_euler('xyz', degrees=True)
+
+            print("3c")
+
+            orientation_error = target_orientation - current_euler
+            target_vel = orientation_error * KP
+            mag = np.linalg.norm(target_vel)
+
+            print("3d")
+
+            if mag == 0:
+                target_vel = np.zeros(3)
+            elif mag > max_vel:
+                target_vel = target_vel * (max_vel / mag)
+
+            print("3e")
+            return target_vel
+
+        except Exception as e:
+            import traceback
+            print("\n❌ live_orientation_control FAILED ❌")
+            traceback.print_exc()
+            raise
+
         
-        if mag == 0:
-            target_vel = np.zeros(3) 
-        elif mag > max_vel:
-            target_vel = target_vel * (max_vel / mag)
-        return target_vel
-    
     
 if __name__=='__main__':
     import time, subprocess

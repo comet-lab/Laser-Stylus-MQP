@@ -1,6 +1,11 @@
 import os, sys, glob
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 import matplotlib.pyplot as plt
+
+import matplotlib
+matplotlib.use('Agg')
+
+
 import numpy as np 
 import cv2
 import yaml, csv

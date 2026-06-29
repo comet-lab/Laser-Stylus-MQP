@@ -3,6 +3,27 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation
 
+## Path setup and Imports
+import sys, pathlib
+HERE = pathlib.Path(__file__).resolve().parent
+# If this file is inside a subfolder, try parent too; stop at the first match.
+for candidate in (HERE, HERE.parent, HERE.parent.parent):
+    if (candidate / "robot").is_dir() and (candidate / "cameras").is_dir() and (candidate / "laser_control").is_dir():
+        sys.path.insert(0, str(candidate))
+        break    
+from registration.cameraRegistration import Camera_Registration
+from registration.transformations.depth_estimation import DepthEstimation
+from registration.transformations.roi_selector import ROISelector
+
+import matplotlib
+matplotlib.use('Agg')
+
+import matplotlib.pyplot as plt
+from robot.robot_controller import Robot_Controller
+from cameras.thermal_cam import ThermalCam
+from cameras.RGBD_cam import RGBD_Cam
+from laser_control.laser_arduino import Laser_Arduino
+
 
 
 # if __name__=='__main__':
@@ -18,6 +39,7 @@ from scipy.spatial.transform import Rotation
 #     from registration.transformations.roi_selector import ROISelector
 
 ### TESTING FUNCTIONS ###
+# Note: function moved to scan_object.py
 def exp_depth_scan(cam_reg, gridShape = np.array([15, 15]), squareSize = 0.002):
     input(f"Press Enter to continue depth estimation creation.")
     
@@ -466,25 +488,7 @@ def view_rgbd_therm_heat_overlay(cam_reg, transformed_view: bool = True,
         cv2.destroyWindow(window_name)
     
     
-if __name__ == '__main__':
-    ## Path setup and Imports
-    import sys, pathlib
-    HERE = pathlib.Path(__file__).resolve().parent
-    # If this file is inside a subfolder, try parent too; stop at the first match.
-    for candidate in (HERE, HERE.parent, HERE.parent.parent):
-        if (candidate / "robot").is_dir() and (candidate / "cameras").is_dir() and (candidate / "laser_control").is_dir():
-            sys.path.insert(0, str(candidate))
-            break    
-    from registration.cameraRegistration import Camera_Registration
-    from registration.transformations.depth_estimation import DepthEstimation
-    from registration.transformations.roi_selector import ROISelector
-
-    import matplotlib.pyplot as plt
-    from robot.robot_controller import Robot_Controller
-    from cameras.thermal_cam import ThermalCam
-    from cameras.RGBD_cam import RGBD_Cam
-    from laser_control.laser_arduino import Laser_Arduino
-
+def main():
     ##################################################################################
     #-------------------------------- Laser Config ----------------------------------#
     ##################################################################################
@@ -528,27 +532,29 @@ if __name__ == '__main__':
     ##################################################################################
     rgbd_cam = RGBD_Cam() #Runs a thread internally
     
-    
     ### -------------------- Run calibration ---------------- ####
-    # Create camera registration object to perform calibration and surface scan
+    # # # Create camera registration object to perform calibration and surface scan
     camera_reg = Camera_Registration(therm_cam,rgbd_cam, robot_controller, laser_controller)
 
-    # Define home pose of robot
-    robot_controller.load_edit_pose()
+
+
+    # # Define home pose of robot
+    camera_reg.robot_controller.load_edit_pose()
+    
     
     # Create "base" homography stack for interpolation in dense stack creation
-    heights = np.array([2, 10])
+    heights = np.array([2, 20])
     heights = heights / 1000.0 # mm
     depth_path = "homography_stack.npz"
     stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
-    
-    # TODO: This should not be in a file called calibration.py, move to depth estimation?
+
     # Scan surface of desired object and save required data for surface reconstruction
     exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.04/24)
+    
+    # Shut down camerastreams
+    rgbd_cam.stop_stream()
+    therm_cam.deinitialize_cam()
 
-    # Required variables to remove camera_reg
-    # self.directory = self.pathToCWD + r"/surgical_system/py_src/registration"
-    # self.calibration_folder = "/calibration_info"
 
-
-
+if __name__ == '__main__':
+    main()

@@ -1,6 +1,10 @@
 import pyrealsense2 as rs
 import numpy as np
 import cv2, threading, time
+
+import matplotlib
+matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -89,7 +93,9 @@ class RGBD_Cam(Camera):
             if not self._ready:
                 return 
             while True:
+                #print("RGBD waiting")
                 self.thread_ready.wait()
+                # print("RGBD running")
                 frames = self.pipeline.poll_for_frames()
                 if frames:
                     
@@ -121,12 +127,14 @@ class RGBD_Cam(Camera):
                     item = {"color": color_np, "depth": depth_np, "ts": ts}
 
                     self._lock.acquire()
+                    #print("RGBD has lock!")
                     self._latest = item
                     self._lock.release()
                 else:
                     time.sleep(0.0005)
         finally:
             self.pipeline.stop()
+            print("RGBD proerly shut down")
             
     def tune_depth(self, min_distance=0.07, max_distance = 0.2):
         def safe_set(opt, val):

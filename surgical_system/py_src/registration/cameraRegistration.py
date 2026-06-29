@@ -2,6 +2,10 @@ import time, cv2, subprocess, os
 from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation
+
+import matplotlib
+matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 
 
@@ -715,9 +719,21 @@ class Camera_Registration(System_Calibration):
         obs_list = []
         
         print("[Camera Reg] Scanning Features")
+
+        # Debugging index
+        i = 0
+        
         while(self.robot_controller.is_trajectory_running()):
             curr_position = self.robot_controller.current_robot_to_world_position()[:2]
+
+            # if (i % 100 == 0):
+            #     print("Attempting to acquire image...")
+
             color_img = self.rgbd_cam.get_latest()['color']
+
+            # if (i % 100 == 0):
+            #     print("Image acquired")
+            # i = i + 1
                     
             u_obs, v_obs = map(float, self.get_hot_pixel(color_img, method="Centroid")[:2])
             X_cmd, Y_cmd = map(float, curr_position[:2])

@@ -6,14 +6,14 @@ all: main CalibrateRobot
 
 
 main: main.o PandaController.o FrankaSubscriber.o
-	$(CC) -o main main.o PandaController.o FrankaSubscriber.o -L /home/nepacheco/libfranka/build/ \
-	-lfranka -L /home/nepacheco/libfranka/build/examples -lexamples_common -L/opt/ros/noetic/lib \
+	$(CC) -o main main.o PandaController.o FrankaSubscriber.o -L /home/cghenry/libfranka/build/ \
+	-lfranka -L /home/cghenry/libfranka/build/examples -lexamples_common -L/opt/ros/noetic/lib \
 	-Wl,-rpath,/opt/ros/noetic/lib -lroscpp -lrosconsole -lrostime \
 	-lroscpp_serialization -lboost_system -lboost_thread -pthread -lactionlib
 
 CalibrateRobot: CalibrateRobot.o PandaController.o 
-	$(CC) -o CalibrateRobot CalibrateRobot.o PandaController.o -L /home/nepacheco/libfranka/build/ \
-	-lfranka -L /home/nepacheco/libfranka/build/examples -lexamples_common -L/opt/ros/noetic/lib \
+	$(CC) -o CalibrateRobot CalibrateRobot.o PandaController.o -L /home/cghenry/libfranka/build/ \
+	-lfranka -L /home/cghenry/libfranka/build/examples -lexamples_common -L/opt/ros/noetic/lib \
 	-Wl,-rpath,/opt/ros/noetic/lib -lroscpp -lrosconsole -lrostime \
 	-lroscpp_serialization -lboost_system -lboost_thread -pthread -lactionlib
 	

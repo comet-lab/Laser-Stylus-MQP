@@ -1,6 +1,11 @@
 from PIL import Image
 import numpy as np
 import cv2, math
+
+import matplotlib
+matplotlib.use('Agg')
+
+
 import matplotlib.pyplot as plt
 from shapely.geometry import Polygon, LineString, MultiLineString, GeometryCollection
 from shapely.ops import unary_union
