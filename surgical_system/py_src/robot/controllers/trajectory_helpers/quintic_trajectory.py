@@ -45,7 +45,7 @@ class QuinticTrajectory:
         t = np.asarray(t)
         tau = t - self.t0
         # optional clamp to segment: uncomment if you want strict [0, dt]
-        # tau = np.clip(tau, 0.0, self.dt)
+        tau = np.clip(tau, 0.0, self.dt)
         return tau
 
     def _poly(self, t: np.ndarray) -> np.ndarray:

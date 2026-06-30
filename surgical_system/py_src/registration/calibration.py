@@ -39,7 +39,6 @@ from laser_control.laser_arduino import Laser_Arduino
 #     from registration.transformations.roi_selector import ROISelector
 
 ### TESTING FUNCTIONS ###
-# Note: function moved to scan_object.py
 def exp_depth_scan(cam_reg, gridShape = np.array([15, 15]), squareSize = 0.002):
     input(f"Press Enter to continue depth estimation creation.")
     
@@ -47,11 +46,10 @@ def exp_depth_scan(cam_reg, gridShape = np.array([15, 15]), squareSize = 0.002):
     yPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
     xValues, yValues = np.meshgrid(xPoints, yPoints)
     
-    
     robot_path = np.hstack((xValues.reshape((-1, 1)), 
                             yValues.reshape((-1, 1)), 
                             np.full((xValues.size, 1), 0)))
-    
+
     start_pos = robot_path[0, :]
     start_pose = np.eye(4)
     start_pose[:3, -1] = start_pos
@@ -536,15 +534,12 @@ def main():
     # # # Create camera registration object to perform calibration and surface scan
     camera_reg = Camera_Registration(therm_cam,rgbd_cam, robot_controller, laser_controller)
 
-
-
-    # # Define home pose of robot
+    # Define home pose of robot
     camera_reg.robot_controller.load_edit_pose()
     
-    
     # Create "base" homography stack for interpolation in dense stack creation
-    heights = np.array([2, 20])
-    heights = heights / 1000.0 # mm
+    heights = np.array([2, 10, 20])
+    heights = heights / 1000.0 # m -> mm
     depth_path = "homography_stack.npz"
     stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
 

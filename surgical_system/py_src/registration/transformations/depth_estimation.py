@@ -599,12 +599,14 @@ class DepthEstimation():
         Z = np.asarray(depth_map, dtype=float)
         H, W = Z.shape
         cs = float(meta["cell_size"])
-
         xs = float(meta["xmin"]) + (np.arange(W) + 0.5) * cs
         ys = float(meta["ymin"]) + (np.arange(H) + 0.5) * cs
         X, Y = np.meshgrid(xs, ys) 
         # Alters dimensions to have N x 3 recon_points
         recon_points = np.stack([X, Y, Z], axis=-1).reshape(-1, 3)
+
+        # # Debugging
+        # print("X: ", xs)
 
         # Extract X,Y,Z coordinates of points in STL file 
         # TODO: point to CAD model stl file to compare to 
@@ -622,13 +624,13 @@ class DepthEstimation():
 
         # Perform ray casting to ensure x,y coordinates we compare are identical (considered with z error)
         # Define ray origins and directions above the mesh, pointing downwards
-        z_start = mesh.bounds[1,2] + 10 
+        z_start = mesh.bounds[1,2] + 10  # z max + 10
         origins = np.column_stack([
-            recon_points[:,0],
-            recon_points[:,1],
+            recon_points[:,0], # x values
+            recon_points[:,1], # y values
             np.full(recon_points.shape[0], z_start)
         ])
-        directions = np.tile([0.0, 0.0, -1.0], (recon_points.shape[0], 1))
+        directions = np.tile([0.0, 0.0, -1.0], (recon_points.shape[0], 1)) # creates same direction for each ray
         # Perform ray casting
         locations, ray_ids, tri_ids = mesh.ray.intersects_location(
             ray_origins=origins,
@@ -637,6 +639,14 @@ class DepthEstimation():
         # Ensure that the ray casting worked (if not, put NaN for those points)
         z_mesh = np.full(recon_points.shape[0], np.nan)
         z_mesh[ray_ids] = locations[:, 2]
+
+        # # Debugging NaN (one row/column too far)
+        # numNans = np.isnan(z_mesh).sum()
+        # print("Number of Nans: ", numNans)
+        # nanIdx = np.argwhere(np.isnan(z_mesh))
+        # print("NaN Indices: ", nanIdx)
+
+        print("Z length: ", z_mesh.shape)
 
         # Compute error between reconstructed points and STL intersection points (z values)
         recon_z = recon_points[:,2]

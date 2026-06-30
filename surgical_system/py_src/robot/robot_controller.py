@@ -248,12 +248,12 @@ class Robot_Controller():
                 # print("Target Vel: ", target_vel, "Correction: ", velocity_correction)
                 command_vel = target_vel + velocity_correction
 
-                print("3a")
+                #print("3a")
                 if self.hold_orientation is not None:
                     target_orien_vel = self.live_orientation_control(self.hold_orientation, 0.005, KP=0.05)
                 else: 
                     target_orien_vel = [0, 0, 0]
-                print("3d")
+                #print("3d")
                 
                 state = self.set_velocity(command_vel, target_orien_vel) 
                 
@@ -489,26 +489,26 @@ class Robot_Controller():
 
         try:
             r_matrix_b = self.get_current_state()[0][:3, :3]
-            print("3b")
+            #print("3b")
 
             #print(r_matrix_b)
 
             current_euler = Rotation.from_matrix(r_matrix_b).as_euler('xyz', degrees=True)
 
-            print("3c")
+            #print("3c")
 
             orientation_error = target_orientation - current_euler
             target_vel = orientation_error * KP
             mag = np.linalg.norm(target_vel)
 
-            print("3d")
+            #print("3d")
 
             if mag == 0:
                 target_vel = np.zeros(3)
             elif mag > max_vel:
                 target_vel = target_vel * (max_vel / mag)
 
-            print("3e")
+            #print("3e")
             return target_vel
 
         except Exception as e:

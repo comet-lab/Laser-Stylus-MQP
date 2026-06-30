@@ -90,7 +90,6 @@ class TrajectoryController():
         # points = np.vstack((points[0], points[1:][mask]))
         # distances = dist[mask]
 
-
         self.total_distance = np.sum(distances)
         if self.durations[0] == -1:
             self.durations[0] = (self.total_distance/float(self.max_velocity)) + 0.2 # small buffer
@@ -98,9 +97,11 @@ class TrajectoryController():
             
         durations = (distances / np.sum(distances)) * self.durations[0]
         cumulative_durations = np.cumsum(durations)
+
         self.total_path_time = cumulative_durations[-1] # total time
         if points.shape[-1] < 3: # Points are not 3D
             points = np.hstack((points, np.full((points.shape[0], 1), self.positions[0, -1])))
+
         
         return points, cumulative_durations
         
@@ -123,7 +124,13 @@ class TrajectoryController():
             dt = durations[i] - durations[i-1]
             if dt <= 0:
                 raise ValueError("durations must be strictly increasing")
-            v_way[i] = (position[i] - position[i-1]) / dt
+            
+            # Indicates changing direction - want zero velocity to avoid "overshooting"
+            # Note: 4 s is specific to the current custom trajectory, better way to find "turnarond" points
+            if durations[i] - durations[i-1] > 4:
+                v_way[i-1] = 0.0
+            else:
+                v_way[i] = (position[i] - position[i-1]) / dt
             
         
         a_way = np.zeros_like(position)
@@ -155,7 +162,8 @@ class TrajectoryController():
             
             target_vel= (movement['velocity'])
             target_vel_list[i] = target_vel
-            
+        
+
         plt.figure(figsize=(6,4), dpi=300)
         plt.plot(times, target_vel_list[:, 0], label="x [m/s]")
         plt.plot(times, target_vel_list[:, 1], label="y [m/s]")
@@ -258,6 +266,7 @@ class TrajectoryController():
         # Calculate Trajectory 
         idx = np.searchsorted(self.durations, self.t, side='right')
         pathIdx = idx if idx < self.n_points-2 else self.n_points-2
+
         self.laser_pos = np.zeros(self.n_dims) # laser position in [cm] shape:(x)
         self.laser_pos_vel = np.zeros(self.n_dims)
         
