@@ -42,6 +42,8 @@ from laser_control.laser_arduino import Laser_Arduino
 def exp_depth_scan(cam_reg, gridShape = np.array([15, 15]), squareSize = 0.002):
     input(f"Press Enter to continue depth estimation creation.")
     
+    # Hard-coding squareSize (0.02 for 25 x 25 mm block, scans 24 x 24 mm)
+    squareSize = 0.0019
     xPoints = (np.arange(gridShape[1]) - (gridShape[1] - 1) / 2) * squareSize
     yPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
     xValues, yValues = np.meshgrid(xPoints, yPoints)
@@ -512,6 +514,8 @@ def main():
     robot_controller.go_to_pose(target_pose@home_pose,1) # Send robot to start position
     time.sleep(2)
     
+
+    # FIMXE: Remove thermal camera dependence
     ##################################################################################
     #--------------------------- Thermal Cam Config ---------------------------------#
     ##################################################################################
@@ -529,6 +533,7 @@ def main():
     #------------------------------ RGBD Cam Config ---------------------------------#
     ##################################################################################
     rgbd_cam = RGBD_Cam() #Runs a thread internally
+    rgbd_cam.display_color_stream()
     
     ### -------------------- Run calibration ---------------- ####
     # # # Create camera registration object to perform calibration and surface scan
@@ -538,12 +543,14 @@ def main():
     camera_reg.robot_controller.load_edit_pose()
     
     # Create "base" homography stack for interpolation in dense stack creation
-    heights = np.array([2, 10, 20])
+    # FIMXE: Anything <= 1 mm for heights causes infinite world reprojection error
+    heights = np.array([1.001, 10, 20])
     heights = heights / 1000.0 # m -> mm
     depth_path = "homography_stack.npz"
     stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
 
     # Scan surface of desired object and save required data for surface reconstruction
+    # Note: hard-coded squareSize in function
     exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.04/24)
     
     # Shut down camerastreams

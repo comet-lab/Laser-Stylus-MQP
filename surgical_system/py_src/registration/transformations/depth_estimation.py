@@ -646,16 +646,14 @@ class DepthEstimation():
         # nanIdx = np.argwhere(np.isnan(z_mesh))
         # print("NaN Indices: ", nanIdx)
 
-        print("Z length: ", z_mesh.shape)
-
         # Compute error between reconstructed points and STL intersection points (z values)
         recon_z = recon_points[:,2]
         stl_z = z_mesh
-        err_z = recon_z - stl_z
+        err_z = np.abs(recon_z - stl_z) * 1000 # mm
         mean_err = np.nanmean(err_z)
         median_err = np.nanmedian(err_z)
         std_dev_err = np.nanstd(err_z)
-        print("Error Mean: ", mean_err, " | Error Median: ", median_err , " | Error Std Dev: ", std_dev_err)
+        print("Error Mean (mm): ", mean_err, " | Error Median (mm): ", median_err , " | Error Std. Dev. (mm): ", std_dev_err)
 
         # Plot original STL against reconstructed surface  
         mesh_triangles = mesh.triangles
@@ -683,7 +681,7 @@ def main():
     # Plot surface
     DepthEstimation.plot_depth_surface(ax, depth_map, meta)
 
-    # Calculate reconstruction error
+    # Calculate reconstruction error & plot STL alongside recon.
     DepthEstimation.calc_recon_error(ax, depth_map, meta)
 
     plt.show()

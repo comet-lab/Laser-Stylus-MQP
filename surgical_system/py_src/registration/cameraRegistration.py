@@ -510,7 +510,6 @@ class Camera_Registration(System_Calibration):
         
         traj = self.robot_controller.create_custom_trajectory(robot_path, 0.025)
         
-        # TODO/FIXME: Trajectory is behaving strangely
         self.robot_controller.run_trajectory(traj, blocking=False)
 
         

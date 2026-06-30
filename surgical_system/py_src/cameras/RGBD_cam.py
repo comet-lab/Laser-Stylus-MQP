@@ -32,6 +32,8 @@ class RGBD_Cam(Camera):
             self.sensor = self.device.sensors[0]
             print(self.device_name, " Connected")
             self.set_color_manual(exposure_us=2000, gain=16, white_balance_k=4500)
+            #self.set_color_manual(exposure_us=10000, gain=16, white_balance_k=4500)
+            
 
             self.config.enable_stream(rs.stream.depth, width, height, rs.format.z16, frame_rate)
             self.config.enable_stream(rs.stream.color, width, height, rs.format.bgr8, frame_rate)
