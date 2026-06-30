@@ -26,22 +26,23 @@ from registration.display_world_transform import Display_World_Transform
     
     
 class System_Calibration():
+    # Note: Commented out all variables related to thermal camera
     def __init__(self, therm_cam: ThermalCam, rgbd_cam: RGBD_Cam, robot_controller: Robot_Controller, laser_controller:Laser_Arduino):
         self.pathToCWD = os.getcwd()
         self.directory = self.pathToCWD + r"/surgical_system/py_src/registration"
         
         self.laser_controller = laser_controller
         self.robot_controller = robot_controller
-        self.therm_cam = therm_cam
+        #self.therm_cam = therm_cam
         self.rgbd_cam = rgbd_cam
         
         self.rgbd_cali = CameraCalibration()
-        self.therm_cali = CameraCalibration()
-        self.rgbd_therm_cali = CameraCalibration()
+        #self.therm_cali = CameraCalibration()
+        #self.rgbd_therm_cali = CameraCalibration()
         
         self.calibration_folder = "/calibration_info"
         self.rgb_cali_folder = "/calibration_info/rgb_cali/"
-        self.therm_cali_folder = "/calibration_info/thermal_cali/"
+        #self.therm_cali_folder = "/calibration_info/thermal_cali/"
         
         self.meta_base_homography_path = self.directory + \
                                                       self.calibration_folder + \
@@ -52,22 +53,25 @@ class System_Calibration():
         
         
         self.cam_transforms = {}
-        for cam in ("color", 'thermal'):
-            cam_obj = self.get_cam_obj(cam)
-            self.cam_transforms[cam] = Display_World_Transform( \
-                H = self.cam_M[cam],
-                img_shape = (cam_obj.height, cam_obj.width),
-                pix_per_m = cam_obj.pix_Per_M,
-                display_size = (cam_obj.height, cam_obj.width),
-            )
+        # Note: Commented out to get rid of thermal camera
+        # for cam in ("color", 'thermal'):
+
+        cam_obj = self.get_cam_obj("color")
+        self.cam_transforms["color"] = Display_World_Transform( \
+            H = self.cam_M["color"],
+            img_shape = (cam_obj.height, cam_obj.width),
+            pix_per_m = cam_obj.pix_Per_M,
+            display_size = (cam_obj.height, cam_obj.width),
+        )
         
-        cam_obj = self.get_cam_obj(cam)
-        self.cam_transforms["rgb_thermal"] = Display_World_Transform( \
-                H = self.rgbd_therm_M,
-                img_shape = (cam_obj.height, cam_obj.width),
-                pix_per_m = 1,
-                display_size = (cam_obj.height, cam_obj.width),
-            )
+        # Note: Commented out to avoid using thermal camera
+        # cam_obj = self.get_cam_obj(cam)
+        # self.cam_transforms["rgb_thermal"] = Display_World_Transform( \
+        #         H = self.rgbd_therm_M,
+        #         img_shape = (cam_obj.height, cam_obj.width),
+        #         pix_per_m = 1,
+        #         display_size = (cam_obj.height, cam_obj.width),
+        #     )
         
         self.boundary_points = None
         
@@ -108,13 +112,16 @@ class System_Calibration():
         self.cam_M = {}
         self.cam_M['color'] = self.rgbd_cali.load_homography(fileLocation = self.rgb_cali_folder)
         print("\n[System Calibration] Thermal Camera to robot calibration info:")
-        self.cam_M['thermal'] = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder)
+        # Note: Commented out to get rid of thermal camera
+        # self.cam_M['thermal'] = self.therm_cali.load_homography(fileLocation = self.therm_cali_folder)
         # self.world_therm_M = np.linalg.inv(self.cam_M['thermal']).astype(np.float32)
         
         img_points = CameraCalibration.load_pts(self.directory +  self.rgb_cali_folder + "laser_spots.csv")
-        obj_points = CameraCalibration.load_pts(self.directory + self.therm_cali_folder  + "laser_spots.csv")
-        print("\n[System Calibration]  RGBD camera to thermal camera calibration info:")
-        self.rgbd_therm_M = self.rgbd_therm_cali.load_homography(M_pix_per_m = 1, img_points=img_points, obj_points=obj_points)
+
+        # Note: Commented out to get rid of thermal camera
+        # obj_points = CameraCalibration.load_pts(self.directory + self.therm_cali_folder  + "laser_spots.csv")
+        # print("\n[System Calibration]  RGBD camera to thermal camera calibration info:")
+        # self.rgbd_therm_M = self.rgbd_therm_cali.load_homography(M_pix_per_m = 1, img_points=img_points, obj_points=obj_points)
         
         
         if os.path.exists(self.meta_base_homography_path):

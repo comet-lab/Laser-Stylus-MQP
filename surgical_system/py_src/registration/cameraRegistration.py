@@ -33,13 +33,17 @@ from registration.transformations.depth_estimation import DepthEstimation
 
 
 class Camera_Registration(System_Calibration):
+    # Note: Commented out all code relating to thermal camera
     def __init__(self, therm_cam: ThermalCam, rgbd_cam: RGBD_Cam, robot_controller: Robot_Controller, laser_controller:Laser_Arduino):
         super().__init__(therm_cam, rgbd_cam, robot_controller, laser_controller)
         
-        self.therm_cam.start_stream()
+        # self.therm_cam.start_stream()
         self.rgbd_cam.start_stream()
         
-        while not self.therm_cam.get_latest() or not self.rgbd_cam.get_latest():
+        # while not self.therm_cam.get_latest() or not self.rgbd_cam.get_latest():
+        #     print("Waiting for camera response...")
+        #     time.sleep(0.5)
+        while not self.rgbd_cam.get_latest():
             print("Waiting for camera response...")
             time.sleep(0.5)
 

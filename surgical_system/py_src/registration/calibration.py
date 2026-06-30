@@ -527,7 +527,8 @@ def main():
     # and the focal distance to 0.204 m. This seems to be at the right location to maximize the focal point around the 
     # free beam laser spot.
     therm_cam = None
-    therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frame_rate="Rate50Hz",focal_distance=0.2) 
+    # TODO: Uncomment me for thermal camera
+    #therm_cam = ThermalCam(IRFormat="TemperatureLinear10mK", height=int(480/window_scale),frame_rate="Rate50Hz",focal_distance=0.2) 
     
     ##################################################################################
     #------------------------------ RGBD Cam Config ---------------------------------#
@@ -543,8 +544,8 @@ def main():
     camera_reg.robot_controller.load_edit_pose()
     
     # Create "base" homography stack for interpolation in dense stack creation
-    # FIMXE: Anything <= 1 mm for heights causes infinite world reprojection error
-    heights = np.array([1.001, 10, 20])
+    # FIMXE: Anything <= 10 mm for heights causes infinite world reprojection error
+    heights = np.array([1.001, 20]) 
     heights = heights / 1000.0 # m -> mm
     depth_path = "homography_stack.npz"
     stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
@@ -555,7 +556,7 @@ def main():
     
     # Shut down camerastreams
     rgbd_cam.stop_stream()
-    therm_cam.deinitialize_cam()
+    #therm_cam.deinitialize_cam()
 
 
 if __name__ == '__main__':

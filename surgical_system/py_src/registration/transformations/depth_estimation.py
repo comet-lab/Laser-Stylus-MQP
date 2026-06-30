@@ -609,7 +609,7 @@ class DepthEstimation():
         # print("X: ", xs)
 
         # Extract X,Y,Z coordinates of points in STL file 
-        # TODO: point to CAD model stl file to compare to 
+        # TODO/FIXME: point to CAD model stl file to compare to & register properly
         mesh = trimesh.load("surgical_system/py_src/image_development/nine_peaks_2.stl")
         mesh.apply_scale(0.001)  # scale from mm to m 
         # Rotate STL file about z axis -90 degrees to align with recon
