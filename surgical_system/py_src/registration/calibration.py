@@ -42,8 +42,8 @@ from laser_control.laser_arduino import Laser_Arduino
 def exp_depth_scan(cam_reg, gridShape = np.array([15, 15]), squareSize = 0.002):
     input(f"Press Enter to continue depth estimation creation.")
     
-    # Hard-coding squareSize (0.02 for 25 x 25 mm block, scans 24 x 24 mm)
-    squareSize = 0.0019
+    # Hard-coding squareSize (0.02 for 25 x 25 mm block, scans 24 x 24 mm, 0.0019 ~ 23 mm x 23 mm, 0.018 ~ 21.5 mm^2)
+    squareSize = 0.0018
     xPoints = (np.arange(gridShape[1]) - (gridShape[1] - 1) / 2) * squareSize
     yPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
     xValues, yValues = np.meshgrid(xPoints, yPoints)
@@ -51,6 +51,9 @@ def exp_depth_scan(cam_reg, gridShape = np.array([15, 15]), squareSize = 0.002):
     robot_path = np.hstack((xValues.reshape((-1, 1)), 
                             yValues.reshape((-1, 1)), 
                             np.full((xValues.size, 1), 0)))
+    
+    # Debugging
+    print("Robot Path", robot_path)
 
     start_pos = robot_path[0, :]
     start_pose = np.eye(4)
@@ -545,8 +548,10 @@ def main():
     
     # Create "base" homography stack for interpolation in dense stack creation
     # FIMXE: Anything <= 10 mm for heights causes infinite world reprojection error
-    heights = np.array([1.001, 20]) 
-    heights = heights / 1000.0 # m -> mm
+    # Note: Took average of 3 measurements from Faro arm for calibration block heights 
+    # heights = np.array([1.004, 10.087, 19.955]) 
+    heights = np.array([1.004, 10.087, 19.955]) 
+    heights = heights / 1000.0 # mm -> m
     depth_path = "homography_stack.npz"
     stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
 

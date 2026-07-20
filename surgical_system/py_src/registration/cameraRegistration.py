@@ -50,6 +50,7 @@ class Camera_Registration(System_Calibration):
             
         self.traj_points = None
         self.display_path = False
+         # Note: This loads the homography stack from previous calibration for initialization purposes (overwritten later)
         self.depth_path = "/homography_stack.npz"
         self.stack_path = self.directory + self.calibration_folder + self.depth_path
         print("\n[Depth Estimation] Loading file: ", self.stack_path)
@@ -532,8 +533,14 @@ class Camera_Registration(System_Calibration):
 
         _objpts = np.array(robot_positions, np.float32) # need this to be [2 x n] 
 
+        # Debugging
+        print("Object Points: \n", _objpts)
+        print("Image Points: \n", _imgpts)
+
         # print(_objpts.shape, _imgpts.shape)
-        H,_ = cv2.findHomography(_imgpts, _objpts)
+        H,_ = cv2.findHomography(_imgpts, _objpts, method=cv2.RANSAC)
+
+        print("Homography Matrix: \n", H)
         
         proj_world = DepthEstimation.project_xy(H, _imgpts)
         world_error = np.linalg.norm(_objpts - proj_world, axis=1)
@@ -715,6 +722,10 @@ class Camera_Registration(System_Calibration):
     
         
     def scan_region_for_depth(self, traj):
+        # Create dense homography stack
+        self.homography_stack = DepthEstimation.load_homography_stack_npz(self.stack_path)
+        self.dense_stack = DepthEstimation.create_dense_stack(self.homography_stack, dz=0.00025)
+
         self.robot_controller.run_trajectory(traj, blocking=False)
         points = np.zeros((0, 3))
         depths = []
@@ -758,6 +769,9 @@ class Camera_Registration(System_Calibration):
         # np.savez("scan_points.npz",
         #  cmd_points=cmd_list,
         #  obs_pixels=obs_list)
+
+        # Debugging 
+        print("Points for Generated Depth Map: ", points)
         
         depth, meta = DepthEstimation.generate_depth_mapping(points, cell_size=0.001)
         
