@@ -246,7 +246,7 @@ class DepthEstimation():
         """
         
         # Calculate relative homography from H0 to H1
-        Hrel = H1 @ np.linalg.pinv(H0)
+        Hrel = H1 @ np.linalg.inv(H0)
         Hrel = DepthEstimation.normalize_homography(Hrel)
         H = Hrel
 
@@ -266,14 +266,15 @@ class DepthEstimation():
                       [0, 0, 1]])
         # A: Submatrix of H_A that encodes non-isotropic scaling and rotation
         A = H_A[:2,:2]
-        U, D, Vt = np.linalg.svd(A)
+        U, s, Vt = np.linalg.svd(A)
         V = Vt.T
+        D = np.diag(s)
         # Ensure positive determinant for proper rotation matrix
         if np.linalg.det(U @ Vt) < 0:
             V[:, -1] *= -1
             D[-1, -1] *= -1 
         # S: Encodes scaling
-        S = np.eye((3,3))
+        S = np.eye(3)
         S[:2,:2] = D
         # R_Phi: Encodes rotation to align axes for scaling
         R_Phi = np.eye(3)
@@ -283,7 +284,6 @@ class DepthEstimation():
         R_Theta[:2,:2] = U @ V.T
 
         # # Interpolation of decomposed matrix
-        ii = 1
         dense_stack = {}
         for z_i in dense_heights:
             # Calculate interpolation variable
@@ -315,20 +315,11 @@ class DepthEstimation():
 
             # FIXME: Do not interpolate values that remain the same between H0 and H1
 
-            dense_stack[ii] = H_int
-            ii += 1
+            dense_stack[z_i] = H_int
         
         return dense_stack
 
 
-
-
-
-
-
-
-
-        
 
     @staticmethod
     def create_dense_stack(homography_stack: dict,
@@ -369,6 +360,7 @@ class DepthEstimation():
         dense_stack = {}
         
         for z in dense_heights:
+            #print("Interpolating for z =", z)
             
             # Exact match
             if z in homography_stack:
@@ -397,20 +389,19 @@ class DepthEstimation():
             H0 = Hs[idx_lower]
             H1 = Hs[idx_upper]
             
+            # TODO: Choose interpolation strategy (linear vs projective) 
+
             # --- Step 4a: Linear interpolation ---
             t = (z - z0) / (z1 - z0)
             H_interp = (1 - t) * H0 + t * H1
-
-            # --- Step 4b: Projective interpolation ---
-            # FIXME: Update to work for any given number of calibration blocks, not just 2
-            # dense_stack = DepthEstimation.projective_interpolation(H0, H1, dense_heights)
-            # break
-
-
             # --- Step 5: Renormalize ---
             H_interp = DepthEstimation.normalize_homography(H_interp)
-            
             dense_stack[z] = H_interp
+
+            # # --- Step 4b: Projective interpolation ---
+            # # FIXME: Update to work for any given number of calibration blocks, not just 2
+            # dense_stack = DepthEstimation.projective_interpolation(H0, H1, dense_heights)
+            # break 
         
         return dense_stack
     
@@ -608,17 +599,15 @@ class DepthEstimation():
             ax.set_ylabel("y [m]")
             ax.set_zlabel("z [m]")
 
-            # Make sure the z-range isn't collapsing visually
-            zmin = float(np.nanmin(0))
-            zmax = float(np.nanmax(11 / 1000))
-            if np.isfinite(zmin) and np.isfinite(zmax) and zmax > zmin:
-                ax.set_zlim(zmin, zmax)
+            # # Make sure the z-range isn't collapsing visually
+            # zmin = float(np.nanmin(0))
+            # zmax = float(np.nanmax(11 / 1000))
+            # if np.isfinite(zmin) and np.isfinite(zmax) and zmax > zmin:
+            #     ax.set_zlim(zmin, zmax)
 
-            
-
-            # Set z-axis ticks 
-            ax.set_xticks([-0.02, -0.01, 0.0, 0.01, 0.02])
-            ax.set_zticks([0.0, 0.01, 0.02])
+            # # Set z-axis ticks 
+            # ax.set_xticks([-0.02, -0.01, 0.0, 0.01, 0.02])
+            # ax.set_zticks([0.0, 0.01, 0.02])
             
     @staticmethod
     def current_height(
@@ -786,7 +775,7 @@ class DepthEstimation():
 
 
 def main():
-    path = "surgical_system/py_src/registration/calibration_info/"
+    # path = "surgical_system/py_src/registration/calibration_info/"
     # stack_path = path + "homography_stack.npz"
     # homography_stack = DepthEstimation.load_homography_stack_npz(stack_path)
     # dense_stack = DepthEstimation.create_dense_stack(homography_stack)
@@ -807,7 +796,7 @@ def main():
     DepthEstimation.plot_depth_surface(ax, depth_map, meta)
 
     # Calculate reconstruction error & plot STL alongside recon.
-    #DepthEstimation.calc_recon_error(ax, depth_map, meta)
+    # DepthEstimation.calc_recon_error(ax, depth_map, meta)
 
     plt.show()
 
