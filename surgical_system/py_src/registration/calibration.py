@@ -39,13 +39,10 @@ from laser_control.laser_arduino import Laser_Arduino
 #     from registration.transformations.roi_selector import ROISelector
 
 ### TESTING FUNCTIONS ###
-def exp_depth_scan(cam_reg, gridShape = np.array([15, 15]), squareSize = 0.002):
+def exp_depth_scan(cam_reg, gridShape, squareSize):
     input(f"Press Enter to continue depth estimation creation.")
-    
-    # Hard-coding squareSize (0.02 for 25 x 25 mm block, scans 24 x 24 mm, 0.0019 ~ 23 mm x 23 mm, 0.018 ~ 21.5 mm^2)
-    squareSize = 0.0018
-    xPoints = (np.arange(gridShape[1]) - (gridShape[1] - 1) / 2) * squareSize
-    yPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
+    xPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
+    yPoints = (np.arange(gridShape[1]) - (gridShape[1] - 1) / 2) * squareSize
     xValues, yValues = np.meshgrid(xPoints, yPoints)
     
     robot_path = np.hstack((xValues.reshape((-1, 1)), 
@@ -556,8 +553,12 @@ def main():
     stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
 
     # Scan surface of desired object and save required data for surface reconstruction
-    # Note: hard-coded squareSize in function
-    exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.04/24)
+    # gridShape: For a 50 x 50 mm block, enter 25 x 25 mm ("area" to scan in every quadrant) 
+        # Note: gridShape values are expected to be odd
+    # squareSize: 0.002 for 25 x 25 mm block scans 24 x 24 mm, 0.0019 ~ 23 mm x 23 mm, 0.0018 ~ 21.5 mm^2)
+        # Note: decrease squareSize to avoid drifting over edge due to radius of aiming beam
+    # TODO: Test changing squareSize back to 0.002 and see if doesn't drift over edge with new trajectory controller
+    exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.0019)
     
     # Shut down camerastreams
     rgbd_cam.stop_stream()

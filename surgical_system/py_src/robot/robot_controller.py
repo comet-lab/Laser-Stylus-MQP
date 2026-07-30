@@ -196,6 +196,9 @@ class Robot_Controller():
         return TrajectoryController(path_info, debug=True)
     
     def _run_trajectory_worker(self, traj: TrajectoryController, laser_on):
+        # Ensure laser is off, regardless if we want it to be on during trajectory
+        self.laser_obj.set_output(False)
+
         total_time = traj.durations[-1]
         self.total_time = total_time
         print("Path Duration: ", total_time)
@@ -220,7 +223,7 @@ class Robot_Controller():
         self.time_list = np.empty(data_num, dtype=float)
 
         i = 0
-        self.laser_obj.set_output(laser_on)
+        #self.laser_obj.set_output(laser_on)
         time.sleep(0.1)
         t_start = time.monotonic()
         try:
@@ -233,11 +236,23 @@ class Robot_Controller():
                     break
 
                 elapsed = min(elapsed, total_time) # redundent 
-                self.laser_obj.set_output(laser_on)
+                #self.laser_obj.set_output(laser_on)
                 
                 movement = traj.update(elapsed)
                 target_vel = movement['velocity']
                 target_pos = movement['position']
+
+                # If laser is on ...
+                # If the laser is performing a "forward pass" of the scan (x increasing / x vel. pos.) have laser on
+                if target_vel[0] > 0.0:
+                    if laser_on == True:
+                        self.laser_obj.set_output(laser_on)
+                        print("LASER ON")
+                else:
+                    self.laser_obj.set_output(False)
+                    print("LASER OFF")
+
+                
 
                 # print(f"Time: {elapsedTime:0,.2f}", "Target Vel: ", target_vel, f" | Target Pos: ", target_pos)
                 

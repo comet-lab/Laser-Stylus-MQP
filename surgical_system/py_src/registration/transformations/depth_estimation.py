@@ -463,6 +463,9 @@ class DepthEstimation():
         if W <= 0 or H <= 0:
             raise ValueError("Computed grid has non-positive dimensions; check bounds/cell_size.")
 
+        # Debugging
+        print("Height and Width of depth map:", H, W)
+
         # Convert world coords -> integer grid indices
         # i: row (y), j: col (x)
         j = np.floor((x - xmin) / cell_size).astype(np.int64)
@@ -720,17 +723,17 @@ class DepthEstimation():
 
         # Extract X,Y,Z coordinates of points in STL file 
         # TODO/FIXME: point to CAD model stl file to compare to & register properly
-        mesh = trimesh.load("surgical_system/py_src/image_development/hills_1.2.stl")
+        mesh = trimesh.load("surgical_system/py_src/image_development/nine_peaks_2.stl")
         mesh.apply_scale(0.001)  # scale from mm to m 
-        # # Rotate STL file about z axis -90 degrees to align with recon (nine peaks STLs)
-        # angle = -np.pi/2
-        # T = np.array([
-        #     [np.cos(angle), -np.sin(angle), 0, 0],
-        #     [np.sin(angle),  np.cos(angle), 0, 0],
-        #     [0,              0,             1, 0],
-        #     [0,              0,             0, 1]
-        # ])
-        # mesh.apply_transform(T)
+        # Rotate STL file about z axis -90 degrees to align with recon (nine peaks STLs)
+        angle = -np.pi/2
+        T = np.array([
+            [np.cos(angle), -np.sin(angle), 0, 0],
+            [np.sin(angle),  np.cos(angle), 0, 0],
+            [0,              0,             1, 0],
+            [0,              0,             0, 1]
+        ])
+        mesh.apply_transform(T)
 
         # Perform ray casting to ensure x,y coordinates we compare are identical (considered with z error)
         # Define ray origins and directions above the mesh, pointing downwards

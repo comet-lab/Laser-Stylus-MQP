@@ -78,10 +78,9 @@ def calc_traj(camera_reg):
     X, Y = np.meshgrid(xs, ys) 
     # Alters dimensions to have N x 3 recon_points
     recon_points = np.stack([X, Y, Z], axis=-1).reshape(-1, 3)
+    # Subtract away lowest z value to ensure starting z is @ "0" (considered focal distance)
+    recon_points[:,2] -= recon_points[:,2].min()
     robot_path = recon_points
-
-    # Debugging
-    print("Roboth path shape: ", robot_path.shape)
 
     # Calculate the trajectory
     traj = camera_reg.robot_controller.create_custom_trajectory(robot_path, 0.01)
@@ -96,20 +95,26 @@ def calc_traj(camera_reg):
     return traj
 
 
+def run_traj(camera_reg, traj):
+    # Run the trajectory
+    # TODO/FIXME: Turn laser off!!!
+    laser_on = False
+    camera_reg.robot_controller.run_trajectory(traj, blocking=False, laser_on=laser_on)
+    while(camera_reg.robot_controller.is_trajectory_running()):
+        time.sleep(5)
+        print("Trajectory is running...")
+
 def main():
     # Setup all communication with hardware 
     camera_reg = setup()
 
-    input(f"Press Enter to perform the raster scan with focus control (height adjustment).")
+
+    input(f"Press Enter to perform the raster scan with focus control...")
 
     # Calculate trajectory for raster scan with focus control
     traj = calc_traj(camera_reg)
-
     # Run the trajectory
-    camera_reg.robot_controller.run_trajectory(traj, blocking=False)
-    while(camera_reg.robot_controller.is_trajectory_running()):
-        time.sleep(5)
-        print("Trajectory is running...")
+    run_traj(camera_reg, traj)
 
 if __name__ == "__main__":
     main()

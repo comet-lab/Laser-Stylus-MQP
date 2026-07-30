@@ -472,7 +472,7 @@ class Camera_Registration(System_Calibration):
             print("Height [mm]: ", z*1000)
             
             H = self.rgb_raster_scan(gridShape = np.array([3, 3]), \
-                                     squareSize=0.035/2.0)
+                                     squareSize=0.02)
             homography_stack[z] = H
             
             
@@ -495,10 +495,10 @@ class Camera_Registration(System_Calibration):
         
         return homography_stack
     
-    def rgb_raster_scan(self, gridShape = np.array([2, 6]), squareSize = 0.0026):
+    def rgb_raster_scan(self, gridShape, squareSize):
         input(f"Press Enter to continue depth estimation creation.")
-        xPoints = (np.arange(gridShape[1]) - (gridShape[1] - 1) / 2) * squareSize
-        yPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
+        xPoints = (np.arange(gridShape[0]) - (gridShape[0] - 1) / 2) * squareSize
+        yPoints = (np.arange(gridShape[1]) - (gridShape[1] - 1) / 2) * squareSize
         xValues, yValues = np.meshgrid(xPoints, yPoints)
         robot_positions = np.zeros((0, 2))
         pixel_points = np.empty((0, 2))
@@ -513,7 +513,7 @@ class Camera_Registration(System_Calibration):
         print("Heading to starting location")
         self.robot_controller.go_to_pose(start_pose @ self.robot_controller.home_pose)
         
-        traj = self.robot_controller.create_custom_trajectory(robot_path, 0.025)
+        traj = self.robot_controller.create_custom_trajectory(robot_path, 0.01)
         
         self.robot_controller.run_trajectory(traj, blocking=False)
 

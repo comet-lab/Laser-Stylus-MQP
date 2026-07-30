@@ -121,13 +121,14 @@ class TrajectoryController():
         v_way[0]  = 0.0
         v_way[-1] = 0.0
         for i in range(1, self.n_points-1):
+
             dt = durations[i] - durations[i-1]
             if dt <= 0:
                 raise ValueError("durations must be strictly increasing")
             
-            # Indicates changing direction - want zero velocity to avoid "overshooting"
-            # Note: 4 s is specific to the current custom trajectory, better way to find "turnarond" points
-            if durations[i] - durations[i-1] > 4:
+            # If new x < old x -> Indicates changing direction - want zero velocity to avoid "overshooting"
+            # Longer duration also indicates change in direction (specific to our raster scan implementation)
+            if position[i][0] < position[i-1][0] or durations[i] > durations[i-1] + 4:
                 v_way[i-1] = 0.0
             else:
                 v_way[i] = (position[i] - position[i-1]) / dt
