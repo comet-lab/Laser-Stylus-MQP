@@ -108,7 +108,6 @@ def main():
     # Setup all communication with hardware 
     camera_reg = setup()
 
-
     input(f"Press Enter to perform the raster scan with focus control...")
 
     # Calculate trajectory for raster scan with focus control

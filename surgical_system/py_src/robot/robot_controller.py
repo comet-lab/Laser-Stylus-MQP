@@ -247,10 +247,8 @@ class Robot_Controller():
                 if target_vel[0] > 0.0:
                     if laser_on == True:
                         self.laser_obj.set_output(laser_on)
-                        print("LASER ON")
                 else:
                     self.laser_obj.set_output(False)
-                    print("LASER OFF")
 
                 
 

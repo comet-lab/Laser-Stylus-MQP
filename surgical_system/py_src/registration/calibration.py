@@ -547,7 +547,7 @@ def main():
     # FIMXE: Anything <= 10 mm for heights causes infinite world reprojection error
     # Note: Took average of 3 measurements from Faro arm for calibration block heights 
     # heights = np.array([1.004, 1.989, 10.087, 19.955, 49.807]) 
-    heights = np.array([1.004, 19.955])  # mm
+    heights = np.array([49.807, 60]) 
     heights = heights / 1000.0 # mm -> m
     depth_path = "homography_stack.npz"
     stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)

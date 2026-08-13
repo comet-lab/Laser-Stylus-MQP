@@ -464,7 +464,58 @@ class Camera_Registration(System_Calibration):
         return data, boundary_pts
     
     
-    
+    def reprojection_test(self, H, gridSize):
+        input(f"Press Enter to begin reprojection test.")
+        # Create grid of 9x9 points on 50 x 50 mm block
+        xPoints = (np.arange(gridSize[0]) - (gridSize[0] - 1) / 2) * 0.005
+        yPoints = (np.arange(gridSize[1]) - (gridSize[1] - 1) / 2) * 0.005
+        xValues, yValues = np.meshgrid(xPoints, yPoints)
+        robot_path = np.hstack((xValues.reshape((-1, 1)), 
+                                yValues.reshape((-1, 1)), 
+                                np.full((xValues.size, 1), 0)))
+
+        # Loop through all the points and calculate pixels
+        pixel_points = np.empty((0, 2))
+        robot_positions = np.zeros((0, 2))
+        for i in range(robot_path.shape[0]):
+            # Send robot/laser to predetermined point
+            robot_pos = robot_path[i,:]
+            robot_pose = np.eye(4)
+            robot_pose[:3,-1] = robot_path[i, :]
+            self.robot_controller.go_to_pose(robot_pose @ self.robot_controller.home_pose)
+            # Grab current position (should be same as sent pose, but double checking)
+            world_pos = self.robot_controller.current_robot_to_world_position()[:2]
+            robot_positions = np.vstack((robot_positions, world_pos))
+            # Ensure robot is no longer moving before taking image (overkill)
+            time.sleep(1.0)
+            # Calculate u,v pixel 
+            color_img = self.rgbd_cam.get_latest()['color']
+            rgb_laser_pixel = self.get_hot_pixel(color_img, method="Centroid")
+            pixel_points = np.vstack((pixel_points, rgb_laser_pixel))
+
+        # Project pixels to world coordinates
+        _imgpts = np.array(pixel_points, np.float32) 
+        _objpts = np.array(robot_positions, np.float32) 
+        proj_world = DepthEstimation.project_xy(H, _imgpts)
+
+        # print("Object Points: \n", _objpts)
+        # print("Projected Points: \n", proj_world)
+
+        reprojection_errors = np.linalg.norm(_objpts - proj_world, axis=1)
+        print("World reprojection error [mm]:", np.mean(reprojection_errors) * 1000)
+
+        # Plotting reprojections
+        plt.scatter(_objpts[:, 0] * 1000, _objpts[:, 1] * 1000, c='b', label='Actual World Points')
+        plt.scatter(proj_world[:, 0] * 1000, proj_world[:, 1] * 1000, c='r', label='Reprojected World Points')
+        plt.title('Reprojection Test')
+        plt.xlabel('X [mm]')
+        plt.ylabel('Y [mm]')
+        plt.legend(loc="upper left", bbox_to_anchor=(1, 1))
+        plt.savefig("reprojection_test.png", dpi=300, bbox_inches='tight')
+
+        return reprojection_errors
+
+
     def rgb_multi_layer_scan(self, heights, file_name = "homography_stack.npz"):
         homography_stack = {}
         
@@ -474,6 +525,11 @@ class Camera_Registration(System_Calibration):
             H = self.rgb_raster_scan(gridShape = np.array([3, 3]), \
                                      squareSize=0.02)
             homography_stack[z] = H
+
+            # Calculate reprojection error
+            gridSize = np.array([9, 9])
+            reprojection_errors = self.reprojection_test(H, gridSize)
+
             
             
         try:
@@ -533,9 +589,9 @@ class Camera_Registration(System_Calibration):
 
         _objpts = np.array(robot_positions, np.float32) # need this to be [2 x n] 
 
-        # Debugging
-        print("Object Points: \n", _objpts)
-        print("Image Points: \n", _imgpts)
+        # # Debugging
+        # print("Object Points: \n", _objpts)
+        # print("Image Points: \n", _imgpts)
 
         # print(_objpts.shape, _imgpts.shape)
         H,_ = cv2.findHomography(_imgpts, _objpts, method=cv2.RANSAC)
