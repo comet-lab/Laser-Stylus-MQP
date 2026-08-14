@@ -6,6 +6,7 @@ from laser_control.laser_arduino import Laser_Arduino
 from robot.robot_controller import Robot_Controller
 from cameras.RGBD_cam import RGBD_Cam
 from registration.cameraRegistration import Camera_Registration
+import matplotlib.pyplot as plt
 
 
 
@@ -104,13 +105,52 @@ def main():
     # Setup all communication with hardware 
     camera_reg = setup()
 
-    # TODO: Create loop to calculate diameters are different heights and record them
-    # Get RGB camera image
-    color_img = camera_reg.rgbd_cam.get_latest()['color']
-    # Determine diameter of laser spot
-    diameter = get_spot_diameter(color_img)
+    # Calculate the trajectory (moving downwards in z direction)
+    # TODO: Starting point is negative relative to "home position" for scanning
+    heights = np.arange(-0.06, 0.000, 0.001) #m
+    robot_path = np.zeros((len(heights), 3))
+    robot_path[:,2] = heights
+    traj = camera_reg.robot_controller.create_custom_trajectory(robot_path, 0.01)
 
+    # Send robot to starting position (first point in trajectory)
+    start_pos = robot_path[0, :]
+    start_pose = np.eye(4)
+    start_pose[:3, -1] = start_pos
+    print("Heading to starting location")
+    camera_reg.robot_controller.go_to_pose(start_pose @ camera_reg.robot_controller.home_pose)
 
+    # Loop to calculate diameters at different heights and record them
+    diameters = np.zeros(len(heights))
+    for i in range(robot_path.shape[0]):
+        print("Heading to height: ", heights[i])
+        # Send robot/laser to predetermined point
+        robot_pos = robot_path[i,:]
+        robot_pose = np.eye(4)
+        robot_pose[:3,-1] = robot_path[i, :]
+        camera_reg.robot_controller.go_to_pose(robot_pose @ camera_reg.robot_controller.home_pose)
+
+        # Ensure robot is no longer moving before taking image (overkill)
+        time.sleep(0.25)
+        
+        # Get RGB camera image
+        color_img = camera_reg.rgbd_cam.get_latest()['color']
+        # Determine diameter of laser spot
+        diameter = get_spot_diameter(color_img)
+        diameters[i] = diameter
+
+    # Determine the focal distance based on smallest diameter and its corresponding height
+    min_diameter_idx = np.nanargmin(diameters)
+    min_diamter = diameters[min_diameter_idx]
+    focal_distance = heights[min_diameter_idx]
+    print(f"Focal distance is: {focal_distance} m with beam waist diameter of: {min_diamter} pixels")
+
+    # Simple plot of findings
+    laser_heights = (heights + 0.08) * 1000
+    plt.scatter(laser_heights, diameters)
+    plt.xlabel("Laser Height (mm)")
+    plt.ylabel("Diameter (pixels)")
+    plt.title("Laser Height vs. Laser Spot Diameter")
+    plt.savefig("laser_height_vs_diameter.png")
 
 if __name__ == "__main__":
     main()
