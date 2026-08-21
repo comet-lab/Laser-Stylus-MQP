@@ -105,11 +105,19 @@ def main():
     # Setup all communication with hardware 
     camera_reg = setup()
 
+    # Create grid of 9x9 points on 50 x 50 mm block
+    gridSize = np.array([9, 9])
+    xPoints = (np.arange(gridSize[0]) - (gridSize[0] - 1) / 2) * 0.005
+    yPoints = (np.arange(gridSize[1]) - (gridSize[1] - 1) / 2) * 0.005
+    xValues, yValues = np.meshgrid(xPoints, yPoints)
+
     # Calculate the trajectory (moving downwards in z direction)
-    # TODO: Starting point is negative relative to "home position" for scanning
-    heights = np.arange(-0.06, 0.000, 0.001) #m
-    robot_path = np.zeros((len(heights), 3))
-    robot_path[:,2] = heights
+    # FIXME: Starting point is negative relative to home position csv for scanning
+    numPoints = gridSize[0] * gridSize[1]
+    heights = np.linspace(-0.06, 0.06, numPoints) #m
+    robot_path = np.hstack((xValues.reshape((-1, 1)), 
+                                    yValues.reshape((-1, 1)), 
+                                    heights.reshape((-1, 1))))
     traj = camera_reg.robot_controller.create_custom_trajectory(robot_path, 0.01)
 
     # Send robot to starting position (first point in trajectory)
@@ -129,28 +137,32 @@ def main():
         robot_pose[:3,-1] = robot_path[i, :]
         camera_reg.robot_controller.go_to_pose(robot_pose @ camera_reg.robot_controller.home_pose)
 
-        # Ensure robot is no longer moving before taking image (overkill)
-        time.sleep(0.25)
+        # Fire the laser (1/2 second)
+        camera_reg.fireLaser()
         
-        # Get RGB camera image
-        color_img = camera_reg.rgbd_cam.get_latest()['color']
-        # Determine diameter of laser spot
-        diameter = get_spot_diameter(color_img)
-        diameters[i] = diameter
+        # TODO/FIXME: Measure diameters of laser's aiming beam
+        # # Get RGB camera image 
+        # color_img = camera_reg.rgbd_cam.get_latest()['color']
+        # # Determine diameter of laser spot
+        # diameter = get_spot_diameter(color_img)
+        # diameters[i] = diameter
 
-    # Determine the focal distance based on smallest diameter and its corresponding height
-    min_diameter_idx = np.nanargmin(diameters)
-    min_diamter = diameters[min_diameter_idx]
-    focal_distance = heights[min_diameter_idx]
-    print(f"Focal distance is: {focal_distance} m with beam waist diameter of: {min_diamter} pixels")
-
-    # Simple plot of findings
-    laser_heights = (heights + 0.08) * 1000
-    plt.scatter(laser_heights, diameters)
-    plt.xlabel("Laser Height (mm)")
-    plt.ylabel("Diameter (pixels)")
-    plt.title("Laser Height vs. Laser Spot Diameter")
-    plt.savefig("laser_height_vs_diameter.png")
+    # Measure diameters of burn marks!!!
+    color_img = camera_reg.rgbd_cam.get_latest()['color']
+    
+    # TODO/FIXME: For measuring diameters of laser's aiming beam
+    # # Determine the focal distance based on smallest diameter and its corresponding height
+    # min_diameter_idx = np.nanargmin(diameters)
+    # min_diamter = diameters[min_diameter_idx]
+    # focal_distance = heights[min_diameter_idx]
+    # print(f"Focal distance is: {focal_distance} m with beam waist diameter of: {min_diamter} pixels")
+    # # Simple plot of findings
+    # laser_heights = (heights + 0.08) * 1000
+    # plt.scatter(laser_heights, diameters)
+    # plt.xlabel("Laser Height (mm)")
+    # plt.ylabel("Diameter (pixels)")
+    # plt.title("Laser Height vs. Laser Spot Diameter")
+    # plt.savefig("laser_height_vs_diameter.png")
 
 if __name__ == "__main__":
     main()

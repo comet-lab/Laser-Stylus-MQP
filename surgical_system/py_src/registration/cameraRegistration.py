@@ -526,9 +526,9 @@ class Camera_Registration(System_Calibration):
                                      squareSize=0.02)
             homography_stack[z] = H
 
-            # Calculate reprojection error
-            gridSize = np.array([9, 9])
-            reprojection_errors = self.reprojection_test(H, gridSize)
+            # # TODO: Calculate reprojection error
+            # gridSize = np.array([9, 9])
+            # reprojection_errors = self.reprojection_test(H, gridSize)
 
             
             

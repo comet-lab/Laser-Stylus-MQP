@@ -323,7 +323,7 @@ class DepthEstimation():
 
     @staticmethod
     def create_dense_stack(homography_stack: dict,
-                        dz: float = 0.0001, # m
+                        dz: float = 0.00001, # m
                         extrapolate: bool = False):
 
         """
@@ -723,17 +723,17 @@ class DepthEstimation():
 
         # Extract X,Y,Z coordinates of points in STL file 
         # TODO/FIXME: point to CAD model stl file to compare to & register properly
-        mesh = trimesh.load("surgical_system/py_src/image_development/nine_peaks_3.stl")
+        mesh = trimesh.load("surgical_system/py_src/image_development/hills_5.stl")
         mesh.apply_scale(0.001)  # scale from mm to m 
-        # Rotate STL file about z axis -90 degrees to align with recon (nine peaks STLs)
-        angle = -np.pi/2
-        T = np.array([
-            [np.cos(angle), -np.sin(angle), 0, 0],
-            [np.sin(angle),  np.cos(angle), 0, 0],
-            [0,              0,             1, 0],
-            [0,              0,             0, 1]
-        ])
-        mesh.apply_transform(T)
+        # # Rotate STL file about z axis -90 degrees to align with recon (nine peaks STLs)
+        # angle = -np.pi/2
+        # T = np.array([
+        #     [np.cos(angle), -np.sin(angle), 0, 0],
+        #     [np.sin(angle),  np.cos(angle), 0, 0],
+        #     [0,              0,             1, 0],
+        #     [0,              0,             0, 1]
+        # ])
+        # mesh.apply_transform(T)
 
         # Perform ray casting to ensure x,y coordinates we compare are identical (considered with z error)
         # Define ray origins and directions above the mesh, pointing downwards
@@ -799,7 +799,7 @@ def main():
     DepthEstimation.plot_depth_surface(ax, depth_map, meta)
 
     # Calculate reconstruction error & plot STL alongside recon.
-    # DepthEstimation.calc_recon_error(ax, depth_map, meta)
+    DepthEstimation.calc_recon_error(ax, depth_map, meta)
 
     plt.show()
 
