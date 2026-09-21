@@ -242,11 +242,20 @@ class Robot_Controller():
                 target_vel = movement['velocity']
                 target_pos = movement['position']
 
-                # If laser is on ...
-                # If the laser is performing a "forward pass" of the scan (x increasing / x vel. pos.) have laser on
+                # TODO/FIXME: Determine when to turn laser on / off
+                # Note else statemetns are overkill - want to ensure the laser is OFF if not desired
+                # If the laser is performing a "forward pass" of the scan (x increasing / x vel. pos.) 
                 if target_vel[0] > 0.0:
-                    if laser_on == True:
-                        self.laser_obj.set_output(laser_on)
+                    # FIXME: If laser is witin specified region, turn it on
+                    # if target_pos[0] > -0.010 and target_pos[0] < 0.010: # Flat Surface
+                    if target_pos[0] > -0.00936 and target_pos[0] < 0.00936: # Slanted Surface
+                        # print("X Velocity: ", target_vel[0])
+                        if laser_on == True:
+                            self.laser_obj.set_output(laser_on)
+                        else:
+                            self.laser_obj.set_output(False)
+                    else:
+                        self.laser_obj.set_output(False)
                 else:
                     self.laser_obj.set_output(False)
 
@@ -486,8 +495,9 @@ class Robot_Controller():
             
     def live_control(self, target_pose_home, max_vel, KP = 5.0, KD = 0.0):
         current_pose, current_velocity = self.get_current_state()
-        current_pose = current_pose[:3, -1] - self.home_pose[:3, -1]
+        current_pose = current_pose[:3,-1] - self.home_pose[:3, -1]
         position_error = target_pose_home[:3, -1] - current_pose
+
         target_vel = position_error * KP - KD * current_velocity[:3]
         # print("[Robot Controller] KD", KD * current_velocity[:3])
         mag = np.linalg.norm(target_vel)

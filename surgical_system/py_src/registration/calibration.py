@@ -548,9 +548,10 @@ def main():
     # Note: Took average of 3 measurements from Faro arm for calibration block heights 
     # heights = np.array([1.004, 1.989, 10.087, 19.955, 49.807]) 
 
-    heights = np.array([1.989, 19.955]) 
+    heights = np.array([10.087, 19.955, 49.807]) #+ 44.0 # mm, based on height of platform
     heights = heights / 1000.0 # mm -> m
     depth_path = "homography_stack.npz"
+    # TODO: Check scanning pattner, seems slightly off center
     stack = camera_reg.rgb_multi_layer_scan(heights, file_name= depth_path)
 
     # Scan surface of desired object and save required data for surface reconstruction
@@ -558,8 +559,7 @@ def main():
         # Note: gridShape values are expected to be odd
     # squareSize: 0.002 for 25 x 25 mm block scans 24 x 24 mm, 0.0019 ~ 23 mm x 23 mm, 0.0018 ~ 21.5 mm^2)
         # Note: decrease squareSize to avoid drifting over edge due to radius of aiming beam
-    # TODO: Test changing squareSize back to 0.002 and see if doesn't drift over edge with new trajectory controller
-    exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.0018)
+    exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.0013)
     
     # Shut down camerastreams
     rgbd_cam.stop_stream()

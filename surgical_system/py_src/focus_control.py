@@ -78,12 +78,26 @@ def calc_traj(camera_reg):
     X, Y = np.meshgrid(xs, ys) 
     # Alters dimensions to have N x 3 recon_points
     recon_points = np.stack([X, Y, Z], axis=-1).reshape(-1, 3)
-    # Subtract away lowest z value to ensure starting z is @ "0" (considered focal distance)
-    recon_points[:,2] -= recon_points[:,2].min()
+
+
+    # FIXME: Calculate focal distance 
+    # Notes: 
+        # Surface is 44 mm above ground plane 
+        # Robot zero position is 198.5 mm in z
+        # Focal position is approixmately 105 mm
+        # FIXME: Need to figure out how to appropriately calculate focal distance (equations wrong, implementation correct)
+        # "Zero" starting position of robot in focus is 198.5 - (44 + z_recon) + dist_to_focus = 105 mm 
+        # "Zero" starting position of robot in focus is 198.5 - (44 + z_recon) + dist_to_focus = 105 mm 
     robot_path = recon_points
+    dist_to_focus = 0.0495 - recon_points[:,2]
+    print(f"dist_to_focus: {dist_to_focus}")
+    # Adjust z position to be at focal distance
+    robot_path[:,2] = (-1 * dist_to_focus[0]) # * np.ones(len(np.array(robot_path[:,2]))) # For NAF
+    
 
     # Calculate the trajectory
-    traj = camera_reg.robot_controller.create_custom_trajectory(robot_path, 0.01)
+    max_vel = 0.00467 #[m/s] - 0.005 m/s on slant, but only control horizontal velocity
+    traj = camera_reg.robot_controller.create_custom_trajectory(robot_path, max_vel)
 
     # Send the robot to the starting position
     start_pos = robot_path[0, :]
@@ -98,7 +112,7 @@ def calc_traj(camera_reg):
 def run_traj(camera_reg, traj):
     # Run the trajectory
     # TODO/FIXME: Turn laser off!!!
-    laser_on = False
+    laser_on = True
     camera_reg.robot_controller.run_trajectory(traj, blocking=False, laser_on=laser_on)
     while(camera_reg.robot_controller.is_trajectory_running()):
         time.sleep(5)

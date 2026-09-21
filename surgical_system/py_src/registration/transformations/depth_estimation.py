@@ -464,7 +464,7 @@ class DepthEstimation():
             raise ValueError("Computed grid has non-positive dimensions; check bounds/cell_size.")
 
         # Debugging
-        print("Height and Width of depth map:", H, W)
+        # print("Height and Width of depth map:", H, W)
 
         # Convert world coords -> integer grid indices
         # i: row (y), j: col (x)
@@ -723,17 +723,18 @@ class DepthEstimation():
 
         # Extract X,Y,Z coordinates of points in STL file 
         # TODO/FIXME: point to CAD model stl file to compare to & register properly
-        mesh = trimesh.load("surgical_system/py_src/image_development/hills_5.stl")
+        mesh = trimesh.load("surgical_system/py_src/image_development/nine_peaks_2.stl")
+        # print(type(mesh))
         mesh.apply_scale(0.001)  # scale from mm to m 
-        # # Rotate STL file about z axis -90 degrees to align with recon (nine peaks STLs)
-        # angle = -np.pi/2
-        # T = np.array([
-        #     [np.cos(angle), -np.sin(angle), 0, 0],
-        #     [np.sin(angle),  np.cos(angle), 0, 0],
-        #     [0,              0,             1, 0],
-        #     [0,              0,             0, 1]
-        # ])
-        # mesh.apply_transform(T)
+        # Rotate STL file about z axis -90 degrees to align with recon (nine peaks STLs)
+        angle = -np.pi/2
+        T = np.array([
+            [np.cos(angle), -np.sin(angle), 0, 0],
+            [np.sin(angle),  np.cos(angle), 0, 0],
+            [0,              0,             1, 0],
+            [0,              0,             0, 1]
+        ])
+        mesh.apply_transform(T)
 
         # Perform ray casting to ensure x,y coordinates we compare are identical (considered with z error)
         # Define ray origins and directions above the mesh, pointing downwards
@@ -749,6 +750,9 @@ class DepthEstimation():
             ray_origins=origins,
             ray_directions=directions
         )
+
+        #  print(locations)
+
         # Ensure that the ray casting worked (if not, put NaN for those points)
         z_mesh = np.full(recon_points.shape[0], np.nan)
         z_mesh[ray_ids] = locations[:, 2]
@@ -766,7 +770,19 @@ class DepthEstimation():
         mean_err = np.nanmean(err_z)
         median_err = np.nanmedian(err_z)
         std_dev_err = np.nanstd(err_z)
-        print("Error Mean (mm): ", mean_err, " | Error Median (mm): ", median_err , " | Error Std. Dev. (mm): ", std_dev_err)
+        max_err = np.nanmax(err_z)
+        print("Error Mean (mm): ", mean_err, " | Error Median (mm): ", median_err , " | Error Std. Dev. (mm): ", std_dev_err, " | Error Max (mm): ", max_err)
+
+    
+        # # Plot error vs index (optional)
+        # plt.figure()
+        # indices = np.arange(len(err_z))
+        # plt.plot(indices, err_z, 'o-')
+        # plt.xlabel('Index')
+        # plt.ylabel('Error')
+        # plt.title('Error vs. Index')
+        # plt.axhline(0, linestyle='--')
+        # plt.show()
 
         # Plot original STL against reconstructed surface  
         mesh_triangles = mesh.triangles
@@ -799,7 +815,7 @@ def main():
     DepthEstimation.plot_depth_surface(ax, depth_map, meta)
 
     # Calculate reconstruction error & plot STL alongside recon.
-    DepthEstimation.calc_recon_error(ax, depth_map, meta)
+    # DepthEstimation.calc_recon_error(ax, depth_map, meta)
 
     plt.show()
 

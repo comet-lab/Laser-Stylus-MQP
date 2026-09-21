@@ -523,7 +523,7 @@ class Camera_Registration(System_Calibration):
             print("Height [mm]: ", z*1000)
             
             H = self.rgb_raster_scan(gridShape = np.array([3, 3]), \
-                                     squareSize=0.02)
+                                     squareSize=0.019)
             homography_stack[z] = H
 
             # # TODO: Calculate reprojection error
@@ -576,12 +576,17 @@ class Camera_Registration(System_Calibration):
         
         # time.sleep(1)
         while(self.robot_controller.is_trajectory_running()):
+            # # Debugging
+            # current_pose, current_velocity = self.robot_controller.get_current_state()
+            # current_pose = current_pose[:3, -1] - (self.robot_controller.get_home_pose())[:3, -1]
+            # print("Current Pose: ", current_pose[1])
+
             world_pos = self.robot_controller.current_robot_to_world_position()[:2]
             robot_positions = np.vstack((robot_positions, world_pos))
             color_img = self.rgbd_cam.get_latest()['color']
             rgb_laser_pixel = self.get_hot_pixel(color_img, method="Centroid")
             pixel_points = np.vstack((pixel_points, rgb_laser_pixel))
-            # print("World Pos: ", world_pos, " Pixel: ", rgb_laser_pixel)
+            #print("World Pos: ", world_pos, " Pixel: ", rgb_laser_pixel)
             time.sleep(1/30.0)
         # self.robot_controller.set_velocity(np.zeros(3), np.zeros(3))
             
