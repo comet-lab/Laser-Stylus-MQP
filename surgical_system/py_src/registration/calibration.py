@@ -59,6 +59,7 @@ def exp_depth_scan(cam_reg, gridShape, squareSize):
     cam_reg.robot_controller.go_to_pose(start_pose @ cam_reg.robot_controller.home_pose)
     
     traj = cam_reg.robot_controller.create_custom_trajectory(robot_path, 0.01)
+    # Create dense homography stack at beginning of following method
     depth, meta = cam_reg.scan_region_for_depth(traj)
     
     save_location = cam_reg.directory + cam_reg.calibration_folder + "/depth_map.npz"
@@ -546,9 +547,9 @@ def main():
     # Create "base" homography stack for interpolation in dense stack creation
     # FIMXE: Anything <= 10 mm for heights causes infinite world reprojection error
     # Note: Took average of 3 measurements from Faro arm for calibration block heights 
-    # heights = np.array([1.004, 1.989, 10.087, 19.955, 49.807]) 
+    # heights = np.array([1.004, 1.989, 10.087, 19.955, 34.841, 49.807]) 
 
-    heights = np.array([10.087, 19.955, 49.807]) #+ 44.0 # mm, based on height of platform
+    heights = np.array([10.087, 34.841]) # + 44.0 # mm, based on height of platform
     heights = heights / 1000.0 # mm -> m
     depth_path = "homography_stack.npz"
     # TODO: Check scanning pattner, seems slightly off center
@@ -559,7 +560,7 @@ def main():
         # Note: gridShape values are expected to be odd
     # squareSize: 0.002 for 25 x 25 mm block scans 24 x 24 mm, 0.0019 ~ 23 mm x 23 mm, 0.0018 ~ 21.5 mm^2)
         # Note: decrease squareSize to avoid drifting over edge due to radius of aiming beam
-    exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.0013)
+    exp_depth_scan(camera_reg, gridShape = np.array([25, 25]), squareSize = 0.0012)
     
     # Shut down camerastreams
     rgbd_cam.stop_stream()

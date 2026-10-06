@@ -97,7 +97,7 @@ def calc_traj(camera_reg):
     # zValues = np.linspace(-0.090, -0.040, xValues.shape[0])
     
     
-    # Testing MDF x CO2 laser interactions
+    # Testing MDF x CO2 laser interactions OR focal distance
     xValues = np.arange(-0.020, 0.020, 0.001)
     # TODO: Select yValues of robot
     # yValues = np.full(xValues.shape, -0.020)
@@ -107,10 +107,11 @@ def calc_traj(camera_reg):
     # yValues = np.full(xValues.shape, 0.010)
     yValues = np.full(xValues.shape, 0.015)
     X, Y = np.meshgrid(xValues, yValues)
-    #TODO: Select zValues (focal height) of robot
+    # TODO: Select zValues (focal height) of robot
     # Height for approximate focal distance of 0.105 m to top of MDF block
-    focalPointHeight = -0.0365
-    Z = np.full(X.size, focalPointHeight) #m
+    focalPointHeight = -0.0365 #m
+    focalHeightAdjustment = 0.010 #m
+    Z = np.full(X.size, focalPointHeight + focalHeightAdjustment) #m
 
     robot_path = np.hstack((X.reshape((-1, 1)), 
                                     Y.reshape((-1, 1)), 

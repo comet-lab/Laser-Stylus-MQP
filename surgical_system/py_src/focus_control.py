@@ -85,17 +85,15 @@ def calc_traj(camera_reg):
         # Surface is 44 mm above ground plane 
         # Robot zero position is 198.5 mm in z
         # Focal position is approixmately 105 mm
-        # FIXME: Need to figure out how to appropriately calculate focal distance (equations wrong, implementation correct)
-        # "Zero" starting position of robot in focus is 198.5 - (44 + z_recon) + dist_to_focus = 105 mm 
         # "Zero" starting position of robot in focus is 198.5 - (44 + z_recon) + dist_to_focus = 105 mm 
     robot_path = recon_points
-    dist_to_focus = 0.0495 - recon_points[:,2]
+    dist_to_focus = recon_points[:,2] - 0.0495
     print(f"dist_to_focus: {dist_to_focus}")
-    # Adjust z position to be at focal distance
-    robot_path[:,2] = (-1 * dist_to_focus[0]) # * np.ones(len(np.array(robot_path[:,2]))) # For NAF
+    # TODO: Adjust z position to be at focal distance (choose if AF or NAF)
+    robot_path[:,2] = dist_to_focus[0] * np.ones(len(np.array(robot_path[:,2]))) # For NAF, only choose dist_to_focus[0] index 
     
 
-    # Calculate the trajectory
+    # Calculate the trajectory (must change depending upon object being scanned)
     max_vel = 0.00467 #[m/s] - 0.005 m/s on slant, but only control horizontal velocity
     traj = camera_reg.robot_controller.create_custom_trajectory(robot_path, max_vel)
 

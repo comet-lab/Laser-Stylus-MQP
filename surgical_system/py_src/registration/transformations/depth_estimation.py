@@ -723,18 +723,18 @@ class DepthEstimation():
 
         # Extract X,Y,Z coordinates of points in STL file 
         # TODO/FIXME: point to CAD model stl file to compare to & register properly
-        mesh = trimesh.load("surgical_system/py_src/image_development/nine_peaks_2.stl")
+        mesh = trimesh.load("surgical_system/py_src/image_development/hills_4.stl")
         # print(type(mesh))
         mesh.apply_scale(0.001)  # scale from mm to m 
-        # Rotate STL file about z axis -90 degrees to align with recon (nine peaks STLs)
-        angle = -np.pi/2
-        T = np.array([
-            [np.cos(angle), -np.sin(angle), 0, 0],
-            [np.sin(angle),  np.cos(angle), 0, 0],
-            [0,              0,             1, 0],
-            [0,              0,             0, 1]
-        ])
-        mesh.apply_transform(T)
+        # # Rotate STL file about z axis -90 degrees to align with recon (nine peaks STLs)
+        # angle = -np.pi/2
+        # T = np.array([
+        #     [np.cos(angle), -np.sin(angle), 0, 0],
+        #     [np.sin(angle),  np.cos(angle), 0, 0],
+        #     [0,              0,             1, 0],
+        #     [0,              0,             0, 1]
+        # ])
+        # mesh.apply_transform(T)
 
         # Perform ray casting to ensure x,y coordinates we compare are identical (considered with z error)
         # Define ray origins and directions above the mesh, pointing downwards
@@ -778,17 +778,17 @@ class DepthEstimation():
         # plt.figure()
         # indices = np.arange(len(err_z))
         # plt.plot(indices, err_z, 'o-')
-        # plt.xlabel('Index')
-        # plt.ylabel('Error')
-        # plt.title('Error vs. Index')
+        # plt.xlabel('Node Index')
+        # plt.ylabel('Vertical Error [mm]')
+        # plt.title('Vertical Error vs. Node Index')
         # plt.axhline(0, linestyle='--')
         # plt.show()
 
         # Plot original STL against reconstructed surface  
         mesh_triangles = mesh.triangles
-        poly = Poly3DCollection(mesh_triangles, alpha=0.25)
+        poly = Poly3DCollection(mesh_triangles, alpha=0.1)
         poly.set_edgecolor('k')
-        poly.set_facecolor('gray')
+        poly.set_facecolor('orange')
         ax.add_collection3d(poly)
         ax.auto_scale_xyz(mesh.vertices[:,0], mesh.vertices[:,1], mesh.vertices[:,2])
 
